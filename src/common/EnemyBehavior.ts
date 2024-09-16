@@ -30,24 +30,54 @@ export class AggressiveBehavior implements EnemyBehavior {
   async act(enemy: Enemy, stage: Stage): Promise<void> {
     const player = stage.getPlayer();
     if (player) {
-      const distance = stage.getDistance(enemy.getPosition(), player.getPosition());
+      const enemyPos = enemy.getPosition();
+      const playerPos = player.getPosition();
+      const distance = stage.getDistance(enemyPos, playerPos);
 
       if (distance <= this.chaseDistance) {
-        // プレイヤーが追跡範囲内にいる場合、追いかける
-        const path = stage.findPath(enemy.getPosition(), player.getPosition());
-        // console.log(path);
-        if (path.length > 1) {
-          // パスの最初のステップに移動
-          const nextStep = path[1]; // path[0]は現在の位置なので、path[1]を使用
-          await stage.moveCharacter(enemy, nextStep.x, nextStep.y, nextStep.z);
-        } else if (path.length === 1) {
-          // プレイヤーに隣接している場合、攻撃を行う
+        // プレイヤーが追跡範囲内にいる場合
+        if (this.isAdjacent(enemyPos, playerPos)) {
+          // プレイヤーに隣接している場合
+          this.facePlayer(enemy, enemyPos, playerPos);
           await enemy.attack();
+        } else {
+          // プレイヤーに隣接していない場合、追いかける
+          const path = stage.findPath(enemyPos, playerPos);
+          if (path.length > 1) {
+            const nextStep = path[1]; // path[0]は現在の位置なので、path[1]を使用
+            await stage.moveCharacter(enemy, nextStep.x, nextStep.y, nextStep.z);
+          }
         }
       } else {
         // プレイヤーが追跡範囲外の場合、ランダムに移動
         await enemy.moveRandomly(stage);
       }
+    }
+  }
+
+  private isAdjacent(
+    pos1: { x: number; y: number; z: number },
+    pos2: { x: number; y: number; z: number }
+  ): boolean {
+    const dx = Math.abs(pos1.x - pos2.x);
+    const dy = Math.abs(pos1.y - pos2.y);
+    const dz = Math.abs(pos1.z - pos2.z);
+    return dx + dy + dz === 1;
+  }
+
+  private facePlayer(
+    enemy: Enemy,
+    enemyPos: { x: number; y: number; z: number },
+    playerPos: { x: number; y: number; z: number }
+  ) {
+    if (playerPos.x > enemyPos.x) {
+      enemy.setDirection('right');
+    } else if (playerPos.x < enemyPos.x) {
+      enemy.setDirection('left');
+    } else if (playerPos.y > enemyPos.y) {
+      enemy.setDirection('down');
+    } else if (playerPos.y < enemyPos.y) {
+      enemy.setDirection('up');
     }
   }
 }

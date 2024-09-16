@@ -6,7 +6,7 @@ import { Character } from './common/Character';
 import { Enemy } from './common/Enemy';
 import { TurnManager, TurnPhase } from './common/TurnManager';
 import { Direction, TileInfo } from './common/types';
-
+import { GameObject } from './common/GameObject';
 interface Item {
   id: string;
   name: string;
@@ -145,6 +145,10 @@ export class Game {
     const enemy3 = await this.stage.addEnemy('enemy2', 'GOBLIN', 3, 5, 0);
     this.enemies.push(enemy1, enemy2, enemy3);
 
+    const boxTexture = '/obj01.png';
+    const box = new GameObject(boxTexture, 5, 8, 0);
+    this.stage.addObject(box);
+
     this.stage.setOnCharacterSelect((character) => {
       this.selectedCharacter = character;
       if (this.onCharacterSelect) {
@@ -156,7 +160,6 @@ export class Game {
       this.selectedEnemy = enemy;
       this.onEnemySelect(enemy);
     });
-
     // プレイヤーをステージに追加
     this.stage.addCharacter(this.player, 1, 0, 2);
     // プレイヤーを追跡

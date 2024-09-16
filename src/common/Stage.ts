@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { Character } from './Character';
 import { Enemy, EnemyFactory } from './Enemy';
-
+import { GameObject } from './GameObject';
 import { Direction, TileType, Tile, TileInfo } from './types';
 
 const TileInfoMap: { [key in TileType]: TileInfo } = {
@@ -35,7 +35,7 @@ export class Stage {
   private app: PIXI.Application | null = null;
   private tileMap: Tile[][][];
   private characters: Map<string, Character>;
-  private objects: Map<string, PIXI.Sprite>;
+  private objects: Map<string, GameObject>;
   private events: Map<string, () => void>;
   private camera: PIXI.Container;
   private tileContainer: PIXI.Container;
@@ -404,14 +404,22 @@ export class Stage {
     this.sortCharacters();
   }
 
-  public addObject(id: string, sprite: PIXI.Sprite, x: number, y: number, z: number) {
-    const position = this.isometricToScreen(x, y);
-    sprite.x = position.x;
-    sprite.y = position.y - z * 5; // 高さに応じて調整
-    sprite.anchor.set(0.5, 1); // オブジェクトの底面を基準点に設定
-    this.objects.set(id, sprite);
-    this.characterContainer?.addChild(sprite);
-    this.sortCharacters(); // オブジェクトも含めて深度ソートを行う
+  public addObject(gameObject: GameObject) {
+    const position = gameObject.getPosition();
+    const key = `${position.x},${position.y},${position.z}`;
+    this.objects.set(key, gameObject);
+    this.characterContainer?.addChild(gameObject.getSprite());
+    this.sortCharacters();
+  }
+
+  public removeGameObject(x: number, y: number, z: number): void {
+    const key = `${x},${y},${z}`;
+    const gameObject = this.objects.get(key);
+    if (gameObject) {
+      this.characterContainer?.removeChild(gameObject.getSprite());
+      this.objects.delete(key);
+      this.sortCharacters();
+    }
   }
 
   public setOnEnemySelect(callback: (enemy: Enemy) => void) {
@@ -420,7 +428,15 @@ export class Stage {
 
   //深度ソート
   private sortCharacters() {
-    this.characterContainer?.children.sort((a, b) => a.y - b.y);
+    // this.characterContainer?.children.sort((a, b) => a.y - b.y);
+
+    const allSprites = [...this.characterContainer!.children];
+    allSprites.sort((a, b) => {
+      const aY = a.y + a.height / 2;
+      const bY = b.y + b.height / 2;
+      return aY - bY;
+    });
+    this.characterContainer!.children = allSprites;
   }
 
   // 新しいメソッド: 指定された位置が占有されているかチェック
@@ -522,6 +538,10 @@ export class Stage {
       return false;
     }
 
+    // GameObjectとの衝突チェック
+    if (this.objects.has(`${x},${y},${z}`)) {
+      return false;
+    }
     return true;
   }
 
@@ -737,9 +757,7 @@ export class Stage {
 
     return true;
   }
-  private isReachable(x: number, y: number, z: number): boolean {
-    return this.isValidMove(x, y, z) && !this.isOccupied(x, y, z);
-  }
+
   public findPath(
     start: { x: number; y: number; z: number },
     goal: { x: number; y: number; z: number }
@@ -765,9 +783,6 @@ export class Stage {
 
     while (openSet.length > 0) {
       const currentNode = this.getLowestFScoreNode(openSet);
-      console.log(
-        `Current node: (${currentNode.x}, ${currentNode.y}, ${currentNode.z}), f=${currentNode.f}`
-      );
 
       if (this.isGoal(currentNode, goalNode)) {
         console.log('Path found!');
@@ -778,7 +793,6 @@ export class Stage {
       closedSet.add(this.nodeToString(currentNode));
 
       const neighbors = this.getNeighbors(currentNode);
-      console.log(`Neighbors: ${JSON.stringify(neighbors)}`);
 
       for (const neighbor of neighbors) {
         if (closedSet.has(this.nodeToString(neighbor))) {
@@ -797,13 +811,7 @@ export class Stage {
         neighbor.g = tentativeGScore;
         neighbor.h = this.heuristic(neighbor, goalNode);
         neighbor.f = neighbor.g + neighbor.h;
-
-        console.log(
-          `Updated node: (${neighbor.x}, ${neighbor.y}, ${neighbor.z}), g=${neighbor.g}, h=${neighbor.h}, f=${neighbor.f}`
-        );
       }
-
-      console.log(`Open set size: ${openSet.length}, Closed set size: ${closedSet.size}`);
     }
 
     console.log('No path found');
