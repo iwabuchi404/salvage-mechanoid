@@ -62,38 +62,38 @@ export class Enemy extends CharacterBase {
     await this.type.behavior.act(this, stage);
   }
 
-  public moveRandomly(stage: Stage): Promise<void> {
-    const directions: Direction[] = ['up', 'down', 'left', 'right'];
-    const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+  // public moveRandomly(stage: Stage): Promise<void> {
+  //   const directions: Direction[] = ['up', 'down', 'left', 'right'];
+  //   const randomDirection = directions[Math.floor(Math.random() * directions.length)];
 
-    const currentPosition = this.getPosition();
-    let newX = currentPosition.x;
-    let newY = currentPosition.y;
+  //   const currentPosition = this.getPosition();
+  //   let newX = currentPosition.x;
+  //   let newY = currentPosition.y;
 
-    switch (randomDirection) {
-      case 'up':
-        newY--;
-        break;
-      case 'down':
-        newY++;
-        break;
-      case 'left':
-        newX--;
-        break;
-      case 'right':
-        newX++;
-        break;
-    }
+  //   switch (randomDirection) {
+  //     case 'up':
+  //       newY--;
+  //       break;
+  //     case 'down':
+  //       newY++;
+  //       break;
+  //     case 'left':
+  //       newX--;
+  //       break;
+  //     case 'right':
+  //       newX++;
+  //       break;
+  //   }
 
-    this.setDirection(randomDirection);
+  //   this.setDirection(randomDirection);
 
-    if (stage.isValidMove(newX, newY, currentPosition.z)) {
-      return stage.moveCharacter(this, newX, newY, currentPosition.z);
-    } else {
-      // 移動できない場合は何もしない
-      return Promise.resolve();
-    }
-  }
+  //   if (stage.isValidMove(newX, newY, currentPosition.z)) {
+  //     return stage.moveCharacter(this, newX, newY, currentPosition.z);
+  //   } else {
+  //     // 移動できない場合は何もしない
+  //     return Promise.resolve();
+  //   }
+  // }
 
   public deleteEnemy(): void {
     console.log(`Deleting enemy: ${this.getName()}`);

@@ -161,7 +161,7 @@ export class Game {
       this.onEnemySelect(enemy);
     });
     // プレイヤーをステージに追加
-    this.stage.addCharacter(this.player, 1, 0, 2);
+    this.stage.addCharacter(this.player, 0, 0, 0);
     // プレイヤーを追跡
     this.stage.setFollowTarget(this.player);
     // カメラのスムージングを設定（必要に応じて調整）

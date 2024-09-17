@@ -1,11 +1,43 @@
 import { Enemy } from './Enemy';
 import { Stage } from './Stage';
-
+import { Direction } from './types';
 import { EnemyBehavior } from './types';
+
+function moveRandomly(enemy: Enemy, stage: Stage): void {
+  const directions: Direction[] = ['up', 'down', 'left', 'right'];
+  const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+
+  const currentPosition = enemy.getPosition();
+  let newX = currentPosition.x;
+  let newY = currentPosition.y;
+
+  switch (randomDirection) {
+    case 'up':
+      newY--;
+      break;
+    case 'down':
+      newY++;
+      break;
+    case 'left':
+      newX--;
+      break;
+    case 'right':
+      newX++;
+      break;
+  }
+
+  enemy.setDirection(randomDirection);
+
+  if (stage.isValidMove(newX, newY, currentPosition.z)) {
+    stage.moveCharacter(enemy, newX, newY, currentPosition.z);
+  } else {
+    // 移動できない場合は何もしない
+  }
+}
 
 export class RandomMoveBehavior implements EnemyBehavior {
   async act(enemy: Enemy, stage: Stage): Promise<void> {
-    await enemy.moveRandomly(stage);
+    moveRandomly(enemy, stage);
   }
 }
 
@@ -50,7 +82,8 @@ export class AggressiveBehavior implements EnemyBehavior {
         }
       } else {
         // プレイヤーが追跡範囲外の場合、ランダムに移動
-        await enemy.moveRandomly(stage);
+        moveRandomly(enemy, stage);
+        // await enemy.moveRandomly(stage);
       }
     }
   }
@@ -88,7 +121,7 @@ export class DefensiveBehavior implements EnemyBehavior {
     if (player) {
       const distance = stage.getDistance(enemy.getPosition(), player.getPosition());
       if (distance < 3) {
-        await enemy.moveRandomly(stage);
+        moveRandomly(enemy, stage);
       } else {
         // その場で待機
       }
