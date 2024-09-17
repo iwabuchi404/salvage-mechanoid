@@ -405,6 +405,7 @@ export class Stage {
     const key = `${enemy.getPosition().x},${enemy.getPosition().y},${enemy.getPosition().z}`;
 
     if (this.enemies?.has(key)) {
+      enemy.deleteEnemy();
       this.enemies.delete(key);
       this.characterContainer?.removeChild(enemy.getSprite());
       this.sortCharacters();
@@ -412,9 +413,6 @@ export class Stage {
     } else {
       console.log('Enemy not found in the enemies map');
     }
-
-    // TurnManagerからも削除
-    this.turnManager?.removeCharacter(enemy);
   }
   public getAllEnemies(): Enemy[] | false {
     if (this.enemies) {

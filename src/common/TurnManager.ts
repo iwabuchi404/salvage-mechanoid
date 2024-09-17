@@ -8,11 +8,23 @@ export enum TurnPhase {
 }
 
 export class TurnManager {
+  private static instance: TurnManager | null = null;
   private characters: (Character | Enemy)[] = [];
-  private currentIndex: number;
-  private currentPhase: TurnPhase;
+  private currentIndex = 0;
+  private currentPhase: TurnPhase = TurnPhase.PLAYER;
 
-  constructor(player: Character, enemies: Enemy[] | false) {
+  private constructor() {
+    console.log('TurnManager new');
+  }
+
+  public static getInstance(): TurnManager {
+    if (!TurnManager.instance) {
+      TurnManager.instance = new TurnManager();
+    }
+    return TurnManager.instance;
+  }
+
+  public initialize(player: Character, enemies: Enemy[]): void {
     if (enemies) {
       this.characters = [player, ...enemies];
     }
@@ -25,7 +37,6 @@ export class TurnManager {
     this.currentPhase = TurnPhase.PLAYER;
     return this.currentPhase;
   }
-
   public nextTurn(): TurnPhase {
     this.currentIndex++;
     if (this.currentIndex >= this.characters.length) {

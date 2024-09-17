@@ -112,6 +112,7 @@ export class Game {
     _canvas.appendChild(app.canvas);
     // アセットを初期化
     await Assets.init();
+    this.turnManager = TurnManager.getInstance();
 
     // アプリケーションが正しく初期化されたことを確認
     // app.ticker.add(() => {
@@ -165,9 +166,13 @@ export class Game {
     this.stage.setFollowTarget(this.player);
     // カメラのスムージングを設定（必要に応じて調整）
     this.stage.setCameraSmoothing(0.1);
-
     this.start();
-    this.turnManager = new TurnManager(this.player, this.stage.getAllEnemies());
+
+    const enemies = this.stage.getAllEnemies();
+    if (this.player && enemies) {
+      this.turnManager?.initialize(this.player, enemies);
+    }
+
     this.stage.setTurnManager(this.turnManager);
     this.startNewTurn();
   }

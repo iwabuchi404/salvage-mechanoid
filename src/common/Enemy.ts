@@ -3,6 +3,7 @@ import { Direction, EnemyType } from './types';
 import { CharacterBase } from './CharacterBase';
 import { Stage } from './Stage';
 import { RandomMoveBehavior, AggressiveBehavior } from './EnemyBehavior';
+import { TurnManager } from './TurnManager';
 
 export class Enemy extends CharacterBase {
   private type: EnemyType;
@@ -111,7 +112,7 @@ export class Enemy extends CharacterBase {
 
     // その他のクリーンアップ処理
     // 例: タイマーの解除、サブスクリプションの解除など
-
+    TurnManager.getInstance().removeCharacter(this);
     console.log(`Enemy ${this.getName()} deleted successfully`);
   }
 }
