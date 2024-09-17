@@ -8,12 +8,14 @@ export enum TurnPhase {
 }
 
 export class TurnManager {
-  private characters: (Character | Enemy)[];
+  private characters: (Character | Enemy)[] = [];
   private currentIndex: number;
   private currentPhase: TurnPhase;
 
-  constructor(player: Character, enemies: Enemy[]) {
-    this.characters = [player, ...enemies];
+  constructor(player: Character, enemies: Enemy[] | false) {
+    if (enemies) {
+      this.characters = [player, ...enemies];
+    }
     this.currentIndex = 0;
     this.currentPhase = TurnPhase.PLAYER;
   }

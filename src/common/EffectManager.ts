@@ -82,6 +82,11 @@ export class EffectManager {
 EffectManager.registerEffect('damage', {
   apply: (sprite: PIXI.Sprite) => {
     sprite.tint = 0xff0000;
+    sprite.pivot.set(sprite.width / 2, sprite.height / 2);
+    sprite.position.set(
+      sprite.position.x + sprite.width / 2,
+      sprite.position.y + sprite.height / 2
+    );
     // 元の位置をスプライトのプロパティとして保存
     (sprite as any)._damageEffectOriginalX = sprite.x;
     (sprite as any)._damageEffectOriginalY = sprite.y;
@@ -98,6 +103,11 @@ EffectManager.registerEffect('damage', {
     // スプライトを元の位置に戻す
     sprite.x = (sprite as any)._damageEffectOriginalX;
     sprite.y = (sprite as any)._damageEffectOriginalY;
+    sprite.position.set(
+      sprite.position.x - sprite.width / 2,
+      sprite.position.y - sprite.height / 2
+    );
+    sprite.pivot.set(0, 0);
     // 一時的に追加したプロパティを削除
     delete (sprite as any)._damageEffectOriginalX;
     delete (sprite as any)._damageEffectOriginalY;
@@ -122,44 +132,47 @@ EffectManager.registerEffect('shake', {
       sprite.position.x + sprite.width / 2,
       sprite.position.y + sprite.height / 2
     );
+    (sprite as any)._originalShakeX = sprite.x;
+    (sprite as any)._originalShakeY = sprite.y;
   },
   update: (sprite: PIXI.Sprite, progress: number) => {
-    const amplitude = 10; // Maximum shake distance in pixels
-    const frequency = 50; // Number of shakes per second
+    const amplitude = 10;
+    const frequency = 50;
     const shake = Math.sin(progress * Math.PI * frequency) * amplitude * (1 - progress);
-    sprite.x += shake;
-    sprite.y += shake;
+    sprite.x = (sprite as any)._originalShakeX + shake;
+    sprite.y = (sprite as any)._originalShakeY + shake;
   },
   complete: (sprite: PIXI.Sprite) => {
+    sprite.x = (sprite as any)._originalShakeX;
+    sprite.y = (sprite as any)._originalShakeY;
     sprite.position.set(
       sprite.position.x - sprite.width / 2,
       sprite.position.y - sprite.height / 2
     );
     sprite.pivot.set(0, 0);
+    delete (sprite as any)._originalShakeX;
+    delete (sprite as any)._originalShakeY;
   },
-  duration: 400, // Shake duration in milliseconds
+  duration: 400,
 });
 
 EffectManager.registerEffect('attack', {
   apply: (sprite: PIXI.Sprite) => {
-    // スプライトに元の位置を保存するプロパティを追加
-    (sprite as any)._originalX = sprite.x;
+    (sprite as any)._originalAttackX = sprite.x;
   },
   update: (sprite: PIXI.Sprite, progress: number) => {
-    const forwardDistance = 20; // 前方への移動距離（ピクセル）
-    const originalX = (sprite as any)._originalX;
+    const forwardDistance = 20;
+    const originalX = (sprite as any)._originalAttackX;
 
     if (progress < 0.5) {
-      // 前半：前方に素早く移動
       sprite.x = originalX + forwardDistance * (progress * 2);
     } else {
-      // 後半：元の位置にゆっくり戻る
       sprite.x = originalX + forwardDistance * (2 - progress * 2);
     }
   },
   complete: (sprite: PIXI.Sprite) => {
-    sprite.x = (sprite as any)._originalX;
-    delete (sprite as any)._originalX;
+    sprite.x = (sprite as any)._originalAttackX;
+    delete (sprite as any)._originalAttackX;
   },
-  duration: 300, // アニメーションの持続時間（ミリ秒）
+  duration: 300,
 });

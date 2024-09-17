@@ -50,7 +50,6 @@ export class Character extends CharacterBase {
   public equip(slot: string, item: string) {
     this.equipment[slot] = item;
   }
-
   public getEquipment(): { [key: string]: string } {
     return this.equipment;
   }

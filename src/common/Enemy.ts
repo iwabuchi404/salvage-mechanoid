@@ -6,7 +6,7 @@ import { RandomMoveBehavior, AggressiveBehavior } from './EnemyBehavior';
 
 export class Enemy extends CharacterBase {
   private type: EnemyType;
-
+  private isDeleted = false;
   private hp: number;
   // private attack: number;
 
@@ -50,7 +50,7 @@ export class Enemy extends CharacterBase {
   }
 
   public isAlive(): boolean {
-    return this.hp > 0;
+    return this.hp > 0 && !this.isDeleted;
   }
 
   public setClickHandler(handler: () => void) {
@@ -92,6 +92,27 @@ export class Enemy extends CharacterBase {
       // 移動できない場合は何もしない
       return Promise.resolve();
     }
+  }
+
+  public deleteEnemy(): void {
+    console.log(`Deleting enemy: ${this.getName()}`);
+    if (this.isDeleted) return;
+    this.isDeleted = true;
+
+    // スプライトの削除
+    if (this.sprite && this.sprite.parent) {
+      this.sprite.parent.removeChild(this.sprite);
+    }
+
+    // クリックハンドラの削除
+    if (this.sprite) {
+      this.sprite.removeAllListeners();
+    }
+
+    // その他のクリーンアップ処理
+    // 例: タイマーの解除、サブスクリプションの解除など
+
+    console.log(`Enemy ${this.getName()} deleted successfully`);
   }
 }
 

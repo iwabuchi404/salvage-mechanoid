@@ -56,6 +56,7 @@ export class Stage {
   private viewportWidth: number;
   private viewportHeight: number;
   private player: Character | null = null;
+  private turnManager: any = null;
 
   constructor(
     stageData: number[][],
@@ -105,13 +106,16 @@ export class Stage {
     this.centerCamera();
     this.app.ticker.add(() => this.update());
 
-    // Enable interactivity on the stage
     this.app.stage.interactive = true;
     if (this.characterContainer) {
       this.characterContainer.interactive = true;
     }
 
     this.setupMouseListeners();
+  }
+
+  public setTurnManager(manager: any) {
+    this.turnManager = manager;
   }
 
   private async initializeTileMap(): Promise<void> {
@@ -270,6 +274,7 @@ export class Stage {
       this.updateCameraPosition();
     }
 
+    this.sortCharacters();
     this.updateVisibleTiles();
   }
 
@@ -397,13 +402,27 @@ export class Stage {
   }
 
   public removeEnemy(enemy: Enemy) {
-    this.enemies?.delete(
-      `${enemy.getPosition().x},${enemy.getPosition().y},${enemy.getPosition().z}`
-    );
-    this.characterContainer?.removeChild(enemy.getSprite());
-    this.sortCharacters();
-  }
+    const key = `${enemy.getPosition().x},${enemy.getPosition().y},${enemy.getPosition().z}`;
 
+    if (this.enemies?.has(key)) {
+      this.enemies.delete(key);
+      this.characterContainer?.removeChild(enemy.getSprite());
+      this.sortCharacters();
+      console.log('Enemy removed successfully');
+    } else {
+      console.log('Enemy not found in the enemies map');
+    }
+
+    // TurnManagerからも削除
+    this.turnManager?.removeCharacter(enemy);
+  }
+  public getAllEnemies(): Enemy[] | false {
+    if (this.enemies) {
+      return Array.from(this.enemies.values());
+    } else {
+      return false;
+    }
+  }
   public addObject(gameObject: GameObject) {
     const position = gameObject.getPosition();
     const key = `${position.x},${position.y},${position.z}`;
@@ -450,12 +469,8 @@ export class Stage {
     }
 
     // エネミーの位置をチェック
-    if (this.enemies) {
-      const key = `${x},${y},${z}`;
-      if (this.enemies.has(key)) {
-        return true;
-      }
-    }
+    const key = `${x},${y},${z}`;
+    return this.enemies?.has(key) ?? false;
 
     return false;
   }
@@ -744,18 +759,10 @@ export class Stage {
       return false;
     }
 
-    // 他のキャラクターとの衝突チェック
-    // if (this.isPositionOccupied(x, y, z)) {
+    // 他のキャラクターやエネミーとの衝突チェック
+    // if (this.isOccupied(x, y, z)) {
     //   return false;
     // }
-
-    // エネミーの位置をチェック
-    if (this.enemies) {
-      const key = `${x},${y},${z}`;
-      if (this.enemies.has(key)) {
-        return false;
-      }
-    }
 
     return true;
   }

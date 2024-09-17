@@ -142,9 +142,9 @@ const closeItemList = () => {
   showItemList.value = false;
   showActionMenu.value = true;
 };
-const attack = () => {
+const attack = async () => {
   if (isPlayerTurn.value) {
-    game.playerAttack();
+    await game.playerAttack();
   }
 };
 const showStatus = () => {

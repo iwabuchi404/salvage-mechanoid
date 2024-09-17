@@ -18,7 +18,7 @@ export class Game {
   private stage: Stage;
 
   private player: Character | null = null;
-  private enemies: Enemy[] = [];
+  // private enemies: Enemy[] = [];
 
   private selectedCharacter: Character | null = null;
   private onCharacterSelect: any;
@@ -142,8 +142,7 @@ export class Game {
     // テスト用に敵を追加
     const enemy1 = await this.stage.addEnemy('enemy1', 'SLIME', 1, 2, 0);
     const enemy2 = await this.stage.addEnemy('enemy2', 'SLIME', 3, 6, 0);
-    const enemy3 = await this.stage.addEnemy('enemy2', 'GOBLIN', 3, 5, 0);
-    this.enemies.push(enemy1, enemy2, enemy3);
+    const enemy3 = await this.stage.addEnemy('enemy3', 'GOBLIN', 3, 5, 0);
 
     const boxTexture = '/obj01.png';
     const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
@@ -168,8 +167,8 @@ export class Game {
     this.stage.setCameraSmoothing(0.1);
 
     this.start();
-
-    this.turnManager = new TurnManager(this.player, this.enemies);
+    this.turnManager = new TurnManager(this.player, this.stage.getAllEnemies());
+    this.stage.setTurnManager(this.turnManager);
     this.startNewTurn();
   }
 
@@ -342,24 +341,23 @@ export class Game {
     { id: 'ether', name: 'エーテル', description: 'MPを30回復します' },
   ];
 
-  public async playerAttack(): Promise<void> {
+  public playerAttack(): void {
     if (!this.isPlayerTurn || !this.player) return;
+    if (this.player.getMoveState()) return;
 
     const targetPosition = this.stage.getAttackTargetPosition(this.player);
     const target = this.stage.getCharacterAt(targetPosition.x, targetPosition.y, targetPosition.z);
 
     if (target && target instanceof Enemy) {
       const damage = this.player.attack();
-      await target.takeDamage(damage);
+      target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
 
       if (!target.isAlive()) {
         console.log(`${target.getName()} was defeated!`);
-        // ここで敵を取り除くなどの処理を行う
-        await this.stage.removeEnemy(target);
+        this.stage.removeEnemy(target);
       }
     } else {
-      const damage = this.player.attack();
       console.log('No target to attack!');
     }
 

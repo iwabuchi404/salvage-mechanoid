@@ -65,6 +65,10 @@ export abstract class CharacterBase {
     return this.name;
   }
 
+  public getMoveState(): boolean {
+    return this.isMoving;
+  }
+
   public getSprite(): PIXI.Sprite {
     return this.sprite;
   }
@@ -113,20 +117,18 @@ export abstract class CharacterBase {
     const startX = this.sprite.x;
     const startY = this.sprite.y;
     const startTime = Date.now();
-
     return new Promise<void>((resolve) => {
       const animate = () => {
         const elapsedTime = Date.now() - startTime;
         const progress = Math.min(elapsedTime / duration, 1);
-
         this.sprite.x = startX + (targetX - startX) * progress;
         this.sprite.y = startY + (targetY - startY) * progress;
 
         if (progress < 1) {
           requestAnimationFrame(animate);
         } else {
-          this.isMoving = false;
           this.updateSpritePosition(targetX, targetY);
+          this.isMoving = false;
           resolve();
         }
       };
@@ -149,7 +151,9 @@ export abstract class CharacterBase {
   public isAlive(): boolean {
     return this.status.hp > 0;
   }
-  public applyEffect(effectName: string): void {
-    EffectManager.applyEffect(this.sprite, effectName);
+  public async applyEffect(effectName: string): Promise<void> {
+    this.isMoving = true;
+    await EffectManager.applyEffect(this.sprite, effectName);
+    this.isMoving = false;
   }
 }
