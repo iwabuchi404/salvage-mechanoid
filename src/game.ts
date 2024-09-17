@@ -342,7 +342,7 @@ export class Game {
     { id: 'ether', name: 'エーテル', description: 'MPを30回復します' },
   ];
 
-  public playerAttack(): void {
+  public async playerAttack(): Promise<void> {
     if (!this.isPlayerTurn || !this.player) return;
 
     const targetPosition = this.stage.getAttackTargetPosition(this.player);
@@ -350,13 +350,13 @@ export class Game {
 
     if (target && target instanceof Enemy) {
       const damage = this.player.attack();
-      target.takeDamage(damage);
+      await target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
 
       if (!target.isAlive()) {
         console.log(`${target.getName()} was defeated!`);
         // ここで敵を取り除くなどの処理を行う
-        this.stage.removeEnemy(target);
+        await this.stage.removeEnemy(target);
       }
     } else {
       const damage = this.player.attack();
