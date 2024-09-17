@@ -88,7 +88,6 @@ export abstract class CharacterBase {
       this.sprite.texture = this.textures[direction];
     }
   }
-
   public getStatus(): typeof this.status {
     return { ...this.status };
   }

@@ -146,7 +146,7 @@ export class Game {
     this.enemies.push(enemy1, enemy2, enemy3);
 
     const boxTexture = '/obj01.png';
-    const box = new GameObject(boxTexture, 5, 8, 0);
+    const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
     this.stage.addObject(box);
 
     this.stage.setOnCharacterSelect((character) => {

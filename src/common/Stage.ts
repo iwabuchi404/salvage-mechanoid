@@ -571,15 +571,17 @@ export class Stage {
         return { ...position }; // デフォルトケースを追加
     }
   }
-
-  private isometricToScreen(x: number, y: number): { x: number; y: number } {
+  public getTileHeight(): number {
+    return this.tileSize.height;
+  }
+  public isometricToScreen(x: number, y: number): { x: number; y: number } {
     return {
       x: ((x - y) * this.tileSize.width) / 2,
       y: ((x + y) * this.tileSize.height) / 3,
     };
   }
 
-  private screenToIsometric(screenX: number, screenY: number): { x: number; y: number } {
+  public screenToIsometric(screenX: number, screenY: number): { x: number; y: number } {
     const tileWidth = this.tileSize.width;
     const tileHeight = this.tileSize.height;
 
@@ -672,7 +674,7 @@ export class Stage {
     return visibleTiles;
   }
 
-  private screenToIso(screenX: number, screenY: number): { x: number; y: number } {
+  public screenToIso(screenX: number, screenY: number): { x: number; y: number } {
     const isoX = this.tileSize.width / 2;
     const isoY = this.tileSize.height / 3;
     return {
@@ -817,7 +819,6 @@ export class Stage {
     console.log('No path found');
     return [];
   }
-
   private getLowestFScoreNode(nodes: Node[]): Node {
     return nodes.reduce((lowest, node) => (node.f < lowest.f ? node : lowest));
   }
