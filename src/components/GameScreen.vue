@@ -1,107 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { GameState, GameStateManager } from './common/GameStateManager';
-import StartScreen from './components/StartScreen.vue';
-import GameScreen from './components/GameScreen.vue';
-import ClearScreen from './components/ClearScreen.vue';
-
-const gameStateManager = new GameStateManager();
-const gameState = ref(gameStateManager.getState());
-
-function startGame() {
-  gameStateManager.setState(GameState.PLAYING);
-  gameState.value = gameStateManager.getState();
-}
-
-function showClearScreen() {
-  gameStateManager.setState(GameState.CLEAR);
-  gameState.value = gameStateManager.getState();
-}
-
-function restartGame() {
-  gameStateManager.setState(GameState.START);
-  gameState.value = gameStateManager.getState();
-}
-</script>
-
-<template>
-  <div id="app-container">
-    <StartScreen v-if="gameState === GameState.START" @start-game="startGame" />
-    <GameScreen v-if="gameState === GameState.PLAYING" @game-clear="showClearScreen" />
-    <ClearScreen v-if="gameState === GameState.CLEAR" @retry="restartGame" />
-  </div>
-</template>
-
-<!-- <template>
-  <div id="app-container">
-    <div id="game-container" ref="mainCanvas"></div>
-    <div id="ui-overlay">
-      <div class="controls">
-        <button @click="movePlayer('up')">↑</button>
-        <button @click="movePlayer('left')">←</button>
-        <button @click="movePlayer('right')">→</button>
-        <button @click="movePlayer('down')">↓</button>
-      </div>
-      <div v-if="showActionMenu" class="action-menu">
-        <button @click="attack">攻撃</button>
-        <button @click="showStatus">ステータス</button>
-        <button @click="showItems">アイテム</button>
-      </div>
-      <div v-if="showStatusWindow" class="status-window">
-        <button class="close-button" @click="closeStatusWindow">&times;</button>
-        <h2>{{ getSelectedName() }} ステータス</h2>
-        <template v-if="selectedCharacter">
-          <p>レベル: {{ selectedCharacter.getStatus().level }}</p>
-          <p>
-            HP: {{ selectedCharacter.getStatus().hp }} /
-            {{ selectedCharacter.getStatus().maxHp }}
-          </p>
-          <p>
-            MP: {{ selectedCharacter.getStatus().mp }} /
-            {{ selectedCharacter.getStatus().maxMp }}
-          </p>
-          <p>攻撃力: {{ selectedCharacter.getStatus().strength }}</p>
-          <p>防御力: {{ selectedCharacter.getStatus().defense }}</p>
-        </template>
-        <template v-else-if="selectedEnemy">
-          <p>HP: {{ selectedEnemy.getStatus().hp }}</p>
-          <p>攻撃力: {{ selectedEnemy.getAttack() }}</p>
-        </template>
-        <template v-else-if="selectedTile">
-          <h2>{{ selectedTile.name }}</h2>
-          <p>Effect: {{ selectedTile.effect }}</p>
-          <p v-for="(value, key) in selectedTile.statModifier" :key="key">
-            {{ key }}: {{ value > 0 ? '+' : '' }}{{ value }}
-          </p>
-        </template>
-      </div>
-      <div v-if="showItemList" class="item-list">
-        <h2>アイテム一覧</h2>
-        <ul>
-          <li v-for="item in playerItems" :key="item.id">
-            {{ item.name }} - {{ item.description }}
-          </li>
-        </ul>
-        <button @click="closeItemList" class="close-button">&times;</button>
-      </div>
-      <div v-if="message" class="message-window">
-        <p class="message-window__text">{{ message }}</p>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { Game } from './game';
 import { onMounted, ref, compile, computed, watch } from 'vue';
 import { Application, Assets, Graphics } from 'pixi.js';
-import { Character } from './common/Character';
-import { Enemy } from './common/Enemy';
-import { TileInfo } from './common/Stage';
-import { TurnManager, TurnPhase } from './common/TurnManager';
+import { Game } from '../game';
+import { Character } from '../common/Character';
+import { Enemy } from '../common/Enemy';
+import { TileInfo } from '../common/Stage';
+import { TurnManager, TurnPhase } from '../common/TurnManager';
+import { defineEmits } from 'vue'; // この行を追加
 
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
 const game = new Game();
+
 const selectedCharacter = ref<Character | null>(null);
 const selectedEnemy = ref<Enemy | null>(null);
 const selectedTile = ref<TileInfo | null>(null);
@@ -111,6 +20,10 @@ const showActionMenu = ref(true);
 const showItemList = ref(false);
 const playerItems = ref<any[]>([]);
 const isPlayerTurn = ref(true);
+
+const emit = defineEmits<{
+  (e: 'game-clear'): void;
+}>();
 
 onMounted(() => {
   if (mainCanvas.value) {
@@ -179,6 +92,7 @@ const closeItemList = () => {
 const attack = async () => {
   if (isPlayerTurn.value) {
     await game.playerAttack();
+    checkGameClear();
   }
 };
 const showStatus = () => {
@@ -190,7 +104,72 @@ const endTurn = () => {
     game.endPlayerTurn();
   }
 };
+// ゲームクリア時の処理を追加
+function checkGameClear() {
+  if (game.isAllEnemiesDefeated()) {
+    emit('game-clear');
+  }
+}
 </script>
+
+<template>
+  <div class="game-screen">
+    <div id="game-container" ref="mainCanvas"></div>
+    <div id="ui-overlay">
+      <div class="controls">
+        <button @click="movePlayer('up')">↑</button>
+        <button @click="movePlayer('left')">←</button>
+        <button @click="movePlayer('right')">→</button>
+        <button @click="movePlayer('down')">↓</button>
+      </div>
+      <div v-if="showActionMenu" class="action-menu">
+        <button @click="attack">攻撃</button>
+        <button @click="showStatus">ステータス</button>
+        <button @click="showItems">アイテム</button>
+      </div>
+      <div v-if="showStatusWindow" class="status-window">
+        <button class="close-button" @click="closeStatusWindow">&times;</button>
+        <h2>{{ getSelectedName() }} ステータス</h2>
+        <template v-if="selectedCharacter">
+          <p>レベル: {{ selectedCharacter.getStatus().level }}</p>
+          <p>
+            HP: {{ selectedCharacter.getStatus().hp }} /
+            {{ selectedCharacter.getStatus().maxHp }}
+          </p>
+          <p>
+            MP: {{ selectedCharacter.getStatus().mp }} /
+            {{ selectedCharacter.getStatus().maxMp }}
+          </p>
+          <p>攻撃力: {{ selectedCharacter.getStatus().strength }}</p>
+          <p>防御力: {{ selectedCharacter.getStatus().defense }}</p>
+        </template>
+        <template v-else-if="selectedEnemy">
+          <p>HP: {{ selectedEnemy.getStatus().hp }}</p>
+          <p>攻撃力: {{ selectedEnemy.getAttack() }}</p>
+        </template>
+        <template v-else-if="selectedTile">
+          <h2>{{ selectedTile.name }}</h2>
+          <p>Effect: {{ selectedTile.effect }}</p>
+          <p v-for="(value, key) in selectedTile.statModifier" :key="key">
+            {{ key }}: {{ value > 0 ? '+' : '' }}{{ value }}
+          </p>
+        </template>
+      </div>
+      <div v-if="showItemList" class="item-list">
+        <h2>アイテム一覧</h2>
+        <ul>
+          <li v-for="item in playerItems" :key="item.id">
+            {{ item.name }} - {{ item.description }}
+          </li>
+        </ul>
+        <button @click="closeItemList" class="close-button">&times;</button>
+      </div>
+      <div v-if="message" class="message-window">
+        <p class="message-window__text">{{ message }}</p>
+      </div>
+    </div>
+  </div>
+</template>
 
 <style>
 #app-container {
@@ -364,4 +343,4 @@ const endTurn = () => {
 .item-list li {
   margin-bottom: 10px;
 }
-</style> -->
+</style>

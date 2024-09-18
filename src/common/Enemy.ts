@@ -8,7 +8,8 @@ import { TurnManager } from './TurnManager';
 export class Enemy extends CharacterBase {
   private type: EnemyType;
   private isDeleted = false;
-  private hp: number;
+  // private hp: number;
+
   // private attack: number;
 
   constructor(id: string, type: EnemyType, level = 1) {
@@ -16,7 +17,16 @@ export class Enemy extends CharacterBase {
 
     this.type = type;
 
-    this.hp = this.calculateHp(level);
+    this.status = {
+      level: 1,
+      hp: 60,
+      maxHp: 60,
+      mp: 50,
+      maxMp: 50,
+      strength: 10,
+      defense: 5,
+    };
+    // this.hp = this.calculateHp(level);
     // this.attack = this.calculateAttack(level);
   }
 
@@ -32,16 +42,12 @@ export class Enemy extends CharacterBase {
     return this.sprite;
   }
 
-  public getHp(): number {
-    return this.hp;
-  }
-
   public getAttack(): number {
-    return this.type.baseAttack;
+    return this.status.strength;
   }
 
   public isAlive(): boolean {
-    return this.hp > 0 && !this.isDeleted;
+    return this.status.hp > 0 && !this.isDeleted;
   }
 
   public setClickHandler(handler: () => void) {

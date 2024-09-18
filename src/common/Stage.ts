@@ -464,7 +464,6 @@ export class Stage {
         return true;
       }
     }
-
     // エネミーの位置をチェック
     const key = `${x},${y},${z}`;
     return this.enemies?.has(key) ?? false;

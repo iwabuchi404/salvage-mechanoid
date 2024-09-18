@@ -355,6 +355,7 @@ export class Game {
 
     if (target && target instanceof Enemy) {
       const damage = await this.player.attack();
+      console.log('damage:', damage);
       await target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
 
@@ -379,5 +380,13 @@ export class Game {
 
   public getPlayerItems(): Item[] {
     return [...this.playerItems];
+  }
+
+  public isAllEnemiesDefeated(): boolean {
+    const enemies = this.stage.getAllEnemies();
+    if (!enemies || enemies.length == 0) {
+      return true;
+    }
+    return false;
   }
 }
