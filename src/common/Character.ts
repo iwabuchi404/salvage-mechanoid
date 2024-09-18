@@ -65,6 +65,7 @@ export class Character extends CharacterBase {
   public getStatus(): typeof this.status {
     return { ...this.status };
   }
+
   public setClickHandler(handler: () => void) {
     this.sprite.eventMode = 'static';
     this.sprite.onmousedown = () => {
@@ -72,11 +73,5 @@ export class Character extends CharacterBase {
       console.log(handler);
       handler();
     };
-  }
-
-  public attack(): number {
-    this.applyEffect('attack');
-    // 基本攻撃力を返す
-    return this.status.strength;
   }
 }

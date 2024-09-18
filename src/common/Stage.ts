@@ -88,7 +88,6 @@ export class Stage {
     this.onEnemySelect = (enemy: Enemy) => {
       console.log(`Enemy selected: ${enemy.getName()}`);
     };
-
     this.onCharacterSelect = () => {
       console.log('onCharacterSelect init');
     };
@@ -507,7 +506,7 @@ export class Stage {
       this.characters.delete(character.getId());
     }
 
-    await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
+    character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
     character.setPosition(targetX, targetY, targetZ);
 
     // 新しい位置に character を追加

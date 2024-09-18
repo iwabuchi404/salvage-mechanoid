@@ -52,6 +52,7 @@ export class RandomMoveBehavior implements EnemyBehavior {
 //     }
 //   }
 // }
+
 export class AggressiveBehavior implements EnemyBehavior {
   private chaseDistance: number;
 

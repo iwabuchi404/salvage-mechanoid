@@ -141,19 +141,31 @@ export abstract class CharacterBase {
     this.sprite.eventMode = 'static';
     this.sprite.on('pointerdown', handler);
   }
-
-  public takeDamage(damage: number): void {
+  public async takeDamage(damage: number): Promise<void> {
     this.status.hp = Math.max(0, this.status.hp - damage);
-    this.applyEffect('damage');
-    console.log(`${this.name} took ${damage} damage. Remaining HP: ${this.status.hp}`);
+    console.log(
+      `${this.name} taking damage. Current position: (${this.sprite.x}, ${this.sprite.y})`
+    );
+    await EffectManager.applyEffect(this.sprite, 'damage');
+    console.log(
+      `${this.name} after damage effect. Current position: (${this.sprite.x}, ${this.sprite.y})`
+    );
   }
-
+  public async attack(): Promise<number> {
+    console.log(`${this.name} attacking. Current position: (${this.sprite.x}, ${this.sprite.y})`);
+    await EffectManager.applyEffect(this.sprite, 'attack');
+    console.log(
+      `${this.name} after attack effect. Current position: (${this.sprite.x}, ${this.sprite.y})`
+    );
+    return this.status.strength;
+  }
   public isAlive(): boolean {
     return this.status.hp > 0;
   }
+
   public async applyEffect(effectName: string): Promise<void> {
     this.isMoving = true;
-    await EffectManager.applyEffect(this.sprite, effectName);
+    EffectManager.applyEffect(this.sprite, effectName);
     this.isMoving = false;
   }
 }

@@ -20,9 +20,13 @@ export class EffectManager {
     return this.effects.get(name);
   }
 
-  static applyEffect(sprite: PIXI.Sprite, effectName: string): void {
+  static async applyEffect(sprite: PIXI.Sprite, effectName: string): Promise<void> {
     const effect = this.getEffect(effectName);
     if (effect) {
+      console.log(
+        `Applying effect: ${effectName} to sprite at position: (${sprite.x}, ${sprite.y})`
+      );
+
       effect.apply(sprite);
 
       if (!this.activeEffects.has(sprite)) {
@@ -34,26 +38,32 @@ export class EffectManager {
         this.startUpdateLoop();
       }
 
-      setTimeout(() => {
-        if (effect.complete) {
-          effect.complete(sprite);
-        }
-        const activeEffectsForSprite = this.activeEffects.get(sprite);
-        if (activeEffectsForSprite) {
-          const index = activeEffectsForSprite.findIndex((e) => e.effect === effect);
-          if (index !== -1) {
-            activeEffectsForSprite.splice(index, 1);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (effect.complete) {
+            effect.complete(sprite);
           }
-          if (activeEffectsForSprite.length === 0) {
-            this.activeEffects.delete(sprite);
+          console.log(
+            `Completed effect: ${effectName}. Sprite position: (${sprite.x}, ${sprite.y})`
+          );
+
+          const activeEffectsForSprite = this.activeEffects.get(sprite);
+          if (activeEffectsForSprite) {
+            const index = activeEffectsForSprite.findIndex((e) => e.effect === effect);
+            if (index !== -1) {
+              activeEffectsForSprite.splice(index, 1);
+            }
+            if (activeEffectsForSprite.length === 0) {
+              this.activeEffects.delete(sprite);
+            }
           }
-        }
-      }, effect.duration);
+          resolve();
+        }, effect.duration);
+      });
     }
   }
 
   private static updateLoop: number | null = null;
-
   private static startUpdateLoop(): void {
     if (this.updateLoop === null) {
       this.updateLoop = requestAnimationFrame(this.update.bind(this));
