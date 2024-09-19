@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { Character } from './Character';
 import { Enemy, EnemyFactory } from './Enemy';
 import { GameObject } from './GameObject';
+import { MapGenerator } from './MapGenerator';
 import { Direction, TileType, Tile, TileInfo } from './types';
 
 const TileInfoMap: { [key in TileType]: TileInfo } = {
@@ -97,10 +98,10 @@ export class Stage {
     };
   }
 
-  public initialize(app: PIXI.Application) {
+  public async initialize(app: PIXI.Application): Promise<void> {
     this.app = app;
     this.app.stage.addChild(this.camera);
-    this.initializeTileMap();
+    await this.initializeTileMap();
     this.setupKeyboardListeners();
     this.centerCamera();
     this.app.ticker.add(() => this.update());
@@ -118,22 +119,42 @@ export class Stage {
   }
 
   private async initializeTileMap(): Promise<void> {
-    for (let y = 0; y < this.stageData.length; y++) {
+    const mapGenerator = new MapGenerator(80, 80, 4, 8);
+    const generatedMap = mapGenerator.generateMap();
+
+    for (let y = 0; y < generatedMap.length; y++) {
       this.tileMap[y] = [];
-      for (let x = 0; x < this.stageData[y].length; x++) {
+      for (let x = 0; x < generatedMap[y].length; x++) {
         this.tileMap[y][x] = [];
-        const tileType = this.stageData[y][x] as TileType;
+        const tileType = generatedMap[y][x];
         if (tileType !== TileType.EMPTY) {
           const tile: Tile = {
             type: tileType,
             height: 0,
             sprite: await this.createTileSprite(tileType, x, y),
-            overlay: this.createTileOverlay(x, y),
+            overlay: await this.createTileOverlay(x, y),
           };
           this.tileMap[y][x][0] = tile;
         }
       }
     }
+
+    // for (let y = 0; y < this.stageData.length; y++) {
+    //   this.tileMap[y] = [];
+    //   for (let x = 0; x < this.stageData[y].length; x++) {
+    //     this.tileMap[y][x] = [];
+    //     const tileType = this.stageData[y][x] as TileType;
+    //     if (tileType !== TileType.EMPTY) {
+    //       const tile: Tile = {
+    //         type: tileType,
+    //         height: 0,
+    //         sprite: await this.createTileSprite(tileType, x, y),
+    //         overlay: this.createTileOverlay(x, y),
+    //       };
+    //       this.tileMap[y][x][0] = tile;
+    //     }
+    //   }
+    // }
   }
 
   private async createTileSprite(tileType: TileType, x: number, y: number): Promise<PIXI.Sprite> {
@@ -282,7 +303,7 @@ export class Stage {
     this.updateCameraPosition();
   }
 
-  private updateCameraPosition() {
+  public updateCameraPosition() {
     if (!this.followTarget || !this.app) return;
 
     const targetPosition = this.followTarget.getPosition();
@@ -529,30 +550,38 @@ export class Stage {
 
   public isValidMove(x: number, y: number, z: number): boolean {
     // マップの境界チェック
-    if (x < 0 || x >= this.stageData[0].length || y < 0 || y >= this.stageData.length) {
+    if (x < 0 || x >= this.tileMap[0].length || y < 0 || y >= this.tileMap.length) {
       return false;
     }
-
+    console.log('isValidMove 1');
+    console.log('isValidMove 1', this.tileMap);
     // タイルの存在チェック
-    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+    // if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][0]) {
+      console.log(this.tileMap[y][x]);
       return false;
     }
+    console.log('isValidMove 2');
 
     // タイルが移動可能かチェック（例：EMPTYタイプは移動不可）
-    const tileType = this.tileMap[y][x][z].type;
+    const tileType = this.tileMap[y][x][0].type;
     if (tileType === TileType.EMPTY) {
       return false;
     }
+    console.log('isValidMove 3');
 
     // 他のキャラクターとの衝突チェック
     if (this.isPositionOccupied(x, y, z)) {
       return false;
     }
+    console.log('isValidMove 4');
 
     // GameObjectとの衝突チェック
     if (this.objects.has(`${x},${y},${z}`)) {
       return false;
     }
+    console.log('isValidMove 5');
+
     return true;
   }
 
@@ -637,8 +666,11 @@ export class Stage {
     const visibleTiles = this.getVisibleTiles();
 
     for (let y = 0; y < this.stageData.length; y++) {
+      if (!this.tileMap[y]) continue; // この行を追加
       for (let x = 0; x < this.stageData[y].length; x++) {
+        if (!this.tileMap[y][x]) continue; // この行を追加
         const tile = this.tileMap[y][x][0];
+        if (!tile) continue; // この行を追加
         if (tile && tile.sprite) {
           if (visibleTiles.has(`${x},${y}`)) {
             tile.sprite.visible = true;
@@ -709,32 +741,6 @@ export class Stage {
   ): number {
     return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) + Math.abs(pos1.z - pos2.z);
   }
-
-  //マップ上のパスを計算
-  // public findPath(
-  //   start: { x: number; y: number; z: number },
-  //   goal: { x: number; y: number; z: number }
-  // ): { x: number; y: number; z: number }[] {
-  //   // ここに簡単な経路探索アルゴリズムを実装します
-  //   const path: { x: number; y: number; z: number }[] = [];
-  //   const dx = Math.sign(goal.x - start.x);
-  //   const dy = Math.sign(goal.y - start.y);
-  //   const dz = Math.sign(goal.z - start.z);
-
-  //   const current = { ...start };
-  //   while (current.x !== goal.x || current.y !== goal.y || current.z !== goal.z) {
-  //     if (current.x !== goal.x) {
-  //       current.x += dx;
-  //     } else if (current.y !== goal.y) {
-  //       current.y += dy;
-  //     } else if (current.z !== goal.z) {
-  //       current.z += dz;
-  //     }
-  //     path.push({ ...current });
-  //   }
-
-  //   return path;
-  // }
 
   public canMoveTo(x: number, y: number, z: number): boolean {
     console.log(`Checking if can move to: (${x}, ${y}, ${z})`);
@@ -881,6 +887,36 @@ export class Stage {
   private heuristic(a: Node, b: Node): number {
     // マンハッタン距離を使用
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+  }
+
+  //マップ内のランダムな歩行可能なタイルを返す
+  public getRandomWalkableTile(): { x: number; y: number } {
+    const walkableTiles: { x: number; y: number }[] = [];
+
+    for (let y = 0; y < this.tileMap.length; y++) {
+      for (let x = 0; x < this.tileMap[y].length; x++) {
+        if (this.isWalkable(x, y, 0)) {
+          walkableTiles.push({ x, y });
+        }
+      }
+    }
+
+    if (walkableTiles.length === 0) {
+      throw new Error('No walkable tiles found in the map');
+    }
+
+    const randomIndex = Math.floor(Math.random() * walkableTiles.length);
+    return walkableTiles[randomIndex];
+  }
+
+  //指定された座標のタイルが歩行可能かどうかを判断
+  private isWalkable(x: number, y: number, z: number): boolean {
+    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+      return false;
+    }
+
+    const tileType = this.tileMap[y][x][z].type;
+    return tileType === TileType.GRASS || tileType === TileType.WATER;
   }
 }
 

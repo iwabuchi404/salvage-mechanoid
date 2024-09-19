@@ -124,7 +124,7 @@ export class Game {
   public async initialize(_canvas: HTMLCanvasElement) {
     this.app = await this.createPixi(_canvas);
 
-    this.stage.initialize(this.app);
+    await this.stage.initialize(this.app);
 
     // タイル選択時の処理
     this.stage.setOnTileSelect((tileInfo) => {
@@ -133,21 +133,51 @@ export class Game {
     });
 
     // プレイヤーの作成
+    const startPosition = this.stage.getRandomWalkableTile();
     this.player = new Character('player', 'Hero', {
       up: '/robo01bk_r.png',
       down: '/robo01_l.png',
       left: '/robo01bk_l.png',
       right: '/robo01_r.png',
     });
-
+    // プレイヤーをステージに追加
+    await this.stage.addCharacter(this.player, startPosition.x, startPosition.y, 0);
+    this.player.setPosition(startPosition.x, startPosition.y, 0);
+    // this.stage.addCharacter(this.player, 2, 2, 0);
+    this.stage.updateCameraPosition();
     // テスト用に敵を追加
-    const enemy1 = await this.stage.addEnemy('enemy1', 'SLIME', 1, 2, 0);
-    const enemy2 = await this.stage.addEnemy('enemy2', 'SLIME', 3, 6, 0);
-    const enemy3 = await this.stage.addEnemy('enemy3', 'GOBLIN', 3, 5, 0);
+    // const enemy1 = await this.stage.addEnemy('enemy1', 'SLIME', 1, 2, 0);
+    // const enemy2 = await this.stage.addEnemy('enemy2', 'SLIME', 3, 6, 0);
+    // const enemy3 = await this.stage.addEnemy('enemy3', 'GOBLIN', 3, 5, 0);
+    for (let i = 0; i < 3; i++) {
+      const enemyPosition = this.stage.getRandomWalkableTile();
+      const enemy = await this.stage.addEnemy(
+        `enemy${i}`,
+        'SLIME',
+        enemyPosition.x,
+        enemyPosition.y,
+        0
+      );
+    }
+    for (let i = 0; i < 30; i++) {
+      const enemyPosition = this.stage.getRandomWalkableTile();
+      const enemy = await this.stage.addEnemy(
+        `enemy${i}`,
+        'GOBLIN',
+        enemyPosition.x,
+        enemyPosition.y,
+        0
+      );
+    }
 
-    const boxTexture = '/obj01.png';
-    const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
-    this.stage.addObject(box);
+    // const boxTexture = '/obj01.png';
+    // for (let i = 0; i < 3; i++) {
+    //   const enemyPosition = this.stage.getRandomWalkableTile();
+    //   const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+    //   this.stage.addObject(box);
+    // }
+    // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+    // this.stage.addObject(box);
 
     this.stage.setOnCharacterSelect((character) => {
       this.selectedCharacter = character;
@@ -160,8 +190,7 @@ export class Game {
       this.selectedEnemy = enemy;
       this.onEnemySelect(enemy);
     });
-    // プレイヤーをステージに追加
-    this.stage.addCharacter(this.player, 0, 0, 0);
+
     // プレイヤーを追跡
     this.stage.setFollowTarget(this.player);
     // カメラのスムージングを設定（必要に応じて調整）
@@ -381,7 +410,6 @@ export class Game {
   public getPlayerItems(): Item[] {
     return [...this.playerItems];
   }
-
   public isAllEnemiesDefeated(): boolean {
     const enemies = this.stage.getAllEnemies();
     if (!enemies || enemies.length == 0) {
