@@ -523,7 +523,6 @@ export class Stage {
     if (event) {
       event();
     }
-
     this.sortCharacters(); // キャラクターの深度ソートを行う
   }
 
@@ -637,19 +636,22 @@ export class Stage {
     const visibleTiles = this.getVisibleTiles();
 
     for (let y = 0; y < this.stageData.length; y++) {
-      for (let x = 0; x < this.stageData[y].length; x++) {
-        const tile = this.tileMap[y][x][0];
-        if (tile && tile.sprite) {
-          if (visibleTiles.has(`${x},${y}`)) {
-            tile.sprite.visible = true;
-          } else {
-            tile.sprite.visible = false;
+      if (this.tileMap[y]) {
+        for (let x = 0; x < this.stageData[y].length; x++) {
+          if (this.tileMap[y][x] && this.tileMap[y][x][0]) {
+            const tile = this.tileMap[y][x][0];
+            if (tile && tile.sprite) {
+              if (visibleTiles.has(`${x},${y}`)) {
+                tile.sprite.visible = true;
+              } else {
+                tile.sprite.visible = false;
+              }
+            }
           }
         }
       }
     }
   }
-
   private getVisibleTiles(): Set<string> {
     const visibleTiles = new Set<string>();
     const cameraX = -this.camera.x;
