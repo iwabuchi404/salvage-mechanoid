@@ -159,7 +159,7 @@ export class Game {
         0
       );
     }
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 1; i++) {
       const enemyPosition = this.stage.getRandomWalkableTile();
       const enemy = await this.stage.addEnemy(
         `enemy${i}`,
@@ -384,7 +384,6 @@ export class Game {
 
     if (target && target instanceof Enemy) {
       const damage = await this.player.attack();
-      console.log('damage:', damage);
       await target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
 

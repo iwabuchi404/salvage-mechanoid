@@ -119,7 +119,7 @@ export class Stage {
   }
 
   private async initializeTileMap(): Promise<void> {
-    const mapGenerator = new MapGenerator(80, 80, 4, 8);
+    const mapGenerator = new MapGenerator(50, 50, 4, 8);
     const generatedMap = mapGenerator.generateMap();
 
     for (let y = 0; y < generatedMap.length; y++) {
@@ -526,7 +526,7 @@ export class Stage {
       this.characters.delete(character.getId());
     }
 
-    character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
+    await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
     character.setPosition(targetX, targetY, targetZ);
 
     // 新しい位置に character を追加
@@ -553,34 +553,28 @@ export class Stage {
     if (x < 0 || x >= this.tileMap[0].length || y < 0 || y >= this.tileMap.length) {
       return false;
     }
-    console.log('isValidMove 1');
-    console.log('isValidMove 1', this.tileMap);
+
     // タイルの存在チェック
     // if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
     if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][0]) {
-      console.log(this.tileMap[y][x]);
       return false;
     }
-    console.log('isValidMove 2');
 
     // タイルが移動可能かチェック（例：EMPTYタイプは移動不可）
     const tileType = this.tileMap[y][x][0].type;
     if (tileType === TileType.EMPTY) {
       return false;
     }
-    console.log('isValidMove 3');
 
     // 他のキャラクターとの衝突チェック
     if (this.isPositionOccupied(x, y, z)) {
       return false;
     }
-    console.log('isValidMove 4');
 
     // GameObjectとの衝突チェック
     if (this.objects.has(`${x},${y},${z}`)) {
       return false;
     }
-    console.log('isValidMove 5');
 
     return true;
   }
@@ -773,14 +767,6 @@ export class Stage {
     start: { x: number; y: number; z: number },
     goal: { x: number; y: number; z: number }
   ): { x: number; y: number; z: number }[] {
-    if (!this.canMoveTo(goal.x, goal.y, goal.z)) {
-      console.log('Goal is not reachable');
-      return [];
-    }
-    console.log(
-      `Finding path from (${start.x}, ${start.y}, ${start.z}) to (${goal.x}, ${goal.y}, ${goal.z})`
-    );
-
     const openSet: Node[] = [];
     const closedSet: Set<string> = new Set();
     const startNode = new Node(start.x, start.y, start.z);
@@ -796,7 +782,6 @@ export class Stage {
       const currentNode = this.getLowestFScoreNode(openSet);
 
       if (this.isGoal(currentNode, goalNode)) {
-        console.log('Path found!');
         return this.reconstructPath(currentNode);
       }
 
@@ -825,9 +810,9 @@ export class Stage {
       }
     }
 
-    console.log('No path found');
-    return [];
+    return []; // パスが見つからない場合
   }
+
   private getLowestFScoreNode(nodes: Node[]): Node {
     return nodes.reduce((lowest, node) => (node.f < lowest.f ? node : lowest));
   }
@@ -874,10 +859,8 @@ export class Stage {
       const newX = node.x + dir.dx;
       const newY = node.y + dir.dy;
 
-      if (this.canMoveTo(newX, newY, node.z)) {
-        const neighbor = new Node(newX, newY, node.z);
-        neighbor.g = node.g + 1;
-        neighbors.push(neighbor);
+      if (this.isWalkable(newX, newY, node.z)) {
+        neighbors.push(new Node(newX, newY, node.z));
       }
     }
 
@@ -910,7 +893,7 @@ export class Stage {
   }
 
   //指定された座標のタイルが歩行可能かどうかを判断
-  private isWalkable(x: number, y: number, z: number): boolean {
+  public isWalkable(x: number, y: number, z: number): boolean {
     if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
       return false;
     }

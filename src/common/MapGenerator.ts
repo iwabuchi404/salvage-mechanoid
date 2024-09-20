@@ -162,8 +162,8 @@ export class MapGenerator {
 
     // 通路を作成し、周囲に壁を配置
     for (const point of path) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
           const nx = point.x + dx;
           const ny = point.y + dy;
           if (ny >= 0 && ny < this.height && nx >= 0 && nx < this.width) {
