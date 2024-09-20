@@ -119,20 +119,17 @@ export class Stage {
   }
 
   private async initializeTileMap(): Promise<void> {
-    const mapGenerator = new MapGenerator(50, 50, 4, 8);
-    const generatedMap = mapGenerator.generateMap();
-
-    for (let y = 0; y < generatedMap.length; y++) {
+    for (let y = 0; y < this.stageData.length; y++) {
       this.tileMap[y] = [];
-      for (let x = 0; x < generatedMap[y].length; x++) {
+      for (let x = 0; x < this.stageData[y].length; x++) {
         this.tileMap[y][x] = [];
-        const tileType = generatedMap[y][x];
+        const tileType = this.stageData[y][x] as TileType;
         if (tileType !== TileType.EMPTY) {
           const tile: Tile = {
             type: tileType,
             height: 0,
             sprite: await this.createTileSprite(tileType, x, y),
-            overlay: await this.createTileOverlay(x, y),
+            overlay: this.createTileOverlay(x, y),
           };
           this.tileMap[y][x][0] = tile;
         }
@@ -319,6 +316,10 @@ export class Stage {
     // 現在のカメラ位置から目標位置へスムーズに移動
     this.camera.x += (targetCameraX - this.camera.x) * this.cameraLerpFactor;
     this.camera.y += (targetCameraY - this.camera.y) * this.cameraLerpFactor;
+
+    // カメラの位置を整数値に丸める
+    this.camera.x = Math.round(this.camera.x);
+    this.camera.y = Math.round(this.camera.y);
   }
 
   private moveCamera(dx: number, dy: number) {
@@ -618,12 +619,7 @@ export class Stage {
   public screenToIsometric(screenX: number, screenY: number): { x: number; y: number } {
     const tileWidth = this.tileSize.width;
     const tileHeight = this.tileSize.height;
-
-    // Adjust for the tile's center point
-    screenX += tileWidth / 2;
-    screenY += tileHeight / 2;
-
-    const x = (screenX / (tileWidth / 2) + screenY / (tileHeight / 3)) / 2 - 1;
+    const x = (screenX / (tileWidth / 2) + screenY / (tileHeight / 3)) / 2;
     const y = (screenY / (tileHeight / 3) - screenX / (tileWidth / 2)) / 2;
     return { x, y };
   }
@@ -660,16 +656,16 @@ export class Stage {
     const visibleTiles = this.getVisibleTiles();
 
     for (let y = 0; y < this.stageData.length; y++) {
-      if (!this.tileMap[y]) continue; // この行を追加
       for (let x = 0; x < this.stageData[y].length; x++) {
-        if (!this.tileMap[y][x]) continue; // この行を追加
         const tile = this.tileMap[y][x][0];
-        if (!tile) continue; // この行を追加
         if (tile && tile.sprite) {
-          if (visibleTiles.has(`${x},${y}`)) {
-            tile.sprite.visible = true;
-          } else {
-            tile.sprite.visible = false;
+          const isVisible = visibleTiles.has(`${x},${y}`);
+          tile.sprite.visible = isVisible;
+          if (isVisible) {
+            const screenPos = this.isometricToScreen(x, y);
+            tile.sprite.x = screenPos.x;
+            tile.sprite.y = screenPos.y;
+            tile.sprite.zIndex = y * this.stageData[0].length + x;
           }
         }
       }
@@ -681,23 +677,21 @@ export class Stage {
     const cameraX = -this.camera.x;
     const cameraY = -this.camera.y;
 
-    // アイソメトリックビューの変換係数
-    const isoX = this.tileSize.width / 2;
-    const isoY = this.tileSize.height / 2;
-
     // ビューポートの四隅の座標をアイソメトリック座標系に変換
-    const corners = [
-      this.screenToIso(cameraX, cameraY),
-      this.screenToIso(cameraX + this.viewportWidth, cameraY),
-      this.screenToIso(cameraX, cameraY + this.viewportHeight),
-      this.screenToIso(cameraX + this.viewportWidth, cameraY + this.viewportHeight),
-    ];
+    const topLeft = this.screenToIsometric(
+      cameraX - this.tileSize.width,
+      cameraY - this.tileSize.height
+    );
+    const bottomRight = this.screenToIsometric(
+      cameraX + this.viewportWidth + this.tileSize.width,
+      cameraY + this.viewportHeight + this.tileSize.height
+    );
 
-    // 表示範囲の境界を計算
-    const minX = Math.floor(Math.min(...corners.map((c) => c.x))) - 1;
-    const maxX = Math.ceil(Math.max(...corners.map((c) => c.x))) + 1;
-    const minY = Math.floor(Math.min(...corners.map((c) => c.y))) - 1;
-    const maxY = Math.ceil(Math.max(...corners.map((c) => c.y))) + 1;
+    // 表示範囲の境界を計算（マージンを追加）
+    const minX = Math.floor(topLeft.x) - 4;
+    const maxX = Math.ceil(bottomRight.x) + 4;
+    const minY = Math.floor(topLeft.y) - 4;
+    const maxY = Math.ceil(bottomRight.y) + 4;
 
     // 表示範囲内のタイルを追加
     for (let y = minY; y <= maxY; y++) {

@@ -7,6 +7,8 @@ import { Enemy } from './common/Enemy';
 import { TurnManager, TurnPhase } from './common/TurnManager';
 import { Direction, TileInfo } from './common/types';
 import { GameObject } from './common/GameObject';
+import { MapGenerator } from './common/MapGenerator';
+
 interface Item {
   id: string;
   name: string;
@@ -84,8 +86,9 @@ export class Game {
     //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     // ];
-
-    this.stage = new Stage(stageData, { width: 160, height: 120 }, 800, 600);
+    const mapGenerator = new MapGenerator(50, 50, 4, 8);
+    const generatedMap = mapGenerator.generateMap();
+    this.stage = new Stage(generatedMap, { width: 160, height: 120 }, 800, 600);
 
     this.setupInputHandlers();
 
