@@ -20,12 +20,19 @@ export interface EnemyType {
 }
 
 // タイルの種類を定義する
+// export enum TileType {
+//   EMPTY = 0,
+//   GRASS = 1,
+//   WATER = 2,
+//   MOUNTAIN = 3,
+//   // 必要に応じて他のタイルタイプを追加
+// }
+
 export enum TileType {
   EMPTY = 0,
   GRASS = 1,
   WATER = 2,
   MOUNTAIN = 3,
-  // 必要に応じて他のタイルタイプを追加
 }
 
 // タイルを表す型

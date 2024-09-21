@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js';
 import { Character } from './Character';
 import { Enemy, EnemyFactory } from './Enemy';
 import { GameObject } from './GameObject';
+import { MapGenerator } from './MapGenerator';
 import { Direction, TileType, Tile, TileInfo } from './types';
 
 const TileInfoMap: { [key in TileType]: TileInfo } = {
@@ -97,10 +98,10 @@ export class Stage {
     };
   }
 
-  public initialize(app: PIXI.Application) {
+  public async initialize(app: PIXI.Application): Promise<void> {
     this.app = app;
     this.app.stage.addChild(this.camera);
-    this.initializeTileMap();
+    await this.initializeTileMap();
     this.setupKeyboardListeners();
     this.centerCamera();
     this.app.ticker.add(() => this.update());
@@ -134,6 +135,23 @@ export class Stage {
         }
       }
     }
+
+    // for (let y = 0; y < this.stageData.length; y++) {
+    //   this.tileMap[y] = [];
+    //   for (let x = 0; x < this.stageData[y].length; x++) {
+    //     this.tileMap[y][x] = [];
+    //     const tileType = this.stageData[y][x] as TileType;
+    //     if (tileType !== TileType.EMPTY) {
+    //       const tile: Tile = {
+    //         type: tileType,
+    //         height: 0,
+    //         sprite: await this.createTileSprite(tileType, x, y),
+    //         overlay: this.createTileOverlay(x, y),
+    //       };
+    //       this.tileMap[y][x][0] = tile;
+    //     }
+    //   }
+    // }
   }
 
   private async createTileSprite(tileType: TileType, x: number, y: number): Promise<PIXI.Sprite> {
@@ -282,7 +300,7 @@ export class Stage {
     this.updateCameraPosition();
   }
 
-  private updateCameraPosition() {
+  public updateCameraPosition() {
     if (!this.followTarget || !this.app) return;
 
     const targetPosition = this.followTarget.getPosition();
@@ -298,6 +316,10 @@ export class Stage {
     // 現在のカメラ位置から目標位置へスムーズに移動
     this.camera.x += (targetCameraX - this.camera.x) * this.cameraLerpFactor;
     this.camera.y += (targetCameraY - this.camera.y) * this.cameraLerpFactor;
+
+    // カメラの位置を整数値に丸める
+    this.camera.x = Math.round(this.camera.x);
+    this.camera.y = Math.round(this.camera.y);
   }
 
   private moveCamera(dx: number, dy: number) {
@@ -505,7 +527,7 @@ export class Stage {
       this.characters.delete(character.getId());
     }
 
-    character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
+    await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
     character.setPosition(targetX, targetY, targetZ);
 
     // 新しい位置に character を追加
@@ -528,17 +550,18 @@ export class Stage {
 
   public isValidMove(x: number, y: number, z: number): boolean {
     // マップの境界チェック
-    if (x < 0 || x >= this.stageData[0].length || y < 0 || y >= this.stageData.length) {
+    if (x < 0 || x >= this.tileMap[0].length || y < 0 || y >= this.tileMap.length) {
       return false;
     }
 
     // タイルの存在チェック
-    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+    // if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][0]) {
       return false;
     }
 
     // タイルが移動可能かチェック（例：EMPTYタイプは移動不可）
-    const tileType = this.tileMap[y][x][z].type;
+    const tileType = this.tileMap[y][x][0].type;
     if (tileType === TileType.EMPTY) {
       return false;
     }
@@ -552,6 +575,7 @@ export class Stage {
     if (this.objects.has(`${x},${y},${z}`)) {
       return false;
     }
+
     return true;
   }
 
@@ -594,12 +618,7 @@ export class Stage {
   public screenToIsometric(screenX: number, screenY: number): { x: number; y: number } {
     const tileWidth = this.tileSize.width;
     const tileHeight = this.tileSize.height;
-
-    // Adjust for the tile's center point
-    screenX += tileWidth / 2;
-    screenY += tileHeight / 2;
-
-    const x = (screenX / (tileWidth / 2) + screenY / (tileHeight / 3)) / 2 - 1;
+    const x = (screenX / (tileWidth / 2) + screenY / (tileHeight / 3)) / 2;
     const y = (screenY / (tileHeight / 3) - screenX / (tileWidth / 2)) / 2;
     return { x, y };
   }
@@ -636,6 +655,7 @@ export class Stage {
     const visibleTiles = this.getVisibleTiles();
 
     for (let y = 0; y < this.stageData.length; y++) {
+<<<<<<< HEAD
       if (this.tileMap[y]) {
         for (let x = 0; x < this.stageData[y].length; x++) {
           if (this.tileMap[y][x] && this.tileMap[y][x][0]) {
@@ -647,6 +667,18 @@ export class Stage {
                 tile.sprite.visible = false;
               }
             }
+=======
+      for (let x = 0; x < this.stageData[y].length; x++) {
+        const tile = this.tileMap[y][x][0];
+        if (tile && tile.sprite) {
+          const isVisible = visibleTiles.has(`${x},${y}`);
+          tile.sprite.visible = isVisible;
+          if (isVisible) {
+            const screenPos = this.isometricToScreen(x, y);
+            tile.sprite.x = screenPos.x;
+            tile.sprite.y = screenPos.y;
+            tile.sprite.zIndex = y * this.stageData[0].length + x;
+>>>>>>> future/20240920/map_generator
           }
         }
       }
@@ -657,23 +689,21 @@ export class Stage {
     const cameraX = -this.camera.x;
     const cameraY = -this.camera.y;
 
-    // アイソメトリックビューの変換係数
-    const isoX = this.tileSize.width / 2;
-    const isoY = this.tileSize.height / 2;
-
     // ビューポートの四隅の座標をアイソメトリック座標系に変換
-    const corners = [
-      this.screenToIso(cameraX, cameraY),
-      this.screenToIso(cameraX + this.viewportWidth, cameraY),
-      this.screenToIso(cameraX, cameraY + this.viewportHeight),
-      this.screenToIso(cameraX + this.viewportWidth, cameraY + this.viewportHeight),
-    ];
+    const topLeft = this.screenToIsometric(
+      cameraX - this.tileSize.width,
+      cameraY - this.tileSize.height
+    );
+    const bottomRight = this.screenToIsometric(
+      cameraX + this.viewportWidth + this.tileSize.width,
+      cameraY + this.viewportHeight + this.tileSize.height
+    );
 
-    // 表示範囲の境界を計算
-    const minX = Math.floor(Math.min(...corners.map((c) => c.x))) - 1;
-    const maxX = Math.ceil(Math.max(...corners.map((c) => c.x))) + 1;
-    const minY = Math.floor(Math.min(...corners.map((c) => c.y))) - 1;
-    const maxY = Math.ceil(Math.max(...corners.map((c) => c.y))) + 1;
+    // 表示範囲の境界を計算（マージンを追加）
+    const minX = Math.floor(topLeft.x) - 4;
+    const maxX = Math.ceil(bottomRight.x) + 4;
+    const minY = Math.floor(topLeft.y) - 4;
+    const maxY = Math.ceil(bottomRight.y) + 4;
 
     // 表示範囲内のタイルを追加
     for (let y = minY; y <= maxY; y++) {
@@ -712,32 +742,6 @@ export class Stage {
     return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) + Math.abs(pos1.z - pos2.z);
   }
 
-  //マップ上のパスを計算
-  // public findPath(
-  //   start: { x: number; y: number; z: number },
-  //   goal: { x: number; y: number; z: number }
-  // ): { x: number; y: number; z: number }[] {
-  //   // ここに簡単な経路探索アルゴリズムを実装します
-  //   const path: { x: number; y: number; z: number }[] = [];
-  //   const dx = Math.sign(goal.x - start.x);
-  //   const dy = Math.sign(goal.y - start.y);
-  //   const dz = Math.sign(goal.z - start.z);
-
-  //   const current = { ...start };
-  //   while (current.x !== goal.x || current.y !== goal.y || current.z !== goal.z) {
-  //     if (current.x !== goal.x) {
-  //       current.x += dx;
-  //     } else if (current.y !== goal.y) {
-  //       current.y += dy;
-  //     } else if (current.z !== goal.z) {
-  //       current.z += dz;
-  //     }
-  //     path.push({ ...current });
-  //   }
-
-  //   return path;
-  // }
-
   public canMoveTo(x: number, y: number, z: number): boolean {
     console.log(`Checking if can move to: (${x}, ${y}, ${z})`);
 
@@ -769,14 +773,6 @@ export class Stage {
     start: { x: number; y: number; z: number },
     goal: { x: number; y: number; z: number }
   ): { x: number; y: number; z: number }[] {
-    if (!this.canMoveTo(goal.x, goal.y, goal.z)) {
-      console.log('Goal is not reachable');
-      return [];
-    }
-    console.log(
-      `Finding path from (${start.x}, ${start.y}, ${start.z}) to (${goal.x}, ${goal.y}, ${goal.z})`
-    );
-
     const openSet: Node[] = [];
     const closedSet: Set<string> = new Set();
     const startNode = new Node(start.x, start.y, start.z);
@@ -792,7 +788,6 @@ export class Stage {
       const currentNode = this.getLowestFScoreNode(openSet);
 
       if (this.isGoal(currentNode, goalNode)) {
-        console.log('Path found!');
         return this.reconstructPath(currentNode);
       }
 
@@ -821,9 +816,9 @@ export class Stage {
       }
     }
 
-    console.log('No path found');
-    return [];
+    return []; // パスが見つからない場合
   }
+
   private getLowestFScoreNode(nodes: Node[]): Node {
     return nodes.reduce((lowest, node) => (node.f < lowest.f ? node : lowest));
   }
@@ -870,10 +865,8 @@ export class Stage {
       const newX = node.x + dir.dx;
       const newY = node.y + dir.dy;
 
-      if (this.canMoveTo(newX, newY, node.z)) {
-        const neighbor = new Node(newX, newY, node.z);
-        neighbor.g = node.g + 1;
-        neighbors.push(neighbor);
+      if (this.isWalkable(newX, newY, node.z)) {
+        neighbors.push(new Node(newX, newY, node.z));
       }
     }
 
@@ -883,6 +876,36 @@ export class Stage {
   private heuristic(a: Node, b: Node): number {
     // マンハッタン距離を使用
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+  }
+
+  //マップ内のランダムな歩行可能なタイルを返す
+  public getRandomWalkableTile(): { x: number; y: number } {
+    const walkableTiles: { x: number; y: number }[] = [];
+
+    for (let y = 0; y < this.tileMap.length; y++) {
+      for (let x = 0; x < this.tileMap[y].length; x++) {
+        if (this.isWalkable(x, y, 0)) {
+          walkableTiles.push({ x, y });
+        }
+      }
+    }
+
+    if (walkableTiles.length === 0) {
+      throw new Error('No walkable tiles found in the map');
+    }
+
+    const randomIndex = Math.floor(Math.random() * walkableTiles.length);
+    return walkableTiles[randomIndex];
+  }
+
+  //指定された座標のタイルが歩行可能かどうかを判断
+  public isWalkable(x: number, y: number, z: number): boolean {
+    if (!this.tileMap[y] || !this.tileMap[y][x] || !this.tileMap[y][x][z]) {
+      return false;
+    }
+
+    const tileType = this.tileMap[y][x][z].type;
+    return tileType === TileType.GRASS || tileType === TileType.WATER;
   }
 }
 
