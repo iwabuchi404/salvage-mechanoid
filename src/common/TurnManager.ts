@@ -37,6 +37,7 @@ export class TurnManager {
     this.currentPhase = TurnPhase.PLAYER;
     return this.currentPhase;
   }
+
   public nextTurn(): TurnPhase {
     this.currentIndex++;
     if (this.currentIndex >= this.characters.length) {

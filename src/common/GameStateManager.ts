@@ -2,6 +2,7 @@ export enum GameState {
   START,
   PLAYING,
   CLEAR,
+  GAME_OVER,
 }
 
 export class GameStateManager {

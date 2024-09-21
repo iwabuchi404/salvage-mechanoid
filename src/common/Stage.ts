@@ -30,6 +30,12 @@ const TileInfoMap: { [key in TileType]: TileInfo } = {
     effect: 'Increases defense',
     statModifier: { defense: 1 },
   },
+  [TileType.TILE]: {
+    type: TileType.TILE,
+    name: 'TILE',
+    effect: 'Increases defense',
+    statModifier: {},
+  },
 };
 
 export class Stage {
@@ -165,6 +171,9 @@ export class Stage {
         break;
       case TileType.MOUNTAIN:
         texturePath = '/image03.png';
+        break;
+      case TileType.TILE:
+        texturePath = '/tile04.png';
         break;
       default:
         texturePath = '/image.png';
@@ -355,6 +364,10 @@ export class Stage {
   // カメラのスムージング係数を設定するメソッド
   public setCameraSmoothing(factor: number) {
     this.cameraLerpFactor = Math.max(0, Math.min(1, factor));
+  }
+
+  public getCameraPosition() {
+    return { x: this.camera.x, y: this.camera.y };
   }
 
   private getMapBounds(): {
@@ -605,9 +618,11 @@ export class Stage {
         return { ...position }; // デフォルトケースを追加
     }
   }
+
   public getTileHeight(): number {
     return this.tileSize.height;
   }
+
   public isometricToScreen(x: number, y: number): { x: number; y: number } {
     return {
       x: ((x - y) * this.tileSize.width) / 2,
@@ -655,19 +670,6 @@ export class Stage {
     const visibleTiles = this.getVisibleTiles();
 
     for (let y = 0; y < this.stageData.length; y++) {
-<<<<<<< HEAD
-      if (this.tileMap[y]) {
-        for (let x = 0; x < this.stageData[y].length; x++) {
-          if (this.tileMap[y][x] && this.tileMap[y][x][0]) {
-            const tile = this.tileMap[y][x][0];
-            if (tile && tile.sprite) {
-              if (visibleTiles.has(`${x},${y}`)) {
-                tile.sprite.visible = true;
-              } else {
-                tile.sprite.visible = false;
-              }
-            }
-=======
       for (let x = 0; x < this.stageData[y].length; x++) {
         const tile = this.tileMap[y][x][0];
         if (tile && tile.sprite) {
@@ -678,7 +680,6 @@ export class Stage {
             tile.sprite.x = screenPos.x;
             tile.sprite.y = screenPos.y;
             tile.sprite.zIndex = y * this.stageData[0].length + x;
->>>>>>> future/20240920/map_generator
           }
         }
       }
@@ -906,6 +907,26 @@ export class Stage {
 
     const tileType = this.tileMap[y][x][z].type;
     return tileType === TileType.GRASS || tileType === TileType.WATER;
+  }
+
+  public getAdjacentPositions(
+    x: number,
+    y: number,
+    z: number
+  ): { x: number; y: number; z: number }[] {
+    return [
+      { x: x + 1, y, z },
+      { x: x - 1, y, z },
+      { x, y: y + 1, z },
+      { x, y: y - 1, z },
+    ];
+  }
+
+  public isAdjacent(
+    pos1: { x: number; y: number; z: number },
+    pos2: { x: number; y: number; z: number }
+  ): boolean {
+    return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) === 1 && pos1.z === pos2.z;
   }
 }
 

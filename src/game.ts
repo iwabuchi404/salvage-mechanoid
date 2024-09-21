@@ -8,6 +8,7 @@ import { TurnManager, TurnPhase } from './common/TurnManager';
 import { Direction, TileInfo } from './common/types';
 import { GameObject } from './common/GameObject';
 import { MapGenerator } from './common/MapGenerator';
+import { onCharacterDestroyed } from './common/VisualEffect';
 
 interface Item {
   id: string;
@@ -28,7 +29,7 @@ export class Game {
   private onEnemySelect: (enemy: Enemy | null) => void;
   private selectedTile: TileInfo | null = null;
   private onTileSelect: (tileInfo: TileInfo | null) => void;
-
+  private onGameOver: (score: number) => void;
   private turnManager: TurnManager | null = null;
   private isPlayerTurn = true;
   private currentPhase: TurnPhase = TurnPhase.PLAYER;
@@ -107,6 +108,9 @@ export class Game {
     this.onTileSelect = () => {
       // console.log('onTileSelect init');
     };
+    this.onGameOver = () => {
+      // console.log('onTileSelect init');
+    };
   }
 
   async createPixi(_canvas: HTMLCanvasElement) {
@@ -162,7 +166,8 @@ export class Game {
         0
       );
     }
-    for (let i = 0; i < 1; i++) {
+
+    for (let i = 0; i < 6; i++) {
       const enemyPosition = this.stage.getRandomWalkableTile();
       const enemy = await this.stage.addEnemy(
         `enemy${i}`,
@@ -173,14 +178,14 @@ export class Game {
       );
     }
 
-    // const boxTexture = '/obj01.png';
-    // for (let i = 0; i < 3; i++) {
-    //   const enemyPosition = this.stage.getRandomWalkableTile();
-    //   const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
-    //   this.stage.addObject(box);
-    // }
-    // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
-    // this.stage.addObject(box);
+    const boxTexture = '/obj01.png';
+    for (let i = 0; i < 3; i++) {
+      const enemyPosition = this.stage.getRandomWalkableTile();
+      const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+      this.stage.addObject(box);
+    }
+    const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+    this.stage.addObject(box);
 
     this.stage.setOnCharacterSelect((character) => {
       this.selectedCharacter = character;
@@ -223,7 +228,28 @@ export class Game {
   private gameLoop() {
     // ゲームの更新ロジックをここに書く
     // 例: キャラクターのアニメーション更新、衝突検出など
+    this.checkGameOver();
     this.stage.update(this.app?.ticker.deltaMS);
+  }
+
+  private checkGameOver() {
+    console.log('checkGameOver HP', this.player?.getStatus().hp);
+    if (this.player && this.player.getStatus().hp <= 0) {
+      this.gameOver();
+    }
+  }
+
+  private gameOver() {
+    // ゲームオーバー時の処理
+    console.log('game over');
+    // const finalScore = this.calculateScore(); // スコア計算のメソッドを実装する
+    if (this.onGameOver) {
+      this.onGameOver(100);
+    }
+  }
+
+  public setOnGameOver(callback: (score: number) => void) {
+    this.onGameOver = callback;
   }
 
   public getCurrentPhase(): TurnPhase {
@@ -392,6 +418,19 @@ export class Game {
 
       if (!target.isAlive()) {
         console.log(`${target.getName()} was defeated!`);
+        const cameraPos = this.stage.getCameraPosition();
+        const effectPos = this.stage.isometricToScreen(
+          target.getPosition().x,
+          target.getPosition().y
+        );
+
+        const effectContainer = onCharacterDestroyed(
+          { x: effectPos.x + cameraPos.x, y: effectPos.y + cameraPos.y },
+          40
+        );
+        console.log('targetPos', target.getPosition().x, target.getPosition().y);
+        console.log('effectPos', effectPos);
+        this.app?.stage.addChild(effectContainer);
         this.stage.removeEnemy(target);
       }
     } else {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref, compile, computed, watch } from 'vue';
 import { Application, Assets, Graphics } from 'pixi.js';
-import { Game } from '../game';
-import { Character } from '../common/Character';
-import { Enemy } from '../common/Enemy';
-import { TileInfo } from '../common/Stage';
-import { TurnManager, TurnPhase } from '../common/TurnManager';
+import { Game } from '../../game';
+import { Character } from '../../common/Character';
+import { Enemy } from '../../common/Enemy';
+import { TileInfo } from '../../common/Stage';
+import { TurnManager, TurnPhase } from '../../common/TurnManager';
 import { defineEmits } from 'vue'; // この行を追加
 
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
@@ -23,6 +23,7 @@ const isPlayerTurn = ref(true);
 
 const emit = defineEmits<{
   (e: 'game-clear'): void;
+  (e: 'game-over', score: number): void;
 }>();
 
 onMounted(() => {
@@ -38,6 +39,11 @@ onMounted(() => {
         isPlayerTurn.value = newPhase === TurnPhase.PLAYER;
       }
     );
+
+    game.setOnGameOver((score: number) => {
+      console.log('call setOnGameOver');
+      emit('game-over', score);
+    });
 
     game.setOnCharacterSelect((character) => {
       selectedCharacter.value = character;
@@ -172,42 +178,19 @@ function checkGameClear() {
 </template>
 
 <style>
-#app-container {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background-color: #404040;
-}
-
 #game-container {
   position: absolute;
   top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
   width: 800px;
   height: 600px;
   margin: auto;
   overflow: hidden;
-  border: 2px solid #d84f00;
-  border-radius: 0px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-#pixi-container {
-  width: 800px;
-  height: 600px;
-}
-
-#ui-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 800px;
-  height: 600px;
-  z-index: 1;
-  pointer-events: none;
-  margin: auto;
+  background-color: rgba(255, 102, 0, 0.2);
+  border: 2px solid #f17523ce;
+  box-shadow: 0 0 10px #ff5e0046, 0 0 20px #ff5e0034;
 }
 
 .controls {
@@ -219,7 +202,8 @@ function checkGameClear() {
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   pointer-events: auto;
-  transform: rotate(25deg);
+  font-family: 'DotGothic16', sans-serif;
+  /* transform: rotate(25deg); */
 }
 
 .controls button {
@@ -231,10 +215,15 @@ function checkGameClear() {
   border-radius: 50%;
   cursor: pointer;
   transition: background-color 0.3s;
+
+  background-color: rgba(184, 80, 11, 0.66);
+  border: 2px solid #f17623;
+  color: #fdb788;
+  transition: all 0.15s ease-in-out;
 }
 
 .controls button:hover {
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgb(143, 33, 6);
 }
 
 .controls button:nth-child(1) {
@@ -266,6 +255,7 @@ function checkGameClear() {
   border-radius: 10px;
   min-width: 200px;
   pointer-events: auto;
+  font-family: 'DotGothic16', sans-serif;
 }
 
 .close-button {
@@ -317,10 +307,18 @@ function checkGameClear() {
 .action-menu button {
   padding: 10px 20px;
   font-size: 16px;
-  background-color: rgba(255, 255, 255, 0.8);
   border: none;
   border-radius: 5px;
   cursor: pointer;
+
+  background-color: rgba(184, 80, 11, 0.66);
+  border: 2px solid #f17623;
+  color: #fdb788;
+  transition: all 0.15s ease-in-out;
+  font-family: 'DotGothic16', sans-serif;
+}
+.action-menu button:hover {
+  background-color: rgb(143, 33, 6);
 }
 
 .item-list {

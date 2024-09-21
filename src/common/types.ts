@@ -33,6 +33,7 @@ export enum TileType {
   GRASS = 1,
   WATER = 2,
   MOUNTAIN = 3,
+  TILE = 4,
 }
 
 // タイルを表す型
