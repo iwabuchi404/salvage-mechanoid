@@ -21,6 +21,15 @@ const showItemList = ref(false);
 const playerItems = ref<any[]>([]);
 const isPlayerTurn = ref(true);
 
+const playerHp = ref(100);
+const playerMaxHp = ref(100);
+
+const playerEnergy = ref(100);
+const playerMaxEnergy = ref(100);
+
+const energyPercentage = computed(() => (playerEnergy.value / playerMaxEnergy.value) * 100);
+const hpPercentage = computed(() => (playerHp.value / playerMaxHp.value) * 100);
+
 const emit = defineEmits<{
   (e: 'game-clear'): void;
   (e: 'game-over', score: number): void;
@@ -59,6 +68,16 @@ onMounted(() => {
     game.setOnTileSelect((tileInfo) => {
       selectedTile.value = tileInfo;
     });
+
+    // エネルギー情報の更新
+    setInterval(() => {
+      if (game.player) {
+        playerEnergy.value = game.player.getEnergy();
+        playerMaxEnergy.value = game.player.getMaxEnergy();
+        playerHp.value = game.player.getStatus().hp;
+        playerMaxHp.value = game.player.getStatus().maxHp;
+      }
+    }, 100);
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
@@ -122,6 +141,16 @@ function checkGameClear() {
   <div class="game-screen">
     <div id="game-container" ref="mainCanvas"></div>
     <div id="ui-overlay">
+      <div class="player-info">
+        <p class="energy-text">HP: {{ playerHp }} / {{ playerMaxHp }}</p>
+        <div class="energy-bar energy-text--hp">
+          <div class="energy-fill energy-fill--hp" :style="{ width: `${hpPercentage}%` }"></div>
+        </div>
+        <p class="energy-text">Energy: {{ playerEnergy }} / {{ playerMaxEnergy }}</p>
+        <div class="energy-bar">
+          <div class="energy-fill" :style="{ width: `${energyPercentage}%` }"></div>
+        </div>
+      </div>
       <div class="controls">
         <button @click="movePlayer('up')">↑</button>
         <button @click="movePlayer('left')">←</button>
@@ -177,7 +206,7 @@ function checkGameClear() {
   </div>
 </template>
 
-<style>
+<style scoped>
 #game-container {
   position: absolute;
   top: 0;
@@ -340,5 +369,35 @@ function checkGameClear() {
 
 .item-list li {
   margin-bottom: 10px;
+}
+
+.player-info {
+  background-color: #333333b0;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 260px;
+  color: #fdb788;
+  border: solid 1px #f17623;
+
+  .energy-bar {
+    width: 100%;
+    height: 6px;
+    background-color: #4b4b4b;
+  }
+
+  .energy-fill {
+    height: 100%;
+    background-color: #f17623;
+    transition: width 0.3s cubic-bezier(0.28, 0.2, 0.45, 1.31);
+  }
+  .energy-fill--hp {
+    background-color: #f17623;
+  }
+  .energy-text {
+    margin: 0 6px 2px 6px;
+    font-size: 12px;
+    font-family: 'DotGothic16', sans-serif;
+  }
 }
 </style>

@@ -7,6 +7,8 @@ export class Character extends CharacterBase {
   private actions: string[];
   private equipment: { [key: string]: string };
   private items: string[];
+  private maxEnergy: number;
+  private currentEnergy: number;
 
   constructor(
     id: string,
@@ -29,6 +31,8 @@ export class Character extends CharacterBase {
       strength: 10,
       defense: 5,
     };
+    this.maxEnergy = 100;
+    this.currentEnergy = this.maxEnergy;
   }
 
   public setStat(key: string, value: number) {
@@ -64,6 +68,57 @@ export class Character extends CharacterBase {
 
   public getStatus(): typeof this.status {
     return { ...this.status };
+  }
+  public getEnergy(): number {
+    return this.currentEnergy;
+  }
+
+  public getMaxEnergy(): number {
+    return this.maxEnergy;
+  }
+
+  public consumeEnergy(amount: number): boolean {
+    if (this.currentEnergy >= amount) {
+      this.currentEnergy -= amount;
+      this.updateEnergyEffects();
+      return true;
+    }
+    return false;
+  }
+
+  private updateEnergyEffects(): void {
+    const energyPercentage = (this.currentEnergy / this.maxEnergy) * 100;
+
+    if (energyPercentage >= 75) {
+      // 通常状態
+    } else if (energyPercentage >= 50) {
+      // スキャン範囲減少
+    } else if (energyPercentage >= 25) {
+      // 移動速度と攻撃力低下
+    } else if (energyPercentage > 0) {
+      // クリティカルモード
+    } else {
+      // 緊急シャットダウン
+    }
+  }
+
+  public restoreEnergy(amount: number): void {
+    this.currentEnergy = Math.min(this.maxEnergy, this.currentEnergy + amount);
+    this.updateEnergyEffects();
+  }
+
+  public move(targetX: number, targetY: number, targetZ: number, duration = 200): Promise<void> {
+    if (this.consumeEnergy(1)) {
+      return super.move(targetX, targetY, targetZ, duration);
+    }
+    return Promise.resolve();
+  }
+
+  public async attack(): Promise<number> {
+    if (this.consumeEnergy(2)) {
+      return super.attack();
+    }
+    return 0;
   }
 
   public setClickHandler(handler: () => void) {

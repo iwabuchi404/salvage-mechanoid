@@ -151,6 +151,7 @@ export abstract class CharacterBase {
       `${this.name} after damage effect. Current position: (${this.sprite.x}, ${this.sprite.y})`
     );
   }
+
   public async attack(): Promise<number> {
     console.log(`${this.name} attacking. Current position: (${this.sprite.x}, ${this.sprite.y})`);
     await EffectManager.applyEffect(this.sprite, 'attack');
@@ -159,6 +160,7 @@ export abstract class CharacterBase {
     );
     return this.status.strength;
   }
+
   public isAlive(): boolean {
     return this.status.hp > 0;
   }

@@ -141,23 +141,6 @@ export class Stage {
         }
       }
     }
-
-    // for (let y = 0; y < this.stageData.length; y++) {
-    //   this.tileMap[y] = [];
-    //   for (let x = 0; x < this.stageData[y].length; x++) {
-    //     this.tileMap[y][x] = [];
-    //     const tileType = this.stageData[y][x] as TileType;
-    //     if (tileType !== TileType.EMPTY) {
-    //       const tile: Tile = {
-    //         type: tileType,
-    //         height: 0,
-    //         sprite: await this.createTileSprite(tileType, x, y),
-    //         overlay: this.createTileOverlay(x, y),
-    //       };
-    //       this.tileMap[y][x][0] = tile;
-    //     }
-    //   }
-    // }
   }
 
   private async createTileSprite(tileType: TileType, x: number, y: number): Promise<PIXI.Sprite> {
@@ -540,7 +523,15 @@ export class Stage {
       this.characters.delete(character.getId());
     }
 
-    await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0);
+    //表示領域にいるかどうかチェック
+    if (this.isEnemyVisible(character)) {
+      //アニメーション再生
+      await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0, 120);
+    } else {
+      // アニメーションをスキップ
+      await character.move(targetPosition.x, targetPosition.y - targetZ * 5, 0, 0);
+    }
+
     character.setPosition(targetX, targetY, targetZ);
 
     // 新しい位置に character を追加
@@ -927,6 +918,24 @@ export class Stage {
     pos2: { x: number; y: number; z: number }
   ): boolean {
     return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) === 1 && pos1.z === pos2.z;
+  }
+
+  //敵が画面内にいるかどうかをチェックする
+  isEnemyVisible(enemy: Enemy | Character): boolean {
+    const enemyPos = enemy.getPosition();
+    const screenPos = this.isometricToScreen(enemyPos.x, enemyPos.y);
+
+    // カメラの位置を考慮
+    const adjustedX = screenPos.x + this.camera.x;
+    const adjustedY = screenPos.y + this.camera.y;
+
+    // 画面の範囲内かどうかをチェック
+    return (
+      adjustedX >= -this.tileSize.width &&
+      adjustedX <= this.viewportWidth + this.tileSize.width &&
+      adjustedY >= -this.tileSize.height &&
+      adjustedY <= this.viewportHeight + this.tileSize.height
+    );
   }
 }
 

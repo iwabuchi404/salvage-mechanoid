@@ -18,9 +18,8 @@ interface Item {
 
 export class Game {
   public app: PIXI.Application | null = null;
-  private stage: Stage;
-
-  private player: Character | null = null;
+  public stage: Stage;
+  public player: Character | null = null;
   // private enemies: Enemy[] = [];
 
   private selectedCharacter: Character | null = null;
@@ -61,32 +60,8 @@ export class Game {
       [1, 1, 1, 2, 2, 2],
       [1, 1, 1, 2, 2, 2],
       [1, 1, 1, 2, 2, 2],
-      [1, 1, 1, 2, 2, 2],
-      [1, 1, 1, 2, 2, 2],
-      [1, 1, 1, 2, 2, 2],
-      [1, 1, 1, 2, 2, 2],
-      [1, 1, 1, 2, 2, 2],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 0, 1, 2, 2],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 1, 2, 1, 1, 1],
-      [1, 3, 1, 3, 3, 2],
     ];
-    // const stageData = [
-    //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //   [0, 3, 0, 2, 0, 0, 3, 0, 0, 0],
-    //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    //   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    // ];
+
     const mapGenerator = new MapGenerator(50, 50, 4, 8);
     const generatedMap = mapGenerator.generateMap();
     this.stage = new Stage(generatedMap, { width: 160, height: 120 }, 800, 600);
@@ -352,20 +327,22 @@ export class Game {
         break;
     }
     // console.log(position, direction, newX, newY);
-
     this.player.setDirection(direction);
-    this.stage
-      .moveCharacter(this.player, newX, newY, position.z)
-      .then(() => {
-        // console.log('Player moved successfully');
-        // カメラの位置が自動的に更新されます
-      })
-      .catch((error) => {
-        // console.log('Player movement failed:', error);
-      });
-    // プレイヤーの行動後、次のターンへ
-    const nextPhase = this.turnManager!.nextTurn();
-    this.handleTurnPhase(nextPhase);
+
+    if (this.player.getEnergy() > 0) {
+      this.stage
+        .moveCharacter(this.player, newX, newY, position.z)
+        .then(() => {
+          this.checkEnergyStatus();
+          const nextPhase = this.turnManager!.nextTurn();
+          this.handleTurnPhase(nextPhase);
+        })
+        .catch((error) => {
+          console.log('Player movement failed:', error);
+        });
+    } else {
+      this.handleEmergencyShutdown();
+    }
   }
 
   public setOnCharacterSelect(callback: ((character: Character | Enemy | null) => void) | null) {
@@ -411,10 +388,11 @@ export class Game {
     const targetPosition = this.stage.getAttackTargetPosition(this.player);
     const target = this.stage.getCharacterAt(targetPosition.x, targetPosition.y, targetPosition.z);
 
-    if (target && target instanceof Enemy) {
+    if (target && target instanceof Enemy && this.player.getEnergy() >= 2) {
       const damage = await this.player.attack();
       await target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
+      this.checkEnergyStatus();
 
       if (!target.isAlive()) {
         console.log(`${target.getName()} was defeated!`);
@@ -428,13 +406,13 @@ export class Game {
           { x: effectPos.x + cameraPos.x, y: effectPos.y + cameraPos.y },
           40
         );
-        console.log('targetPos', target.getPosition().x, target.getPosition().y);
-        console.log('effectPos', effectPos);
+
         this.app?.stage.addChild(effectContainer);
         this.stage.removeEnemy(target);
       }
     } else {
       console.log('No target to attack!');
+      await this.player.attack();
     }
 
     // プレイヤーの行動後、次のターンへ
@@ -457,5 +435,28 @@ export class Game {
       return true;
     }
     return false;
+  }
+
+  private checkEnergyStatus(): void {
+    const player = this.player;
+    if (!player) return;
+
+    const energy = player.getEnergy();
+    if (energy === 0) {
+      this.handleEmergencyShutdown();
+    } else if (energy <= player.getMaxEnergy() * 0.15) {
+      // クリティカルモードの処理
+      player.takeDamage(1);
+      if (!player.isAlive()) {
+        this.gameOver();
+      }
+    }
+  }
+
+  private handleEmergencyShutdown(): void {
+    console.log('Emergency Shutdown!');
+    // 3ターン行動不能の処理
+    // その後の強制帰還処理
+    this.gameOver();
   }
 }
