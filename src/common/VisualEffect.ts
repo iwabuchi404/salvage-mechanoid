@@ -22,8 +22,8 @@ class Particle extends PIXI.Graphics {
 
   private getRandomRedOrangeColor(): number {
     const r = Math.floor(Math.random() * 56) + 200; // 200-255
-    const g = Math.floor(Math.random() * 150); // 0-150
-    const b = 0;
+    const g = Math.floor(Math.random() * 180); // 0-180
+    const b = Math.floor(Math.random() * 100); // 0-100
     return (r << 16) | (g << 8) | b;
   }
 
@@ -49,7 +49,7 @@ class Explosion extends PIXI.Container {
   private isCompleted = false;
   private explosionSize: number;
 
-  constructor(explosionSize: number, particleCount = 60) {
+  constructor(explosionSize: number, particleCount = 120) {
     super();
     this.explosionSize = explosionSize;
     this.particles = [];
@@ -98,7 +98,6 @@ export function onCharacterDestroyed(character: Character, explosionSize = 100):
       requestAnimationFrame(animate);
     } else {
       // アニメーション完了時の処理
-      // explosionContainer.parent?.removeChild(explosionContainer);
     }
   }
   animate();

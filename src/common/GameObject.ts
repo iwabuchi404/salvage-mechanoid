@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { Stage } from './Stage';
+
 export class GameObject {
   private sprite: PIXI.Sprite;
   private position: { x: number; y: number; z: number };

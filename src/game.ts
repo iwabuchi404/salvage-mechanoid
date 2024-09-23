@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { Application, Assets, Graphics, Sprite, Loader } from 'pixi.js';
-
+import { sound } from '@pixi/sound';
 import { Stage } from './common/Stage';
 import { Character } from './common/Character';
 import { Enemy } from './common/Enemy';
@@ -21,7 +21,7 @@ export class Game {
   public stage: Stage;
   public player: Character | null = null;
   // private enemies: Enemy[] = [];
-
+  public soundList: any;
   private selectedCharacter: Character | null = null;
   private onCharacterSelect: any;
   private selectedEnemy: Enemy | null = null;
@@ -127,6 +127,7 @@ export class Game {
     this.player.setPosition(startPosition.x, startPosition.y, 0);
     // this.stage.addCharacter(this.player, 2, 2, 0);
     this.stage.updateCameraPosition();
+
     // テスト用に敵を追加
     // const enemy1 = await this.stage.addEnemy('enemy1', 'SLIME', 1, 2, 0);
     // const enemy2 = await this.stage.addEnemy('enemy2', 'SLIME', 3, 6, 0);
@@ -153,14 +154,19 @@ export class Game {
       );
     }
 
+    //boxオブジェクトを追加
+    // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+    // this.stage.addObject(box);
+
     const boxTexture = '/obj01.png';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 20; i++) {
       const enemyPosition = this.stage.getRandomWalkableTile();
-      const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
+      const box = new GameObject(this.stage, boxTexture, 5, 8, 0, {
+        x: enemyPosition.x,
+        y: enemyPosition.y,
+      });
       this.stage.addObject(box);
     }
-    const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
-    this.stage.addObject(box);
 
     this.stage.setOnCharacterSelect((character) => {
       this.selectedCharacter = character;
