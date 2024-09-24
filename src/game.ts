@@ -9,6 +9,8 @@ import { Direction, TileInfo } from './common/types';
 import { GameObject } from './common/GameObject';
 import { MapGenerator } from './common/MapGenerator';
 import { onCharacterDestroyed } from './common/VisualEffect';
+import { SoundManager } from './common/SoundManager';
+import { useGameStore } from './stores/gameStore';
 
 interface Item {
   id: string;
@@ -32,6 +34,8 @@ export class Game {
   private turnManager: TurnManager | null = null;
   private isPlayerTurn = true;
   private currentPhase: TurnPhase = TurnPhase.PLAYER;
+  private soundManager: SoundManager = SoundManager.getInstance();
+  private gameStore = useGameStore();
 
   constructor() {
     // ステージデータの定義（仮のデータ）
@@ -116,6 +120,8 @@ export class Game {
 
     // プレイヤーの作成
     const startPosition = this.stage.getRandomWalkableTile();
+    this.gameStore.player.status.hp = this.gameStore.player.status.maxHp;
+    this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
     this.player = new Character('player', 'Hero', {
       up: '/robo01bk_r.png',
       down: '/robo01_l.png',
@@ -395,6 +401,7 @@ export class Game {
     const target = this.stage.getCharacterAt(targetPosition.x, targetPosition.y, targetPosition.z);
 
     if (target && target instanceof Enemy && this.player.getEnergy() >= 2) {
+      this.soundManager.playSE('attack');
       const damage = await this.player.attack();
       await target.takeDamage(damage);
       console.log(`Player attacked ${target.getName()} for ${damage} damage!`);
@@ -408,17 +415,18 @@ export class Game {
           target.getPosition().y
         );
 
+        this.soundManager.playSE('explosion');
         const effectContainer = onCharacterDestroyed(
           { x: effectPos.x + cameraPos.x, y: effectPos.y + cameraPos.y },
           40
         );
-
         this.app?.stage.addChild(effectContainer);
         this.stage.removeEnemy(target);
       }
     } else {
       console.log('No target to attack!');
       await this.player.attack();
+      this.soundManager.playSE('attack');
     }
 
     // プレイヤーの行動後、次のターンへ

@@ -23,9 +23,12 @@ export class EffectManager {
   static async applyEffect(sprite: PIXI.Sprite, effectName: string): Promise<void> {
     const effect = this.getEffect(effectName);
     if (effect) {
-      console.log(
-        `Applying effect: ${effectName} to sprite at position: (${sprite.x}, ${sprite.y})`
-      );
+      console.log(`エフェクト適用: ${effectName}, スプライト位置: (${sprite.x}, ${sprite.y})`);
+
+      // 元の位置を保存（まだ保存されていない場合）
+      if (!(sprite as any)._effectOriginalPosition) {
+        (sprite as any)._effectOriginalPosition = sprite.position.clone();
+      }
 
       effect.apply(sprite);
 
@@ -43,9 +46,7 @@ export class EffectManager {
           if (effect.complete) {
             effect.complete(sprite);
           }
-          console.log(
-            `Completed effect: ${effectName}. Sprite position: (${sprite.x}, ${sprite.y})`
-          );
+          console.log(`エフェクト完了: ${effectName}, スプライト位置: (${sprite.x}, ${sprite.y})`);
 
           const activeEffectsForSprite = this.activeEffects.get(sprite);
           if (activeEffectsForSprite) {
@@ -55,6 +56,9 @@ export class EffectManager {
             }
             if (activeEffectsForSprite.length === 0) {
               this.activeEffects.delete(sprite);
+              // すべてのエフェクトが完了したら元の位置に戻す
+              sprite.position.copyFrom((sprite as any)._effectOriginalPosition);
+              delete (sprite as any)._effectOriginalPosition;
             }
           }
           resolve();
@@ -92,35 +96,18 @@ export class EffectManager {
 EffectManager.registerEffect('damage', {
   apply: (sprite: PIXI.Sprite) => {
     sprite.tint = 0xff0000;
-    sprite.pivot.set(sprite.width / 2, sprite.height / 2);
-    sprite.position.set(
-      sprite.position.x + sprite.width / 2,
-      sprite.position.y + sprite.height / 2
-    );
-    // 元の位置をスプライトのプロパティとして保存
-    (sprite as any)._damageEffectOriginalX = sprite.x;
-    (sprite as any)._damageEffectOriginalY = sprite.y;
   },
   update: (sprite: PIXI.Sprite, progress: number) => {
     const amplitude = 10; // 最大シェイク距離（ピクセル）
     const frequency = 30; // 1秒あたりのシェイク回数
     const shake = Math.sin(progress * Math.PI * frequency) * amplitude * (1 - progress);
-    sprite.x = (sprite as any)._damageEffectOriginalX + shake;
-    sprite.y = (sprite as any)._damageEffectOriginalY + shake;
+    sprite.position.set(
+      (sprite as any)._effectOriginalPosition.x + shake,
+      (sprite as any)._effectOriginalPosition.y + shake
+    );
   },
   duration: 200,
   complete: (sprite: PIXI.Sprite) => {
-    // スプライトを元の位置に戻す
-    sprite.x = (sprite as any)._damageEffectOriginalX;
-    sprite.y = (sprite as any)._damageEffectOriginalY;
-    sprite.position.set(
-      sprite.position.x - sprite.width / 2,
-      sprite.position.y - sprite.height / 2
-    );
-    sprite.pivot.set(0, 0);
-    // 一時的に追加したプロパティを削除
-    delete (sprite as any)._damageEffectOriginalX;
-    delete (sprite as any)._damageEffectOriginalY;
     sprite.tint = 0xffffff;
   },
 });
@@ -137,42 +124,28 @@ EffectManager.registerEffect('heal', {
 
 EffectManager.registerEffect('shake', {
   apply: (sprite: PIXI.Sprite) => {
-    sprite.pivot.set(sprite.width / 2, sprite.height / 2);
-    sprite.position.set(
-      sprite.position.x + sprite.width / 2,
-      sprite.position.y + sprite.height / 2
-    );
-    (sprite as any)._originalShakeX = sprite.x;
-    (sprite as any)._originalShakeY = sprite.y;
+    //
   },
   update: (sprite: PIXI.Sprite, progress: number) => {
     const amplitude = 10;
     const frequency = 50;
     const shake = Math.sin(progress * Math.PI * frequency) * amplitude * (1 - progress);
-    sprite.x = (sprite as any)._originalShakeX + shake;
-    sprite.y = (sprite as any)._originalShakeY + shake;
+    sprite.x = (sprite as any)._effectOriginalPosition.x + shake;
+    sprite.y = (sprite as any)._effectOriginalPosition.y + shake;
   },
   complete: (sprite: PIXI.Sprite) => {
-    sprite.x = (sprite as any)._originalShakeX;
-    sprite.y = (sprite as any)._originalShakeY;
-    sprite.position.set(
-      sprite.position.x - sprite.width / 2,
-      sprite.position.y - sprite.height / 2
-    );
-    sprite.pivot.set(0, 0);
-    delete (sprite as any)._originalShakeX;
-    delete (sprite as any)._originalShakeY;
+    //
   },
   duration: 400,
 });
 
 EffectManager.registerEffect('attack', {
   apply: (sprite: PIXI.Sprite) => {
-    (sprite as any)._originalAttackX = sprite.x;
+    //
   },
   update: (sprite: PIXI.Sprite, progress: number) => {
     const forwardDistance = 20;
-    const originalX = (sprite as any)._originalAttackX;
+    const originalX = (sprite as any)._effectOriginalPosition.x;
 
     if (progress < 0.5) {
       sprite.x = originalX + forwardDistance * (progress * 2);
@@ -181,8 +154,7 @@ EffectManager.registerEffect('attack', {
     }
   },
   complete: (sprite: PIXI.Sprite) => {
-    sprite.x = (sprite as any)._originalAttackX;
-    delete (sprite as any)._originalAttackX;
+    //
   },
   duration: 300,
 });

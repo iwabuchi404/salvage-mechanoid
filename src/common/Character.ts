@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { CharacterBase } from './CharacterBase';
 import { Direction } from './types';
+import { useGameStore } from '../stores/gameStore';
 
 export class Character extends CharacterBase {
   private stats: { [key: string]: number };
@@ -9,6 +10,7 @@ export class Character extends CharacterBase {
   private items: string[];
   private maxEnergy: number;
   private currentEnergy: number;
+  private gameStore = useGameStore();
 
   constructor(
     id: string,
@@ -18,21 +20,24 @@ export class Character extends CharacterBase {
   ) {
     super(id, name, textureUrls, center);
 
+    this.position = this.gameStore.player.position;
     this.stats = {};
     this.actions = [];
     this.equipment = {};
-    this.items = [];
-    this.status = {
-      level: 1,
-      hp: 100,
-      maxHp: 100,
-      mp: 50,
-      maxMp: 50,
-      strength: 10,
-      defense: 5,
-    };
+    this.items = this.gameStore.player.items;
+    this.status = this.gameStore.player.status;
     this.maxEnergy = 100;
     this.currentEnergy = this.maxEnergy;
+  }
+
+  public getPosition(): { x: number; y: number; z: number } {
+    return { ...this.gameStore.player.position };
+  }
+
+  public setPosition(x: number, y: number, z: number): void {
+    this.position = { x, y, z };
+    this.gameStore.player.position = { x, y, z };
+    // this.updateSpritePosition();
   }
 
   public setStat(key: string, value: number) {
@@ -59,27 +64,27 @@ export class Character extends CharacterBase {
   }
 
   public addItem(item: string) {
-    this.items.push(item);
+    this.gameStore.player.items.push(item);
   }
 
   public getItems(): string[] {
-    return this.items;
+    return this.gameStore.player.items;
   }
 
   public getStatus(): typeof this.status {
-    return { ...this.status };
+    return { ...this.gameStore.player.status };
   }
   public getEnergy(): number {
-    return this.currentEnergy;
+    return this.gameStore.player.status.energy;
   }
 
   public getMaxEnergy(): number {
-    return this.maxEnergy;
+    return this.gameStore.player.status.maxEnergy;
   }
 
   public consumeEnergy(amount: number): boolean {
-    if (this.currentEnergy >= amount) {
-      this.currentEnergy -= amount;
+    if (this.getEnergy() >= amount) {
+      this.gameStore.player.status.energy -= amount;
       this.updateEnergyEffects();
       return true;
     }
@@ -103,7 +108,10 @@ export class Character extends CharacterBase {
   }
 
   public restoreEnergy(amount: number): void {
-    this.currentEnergy = Math.min(this.maxEnergy, this.currentEnergy + amount);
+    this.gameStore.player.status.energy = Math.min(
+      this.gameStore.player.status.maxEnergy,
+      this.gameStore.player.status.energy + amount
+    );
     this.updateEnergyEffects();
   }
 
@@ -124,8 +132,6 @@ export class Character extends CharacterBase {
   public setClickHandler(handler: () => void) {
     this.sprite.eventMode = 'static';
     this.sprite.onmousedown = () => {
-      console.log('onclick');
-      console.log(handler);
       handler();
     };
   }

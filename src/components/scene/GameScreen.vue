@@ -7,7 +7,9 @@ import { Enemy } from '../../common/Enemy';
 import { TileInfo } from '../../common/Stage';
 import { TurnManager, TurnPhase } from '../../common/TurnManager';
 import { defineEmits } from 'vue'; // この行を追加
+import { useGameStore } from '../../stores/gameStore';
 
+const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
 const game = new Game();
 
@@ -27,8 +29,12 @@ const playerMaxHp = ref(100);
 const playerEnergy = ref(100);
 const playerMaxEnergy = ref(100);
 
-const energyPercentage = computed(() => (playerEnergy.value / playerMaxEnergy.value) * 100);
-const hpPercentage = computed(() => (playerHp.value / playerMaxHp.value) * 100);
+const energyPercentage = computed(
+  () => (gameStore.player.status.energy / gameStore.player.status.maxEnergy) * 100
+);
+const hpPercentage = computed(
+  () => (gameStore.player.status.hp / gameStore.player.status.maxHp) * 100
+);
 
 const emit = defineEmits<{
   (e: 'game-clear'): void;
@@ -142,11 +148,15 @@ function checkGameClear() {
     <div id="game-container" ref="mainCanvas"></div>
     <div id="ui-overlay">
       <div class="player-info">
-        <p class="energy-text">HP: {{ playerHp }} / {{ playerMaxHp }}</p>
+        <p class="energy-text">
+          HP: {{ gameStore.player.status.hp }} / {{ gameStore.player.status.maxHp }}
+        </p>
         <div class="energy-bar energy-text--hp">
           <div class="energy-fill energy-fill--hp" :style="{ width: `${hpPercentage}%` }"></div>
         </div>
-        <p class="energy-text">Energy: {{ playerEnergy }} / {{ playerMaxEnergy }}</p>
+        <p class="energy-text">
+          Energy: {{ gameStore.player.status.energy }} / {{ gameStore.player.status.maxEnergy }}
+        </p>
         <div class="energy-bar">
           <div class="energy-fill" :style="{ width: `${energyPercentage}%` }"></div>
         </div>
@@ -170,10 +180,6 @@ function checkGameClear() {
           <p>
             HP: {{ selectedCharacter.getStatus().hp }} /
             {{ selectedCharacter.getStatus().maxHp }}
-          </p>
-          <p>
-            MP: {{ selectedCharacter.getStatus().mp }} /
-            {{ selectedCharacter.getStatus().maxMp }}
           </p>
           <p>攻撃力: {{ selectedCharacter.getStatus().strength }}</p>
           <p>防御力: {{ selectedCharacter.getStatus().defense }}</p>

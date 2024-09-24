@@ -21,8 +21,6 @@ export class Enemy extends CharacterBase {
       level: 1,
       hp: 60,
       maxHp: 60,
-      mp: 50,
-      maxMp: 50,
       strength: 10,
       defense: 5,
     };

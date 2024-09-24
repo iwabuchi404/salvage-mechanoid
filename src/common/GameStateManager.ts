@@ -1,4 +1,5 @@
 import { sound } from '@pixi/sound';
+import { SoundManager } from './SoundManager';
 
 export enum GameState {
   START,
@@ -9,34 +10,32 @@ export enum GameState {
 
 export class GameStateManager {
   private currentState: GameState;
+  private soundManager: SoundManager;
 
   constructor() {
-    //bgm読み込み
-    sound.add('bgm01', 'bgm01.mp3');
-    sound.add('bgm02', 'bgm02.mp3');
-    sound.add('bgm03', 'bgm03.mp3');
-
     //シーンスタート
     this.currentState = GameState.START;
+    this.soundManager = SoundManager.getInstance();
+    this.soundManager.loadSounds();
   }
 
   setState(state: GameState) {
     this.currentState = state;
 
-    sound.stop;
+    this.soundManager.stopBGM();
     //bgm再生
     switch (this.currentState) {
       case GameState.START:
-        sound.play('bgm03', { loop: true, volume: 0.1 });
+        this.soundManager.playBGM('bgm03');
         break;
       case GameState.PLAYING:
-        sound.play('bgm01', { loop: true, volume: 0.1 });
+        this.soundManager.playBGM('bgm01');
         break;
       case GameState.CLEAR:
-        sound.play('bgm01', { loop: true, volume: 0.1 });
+        this.soundManager.playBGM('bgm01');
         break;
       case GameState.GAME_OVER:
-        sound.play('bgm02', { loop: true, volume: 0.1 });
+        this.soundManager.playBGM('bgm02');
         break;
     }
   }

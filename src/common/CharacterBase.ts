@@ -15,8 +15,6 @@ export abstract class CharacterBase {
     level: number;
     hp: number;
     maxHp: number;
-    mp: number;
-    maxMp: number;
     strength: number;
     defense: number;
   };
@@ -36,8 +34,6 @@ export abstract class CharacterBase {
       level: 1,
       hp: 100,
       maxHp: 100,
-      mp: 50,
-      maxMp: 50,
       strength: 10,
       defense: 5,
     };

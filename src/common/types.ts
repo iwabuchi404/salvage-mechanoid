@@ -60,12 +60,3 @@ export enum TurnPhase {
 
 // ヘックス座標を表す型
 export type HexCoord = { q: number; r: number; s: number };
-
-// 敵のタイプを定義するインターフェース
-export interface EnemyType {
-  name: string;
-  baseHp: number;
-  baseAttack: number;
-  center?: { x: number; y: number };
-  textures: { [key: string]: string };
-}
