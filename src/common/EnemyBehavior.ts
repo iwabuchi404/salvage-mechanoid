@@ -2,11 +2,11 @@ import { Enemy } from './Enemy';
 import { Stage } from './Stage';
 import { Direction } from './types';
 import { EnemyBehavior } from './types';
+import { SoundManager } from './SoundManager';
 
 function moveRandomly(enemy: Enemy, stage: Stage): void {
   const directions: Direction[] = ['up', 'down', 'left', 'right'];
   const randomDirection = directions[Math.floor(Math.random() * directions.length)];
-
   const currentPosition = enemy.getPosition();
   let newX = currentPosition.x;
   let newY = currentPosition.y;
@@ -41,20 +41,9 @@ export class RandomMoveBehavior implements EnemyBehavior {
   }
 }
 
-// export class AggressiveBehavior implements EnemyBehavior {
-//   async act(enemy: Enemy, stage: Stage): Promise<void> {
-//     const player = stage.getPlayer();
-//     if (player) {
-//       const path = stage.findPath(enemy.getPosition(), player.getPosition());
-//       if (path.length > 4) {
-//         await stage.moveCharacter(enemy, path[0].x, path[0].y, path[0].z);
-//       }
-//     }
-//   }
-// }
-
 export class AggressiveBehavior implements EnemyBehavior {
   private chaseDistance: number;
+  private soundManager = SoundManager.getInstance();
 
   constructor(chaseDistance = 6) {
     this.chaseDistance = chaseDistance;
@@ -76,6 +65,7 @@ export class AggressiveBehavior implements EnemyBehavior {
         } else if (path.length === 2) {
           // プレイヤーに隣接している場合、攻撃
           console.log('enemy.attack');
+          this.soundManager.playSE('attack');
           player.takeDamage(await enemy.attack());
         }
       } else {
