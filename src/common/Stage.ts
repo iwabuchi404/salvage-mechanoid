@@ -147,19 +147,19 @@ export class Stage {
     let texturePath: string;
     switch (tileType) {
       case TileType.GRASS:
-        texturePath = '/image.png';
+        texturePath = './image.png';
         break;
       case TileType.WATER:
-        texturePath = '/image02.png';
+        texturePath = './image02.png';
         break;
       case TileType.MOUNTAIN:
-        texturePath = '/image03.png';
+        texturePath = './image03.png';
         break;
       case TileType.TILE:
-        texturePath = '/tile04.png';
+        texturePath = './tile04.png';
         break;
       default:
-        texturePath = '/image.png';
+        texturePath = './image.png';
     }
 
     const sprite = new PIXI.Sprite(await PIXI.Assets.load(texturePath));

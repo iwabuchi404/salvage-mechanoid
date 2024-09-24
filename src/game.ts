@@ -123,10 +123,10 @@ export class Game {
     this.gameStore.player.status.hp = this.gameStore.player.status.maxHp;
     this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
     this.player = new Character('player', 'Hero', {
-      up: '/robo01bk_r.png',
-      down: '/robo01_l.png',
-      left: '/robo01bk_l.png',
-      right: '/robo01_r.png',
+      up: './robo01bk_r.png',
+      down: './robo01_l.png',
+      left: './robo01bk_l.png',
+      right: './robo01_r.png',
     });
     // プレイヤーをステージに追加
     await this.stage.addCharacter(this.player, startPosition.x, startPosition.y, 0);
@@ -164,7 +164,7 @@ export class Game {
     // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
     // this.stage.addObject(box);
 
-    const boxTexture = '/obj01.png';
+    const boxTexture = './obj01.png';
     for (let i = 0; i < 20; i++) {
       const enemyPosition = this.stage.getRandomWalkableTile();
       const box = new GameObject(this.stage, boxTexture, 5, 8, 0, {
@@ -308,10 +308,10 @@ export class Game {
   async addPlayer() {
     // プレイヤーキャラクターの作成
     this.player = new Character('player', 'Hero', {
-      up: '/robo_l.png',
-      down: '/robo_r.png',
-      left: '/robo_l.png',
-      right: '/robo_r.png',
+      up: './robo_l.png',
+      down: './robo_r.png',
+      left: './robo_l.png',
+      right: './robo_r.png',
     });
     this.stage.addCharacter(this.player, 1, 0, 2);
 
