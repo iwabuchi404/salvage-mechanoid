@@ -1,9 +1,12 @@
+<script setup lang="ts">
+import BaseButton from '../uiParts/BaseButton.vue';
+</script>
 <template>
   <div class="start-screen">
     <h1 class="game-title"><span class="inner">サルベージ・メカノイド</span></h1>
     <div class="menu-container">
-      <button @click="$emit('start-game')" class="start-button">ダンジョン潜入</button>
-      <button class="option-button">オプション</button>
+      <BaseButton @click="$emit('start-game')" type="'normal'">ダンジョン潜入</BaseButton>
+      <BaseButton type="'normal'">オプション</BaseButton>
     </div>
     <div class="background-elements">
       <div class="robot-silhouette"></div>

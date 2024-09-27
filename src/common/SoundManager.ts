@@ -20,13 +20,13 @@ export class SoundManager {
 
   public loadSounds(): void {
     //bgm読み込み
-    sound.add('bgm01', 'bgm01.mp3');
-    sound.add('bgm02', 'bgm02.mp3');
-    sound.add('bgm03', 'bgm03.mp3');
+    sound.add('bgm01', 'sound/bgm01.mp3');
+    sound.add('bgm02', 'sound/bgm02.mp3');
+    sound.add('bgm03', 'sound/bgm03.mp3');
 
     //se読み込み
-    sound.add('attack', 'se_attack.mp3');
-    sound.add('explosion', 'explosion.mp3');
+    sound.add('attack', 'sound/se_attack.mp3');
+    sound.add('explosion', 'sound/explosion.mp3');
   }
 
   public async playBGM(key: string): Promise<void> {

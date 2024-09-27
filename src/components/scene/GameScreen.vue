@@ -8,6 +8,7 @@ import { TileInfo } from '../../common/Stage';
 import { TurnManager, TurnPhase } from '../../common/TurnManager';
 import { defineEmits } from 'vue'; // この行を追加
 import { useGameStore } from '../../stores/gameStore';
+import BaseButton from '../uiParts/BaseButton.vue';
 
 const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
@@ -168,9 +169,9 @@ function checkGameClear() {
         <button @click="movePlayer('down')">↓</button>
       </div>
       <div v-if="showActionMenu" class="action-menu">
-        <button @click="attack">攻撃</button>
-        <button @click="showStatus">ステータス</button>
-        <button @click="showItems">アイテム</button>
+        <BaseButton @click="attack" :type="'small'">攻撃</BaseButton>
+        <BaseButton @click="showStatus" :type="'small'">ステータス</BaseButton>
+        <BaseButton @click="showItems" :type="'small'">アイテム</BaseButton>
       </div>
       <div v-if="showStatusWindow" class="status-window">
         <button class="close-button" @click="closeStatusWindow">&times;</button>
