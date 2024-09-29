@@ -6,9 +6,10 @@ import { Character } from '../../common/Character';
 import { Enemy } from '../../common/Enemy';
 import { TileInfo } from '../../common/Stage';
 import { TurnManager, TurnPhase } from '../../common/TurnManager';
-import { defineEmits } from 'vue'; // この行を追加
+import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
+import BaseWindow from '../uiParts/BaseWindow.vue';
 
 const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
@@ -85,6 +86,9 @@ onMounted(() => {
         playerMaxHp.value = game.player.getStatus().maxHp;
       }
     }, 100);
+
+    window.addEventListener('resize', resizeGame);
+    resizeGame(); // 初期サイズを設定
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
@@ -142,6 +146,26 @@ function checkGameClear() {
     emit('game-clear');
   }
 }
+
+const resizeGame = () => {
+  if (mainCanvas.value && game) {
+    const containerWidth = mainCanvas.value.clientWidth;
+    const containerHeight = mainCanvas.value.clientHeight;
+    const aspectRatio = 4 / 3; // 800 / 600
+
+    let newWidth, newHeight;
+
+    if (containerWidth / containerHeight > aspectRatio) {
+      newHeight = containerHeight;
+      newWidth = newHeight * aspectRatio;
+    } else {
+      newWidth = containerWidth;
+      newHeight = newWidth / aspectRatio;
+    }
+
+    game.resize(newWidth, newHeight);
+  }
+};
 </script>
 
 <template>
@@ -173,9 +197,15 @@ function checkGameClear() {
         <BaseButton @click="showStatus" :type="'small'">ステータス</BaseButton>
         <BaseButton @click="showItems" :type="'small'">アイテム</BaseButton>
       </div>
-      <div v-if="showStatusWindow" class="status-window">
-        <button class="close-button" @click="closeStatusWindow">&times;</button>
-        <h2>{{ getSelectedName() }} ステータス</h2>
+
+      <BaseWindow
+        height="300px"
+        width="240px"
+        :pos="{ x: 'calc(100% - 310px)', y: 'calc(10px)' }"
+        :state="showStatusWindow"
+        :title="getSelectedName() + 'ステータス'"
+        @close="closeStatusWindow"
+      >
         <template v-if="selectedCharacter">
           <p>レベル: {{ selectedCharacter.getStatus().level }}</p>
           <p>
@@ -196,7 +226,8 @@ function checkGameClear() {
             {{ key }}: {{ value > 0 ? '+' : '' }}{{ value }}
           </p>
         </template>
-      </div>
+      </BaseWindow>
+
       <div v-if="showItemList" class="item-list">
         <h2>アイテム一覧</h2>
         <ul>
@@ -220,8 +251,10 @@ function checkGameClear() {
   bottom: 0;
   left: 0;
   right: 0;
-  width: 800px;
-  height: 600px;
+  width: 100%;
+  height: 100%;
+  max-width: 800px;
+  max-height: 600px;
   margin: auto;
   overflow: hidden;
   background-color: rgba(255, 102, 0, 0.2);
@@ -233,17 +266,18 @@ function checkGameClear() {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  /* transform: translateX(-50%); */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   pointer-events: auto;
   font-family: 'DotGothic16', sans-serif;
-  /* transform: rotate(25deg); */
 }
 
 .controls button {
+  display: grid;
+  place-content: center;
   width: 50px;
+
   height: 50px;
   font-size: 24px;
   border: none;

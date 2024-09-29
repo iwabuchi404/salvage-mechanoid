@@ -201,6 +201,17 @@ export class Game {
     this.startNewTurn();
   }
 
+  public resize(width: number, height: number): void {
+    if (this.app) {
+      this.app.renderer.resize(width, height);
+      // ステージやその他のゲーム要素のサイズも調整する必要があります
+      // 例：
+      // this.stage.resize(width, height);
+      // this.player.updatePosition();
+      // など
+    }
+  }
+
   private setupInputHandlers() {
     // test
   }

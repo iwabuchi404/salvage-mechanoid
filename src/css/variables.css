@@ -1,0 +1,18 @@
+:root {
+  /* c-で始まるのはcollar */
+  --c-gray10: #dfdfdf;
+  --c-gray20: #cacaca;
+  --c-gray30: #c4c4c4;
+  --c-gray40: #a3a3a3;
+  --c-gray50: #838383;
+  --c-gray60: #686868;
+  --c-gray70: #5e5e5e;
+  --c-gray80: #383838;
+  --c-primary1: #f17623;
+  --c-primary2: #ff5e00;
+  --c-primary3: #ff5e00;
+
+  --c-text: #000;
+  --c-text2: #f17623;
+  --c-text3: #fff;
+}

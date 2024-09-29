@@ -1,13 +1,43 @@
 <script setup lang="ts">
+import { onMounted, ref, compile, computed, watch } from 'vue';
 import BaseButton from '../uiParts/BaseButton.vue';
+import BaseWindow from '../uiParts/BaseWindow.vue';
+
+const statusShowstate = ref(false);
+const statusClose = () => {
+  statusShowstate.value = false;
+};
 </script>
+
 <template>
   <div class="start-screen">
     <h1 class="game-title"><span class="inner">サルベージ・メカノイド</span></h1>
     <div class="menu-container">
       <BaseButton @click="$emit('start-game')" type="'normal'">ダンジョン潜入</BaseButton>
-      <BaseButton type="'normal'">オプション</BaseButton>
+      <BaseButton
+        @click="
+          () => {
+            statusShowstate = true;
+          }
+        "
+        type="'normal'"
+        >オプション</BaseButton
+      >
     </div>
+    <BaseWindow
+      height="620px"
+      width="840px"
+      :pos="{ x: '0', y: '0' }"
+      :state="statusShowstate"
+      :title="'オプション'"
+      @close="statusClose"
+    >
+      <ul>
+        <li>難易度</li>
+        <li>グラフィック</li>
+        <li>サウンド</li>
+      </ul>
+    </BaseWindow>
     <div class="background-elements">
       <div class="robot-silhouette"></div>
       <div class="underground-city"></div>

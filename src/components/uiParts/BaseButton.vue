@@ -6,8 +6,12 @@ const props = withDefaults(
     type: string;
     tag?: 'a' | 'btn';
     href?: string;
+    width?: string;
   }>(),
-  { tag: 'btn' }
+  {
+    tag: 'btn',
+    width: 'auto',
+  }
 );
 
 const emit = defineEmits<{
@@ -20,16 +24,16 @@ const emit = defineEmits<{
     <span class="button__inner"><slot></slot></span>
   </button>
   <a v-if="tag === 'a'" :href="href" @click="$emit('click')" class="button" :class="type">
-    <slot></slot>
+    <span class="button__inner"><slot></slot></span>
   </a>
 </template>
 
 <style scoped>
 .button {
-  /* font-family: 'Press Start 2P', cursive; */
+  width: v-bind(width);
   font-size: 1.5rem;
   padding: 1rem 2rem;
-  background-color: rgba(255, 102, 0, 0.2);
+  background-color: rgba(138, 58, 5, 0.4);
   border: none;
   border: 2px solid #f17623;
   border-bottom: none;
@@ -43,7 +47,7 @@ const emit = defineEmits<{
   letter-spacing: 4px;
   animation: bgAnime 1s alternate infinite;
   position: relative;
-
+  text-align: center;
   .button__inner {
     z-index: 3;
     display: block;
@@ -89,7 +93,6 @@ const emit = defineEmits<{
   box-shadow: 0 0 10px #4119023b, 0 0 20px #4119023b;
   transform: scale(1.05);
   .button__inner {
-    /* color: white; */
   }
   .button__inner::before {
     width: calc(100% + 1px);
@@ -139,22 +142,22 @@ const emit = defineEmits<{
 }
 @keyframes bgAnime {
   0% {
-    background: rgba(255, 102, 0, 0.35);
+    background: rgba(151, 63, 5, 0.45);
   }
   10% {
-    background: rgba(255, 102, 0, 0.4);
+    background: rgba(151, 63, 0, 0.5);
   }
   15% {
-    background: rgba(255, 102, 0, 0.3);
+    background: rgba(151, 63, 0, 0.4);
   }
   25% {
-    background: rgba(255, 102, 0, 0.4);
+    background: rgba(151, 63, 0, 0.5);
   }
   30% {
-    background: rgba(255, 102, 0, 0.35);
+    background: rgba(151, 63, 0, 0.45);
   }
   100% {
-    background: rgba(255, 102, 0, 0.4);
+    background: rgba(151, 63, 0, 0.5);
   }
 }
 @keyframes gradationAnime {
