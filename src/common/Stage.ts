@@ -3,6 +3,7 @@ import { Character } from './Character';
 import { Enemy, EnemyFactory } from './Enemy';
 import { GameObject } from './GameObject';
 import { MapGenerator } from './MapGenerator';
+import { EventObject, EventCallback } from './EventObject';
 import { Direction, TileType, Tile, TileInfo } from './types';
 
 const TileInfoMap: { [key in TileType]: TileInfo } = {
@@ -64,6 +65,9 @@ export class Stage {
   private viewportHeight: number;
   private player: Character | null = null;
   private turnManager: any = null;
+
+  private gameObjects: GameObject[] = [];
+  private eventObjects: EventObject[] = [];
 
   constructor(
     stageData: number[][],
@@ -438,6 +442,7 @@ export class Stage {
       return false;
     }
   }
+
   public addObject(gameObject: GameObject) {
     const position = gameObject.getPosition();
     const key = `${position.x},${position.y},${position.z}`;
@@ -493,7 +498,10 @@ export class Stage {
     for (const character of this.characters.values()) {
       const pos = character.getPosition();
       if (pos.x === x && pos.y === y && pos.z === z) {
-        return true;
+        return this.gameObjects.some(
+          (obj) =>
+            obj.hasCollisionEnabled() && obj.getPosition().x === x && obj.getPosition().y === y
+        );
       }
     }
     return false;
@@ -576,7 +584,7 @@ export class Stage {
     }
 
     // GameObjectとの衝突チェック
-    if (this.objects.has(`${x},${y},${z}`)) {
+    if (this.objects.has(`${x},${y},${z}`) && this.objects.get(`${x},${y},${z}`)?.hasCollision) {
       return false;
     }
 
@@ -936,6 +944,56 @@ export class Stage {
       adjustedY >= -this.tileSize.height &&
       adjustedY <= this.viewportHeight + this.tileSize.height
     );
+  }
+
+  public addEventObject(
+    texture: string,
+    x: number,
+    y: number,
+    z: number,
+    eventCallback: EventCallback,
+    hasCollision = false,
+    center?: { x: number; y: number }
+  ): EventObject {
+    const eventObject = new EventObject(
+      this,
+      texture,
+      x,
+      y,
+      z,
+      eventCallback,
+      hasCollision,
+      center
+    );
+    this.eventObjects.push(eventObject);
+    // this.gameObjects.push(eventObject);
+    // this.addObjectToScene(eventObject);
+
+    const position = eventObject.getPosition();
+    const key = `${position.x},${position.y},${position.z}`;
+    this.objects.set(key, eventObject);
+    this.characterContainer?.addChild(eventObject.getSprite());
+    this.sortCharacters();
+    return eventObject;
+  }
+
+  public checkAndTriggerEvents(character: Character): void {
+    const position = character.getPosition();
+    for (const eventObject of this.eventObjects) {
+      if (eventObject.isCharacterOn(position.x, position.y, position.z)) {
+        eventObject.triggerEvent(character);
+      }
+    }
+  }
+
+  private addObjectToScene(gameObject: GameObject): void {
+    // オブジェクトのスプライトをシーンに追加するロジック
+    console.log('addObjectToScene');
+    this.app?.stage.addChild(gameObject.getSprite());
+  }
+
+  public getWidth(): number {
+    return this.stageData[0].length * this.tileSize.width;
   }
 }
 

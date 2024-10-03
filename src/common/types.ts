@@ -60,3 +60,12 @@ export enum TurnPhase {
 
 // ヘックス座標を表す型
 export type HexCoord = { q: number; r: number; s: number };
+
+export enum TileType {
+  // ... 既存のタイプ ...
+  PORTAL,
+  DAMAGE,
+  HEAL,
+  EVENT,
+  // ... 他のイベントタイプ ...
+}

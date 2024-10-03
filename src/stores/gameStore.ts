@@ -25,6 +25,8 @@ export const useGameStore = defineStore('game', () => {
   const currentFloor = ref(1);
   const score = ref(0);
 
+  const isPortalActive = ref(false);
+
   // プレイヤーが生存しているかどうかを計算するgetter
   const isPlayerAlive = computed(() => player.value.status.hp > 0);
 
@@ -53,6 +55,10 @@ export const useGameStore = defineStore('game', () => {
     score.value += points;
   }
 
+  const setPortalActive = (isActive: boolean) => {
+    isPortalActive.value = isActive;
+  };
+
   // 外部から使用可能な状態とメソッドを返す
   return {
     player,
@@ -66,5 +72,7 @@ export const useGameStore = defineStore('game', () => {
     damagePlayer,
     usePlayerEnergy,
     addScore,
+    setPortalActive,
+    isPortalActive,
   };
 });

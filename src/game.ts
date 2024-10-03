@@ -5,7 +5,7 @@ import { Stage } from './common/Stage';
 import { Character } from './common/Character';
 import { Enemy } from './common/Enemy';
 import { TurnManager, TurnPhase } from './common/TurnManager';
-import { Direction, TileInfo } from './common/types';
+import { Direction, TileInfo, TileType } from './common/types';
 import { GameObject } from './common/GameObject';
 import { MapGenerator } from './common/MapGenerator';
 import { onCharacterDestroyed } from './common/VisualEffect';
@@ -159,19 +159,34 @@ export class Game {
         0
       );
     }
-
     //boxオブジェクトを追加
     // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
     // this.stage.addObject(box);
 
     const boxTexture = './obj01.png';
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 6; i++) {
       const enemyPosition = this.stage.getRandomWalkableTile();
-      const box = new GameObject(this.stage, boxTexture, 5, 8, 0, {
-        x: enemyPosition.x,
-        y: enemyPosition.y,
-      });
+      const box = new GameObject(this.stage, boxTexture, enemyPosition.x, enemyPosition.y, 0, true);
       this.stage.addObject(box);
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const pos = this.stage.getRandomWalkableTile();
+      const portal = this.stage.addEventObject(
+        './obj02.png',
+        pos.x,
+        pos.y,
+        0,
+        (character) => {
+          if (character === this.player) {
+            console.log('ポータル');
+            this.gameStore.setPortalActive(true);
+          }
+        },
+        false,
+        { x: 0.5, y: 0.8 }
+      );
+      this.stage.addObject(portal);
     }
 
     this.stage.setOnCharacterSelect((character) => {
@@ -357,6 +372,9 @@ export class Game {
         .moveCharacter(this.player, newX, newY, position.z)
         .then(() => {
           this.checkEnergyStatus();
+          if (this.player) {
+            this.stage.checkAndTriggerEvents(this.player);
+          }
           const nextPhase = this.turnManager!.nextTurn();
           this.handleTurnPhase(nextPhase);
         })
@@ -483,5 +501,41 @@ export class Game {
     // 3ターン行動不能の処理
     // その後の強制帰還処理
     this.gameOver();
+  }
+
+  private setupEventObjects(): void {
+    // ポータル（衝突なし）
+    const pos = this.stage.getRandomWalkableTile();
+    this.stage.addEventObject(
+      './obj02.png',
+      pos.x,
+      pos.y,
+      0,
+      (character) => {
+        if (character === this.player) {
+          console.log('ポータル');
+          this.gameStore.setPortalActive(true);
+        }
+      },
+      false
+    );
+
+    //   // ダメージマス（衝突なし）
+    //   this.stage.addEventObject('/assets/damage_tile.png', 7, 7, 0, (character) => {
+    //     character.takeDamage(10);
+    //     console.log(`${character.getName()} took 10 damage from a damage tile!`);
+    //   }, false);
+
+    //   // 回復マス（衝突なし）
+    //   this.stage.addEventObject('/assets/heal_tile.png', 9, 9, 0, (character) => {
+    //     character.heal(20);
+    //     console.log(`${character.getName()} healed 20 HP from a healing tile!`);
+    //   }, false);
+
+    //   // 障害物（衝突あり）
+    //   this.stage.addEventObject('/assets/obstacle.png', 11, 11, 0, (character) => {
+    //     console.log(`${character.getName()} bumped into an obstacle!`);
+    //   }, true);
+    // }
   }
 }

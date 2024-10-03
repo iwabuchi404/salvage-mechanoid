@@ -166,6 +166,14 @@ const resizeGame = () => {
     game.resize(newWidth, newHeight);
   }
 };
+
+const moveToNextFloor = () => {
+  // game.moveToNextFloor();
+};
+
+const closePortalDialog = () => {
+  gameStore.setPortalActive(false);
+};
 </script>
 
 <template>
@@ -240,10 +248,20 @@ const resizeGame = () => {
       <div v-if="message" class="message-window">
         <p class="message-window__text">{{ message }}</p>
       </div>
+      <BaseWindow
+        height="240px"
+        width="480px"
+        :pos="{ x: '0', y: '0' }"
+        :state="gameStore.isPortalActive"
+        :title="'ポータル'"
+      >
+        <p>ポータルが見つかりました。次の階層に進みますか？</p>
+        <BaseButton @click="closePortalDialog" :type="'small'">キャンセル</BaseButton>
+        <BaseButton @click="moveToNextFloor" :type="'small'">次の階層へ</BaseButton>
+      </BaseWindow>
     </div>
   </div>
 </template>
-
 <style scoped>
 #game-container {
   position: absolute;
