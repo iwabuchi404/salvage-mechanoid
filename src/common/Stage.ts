@@ -65,7 +65,7 @@ export class Stage {
   private viewportHeight: number;
   private player: Character | null = null;
   private turnManager: any = null;
-
+  private rooms: any[]; // 部屋の情報を保持する配列
   private gameObjects: GameObject[] = [];
   private eventObjects: EventObject[] = [];
 
@@ -93,7 +93,7 @@ export class Stage {
     // カメラの位置を設定
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
-
+    this.rooms = []; // コンストラクタで初期化
     //エネミー
     this.enemies = new Map();
     this.onEnemySelect = (enemy: Enemy) => {
@@ -994,6 +994,35 @@ export class Stage {
 
   public getWidth(): number {
     return this.stageData[0].length * this.tileSize.width;
+  }
+  // マップ生成時に部屋の情報を設定するメソッド
+  public setRooms(rooms: any[]): void {
+    this.rooms = rooms;
+  }
+
+  public getRandomEmptyRoomTile(): { x: number; y: number; z: number } | null {
+    if (this.rooms.length === 0) {
+      return null; // 部屋が存在しない場合
+    }
+
+    // ランダムに部屋を選択
+    const randomRoom = this.rooms[Math.floor(Math.random() * this.rooms.length)];
+
+    // 選択された部屋内のランダムな位置を試行
+    for (let attempts = 0; attempts < 50; attempts++) {
+      // 最大50回試行
+      const x = randomRoom.x + Math.floor(Math.random() * randomRoom.width);
+      const y = randomRoom.y + Math.floor(Math.random() * randomRoom.height);
+      const z = 0; // 基本的に地面レベル
+
+      // タイルが歩行可能で、かつオブジェクトが配置されていないことを確認
+      if (this.isWalkable(x, y, z) && !this.isPositionOccupied(x, y, z)) {
+        return { x, y, z };
+      }
+    }
+
+    // 空きスペースが見つからない場合は null を返す
+    return null;
   }
 }
 

@@ -26,12 +26,16 @@ export class MapGenerator {
     this.rooms = [];
   }
 
-  generateMap(): number[][] {
+  generateMap(): { map: number[][]; rooms: Room[] } {
     this.initializeMap();
     this.splitSpace(0, 0, this.width, this.height, 0);
     this.connectRooms();
     this.addRandomFeatures();
-    return this.stageData;
+    // return this.stageData;
+    return {
+      map: this.stageData,
+      rooms: this.rooms,
+    };
   }
 
   private initializeMap() {

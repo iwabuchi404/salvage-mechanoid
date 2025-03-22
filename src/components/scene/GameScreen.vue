@@ -254,10 +254,15 @@ const closePortalDialog = () => {
         :pos="{ x: '0', y: '0' }"
         :state="gameStore.isPortalActive"
         :title="'ポータル'"
+        @close="closePortalDialog"
       >
         <p>ポータルが見つかりました。次の階層に進みますか？</p>
-        <BaseButton @click="closePortalDialog" :type="'small'">キャンセル</BaseButton>
-        <BaseButton @click="moveToNextFloor" :type="'small'">次の階層へ</BaseButton>
+        <div class="u-d--flex u-flex--center u-mg--t10">
+          <BaseButton @click="closePortalDialog" :type="'small'">キャンセル</BaseButton>
+          <BaseButton class="u-mg--l12" @click="moveToNextFloor" :type="'small'"
+            >次の階層へ</BaseButton
+          >
+        </div>
       </BaseWindow>
     </div>
   </div>

@@ -68,8 +68,8 @@ export class Game {
 
     const mapGenerator = new MapGenerator(50, 50, 4, 8);
     const generatedMap = mapGenerator.generateMap();
-    this.stage = new Stage(generatedMap, { width: 160, height: 120 }, 800, 600);
-
+    this.stage = new Stage(generatedMap.map, { width: 160, height: 120 }, 800, 600);
+    this.stage.setRooms(generatedMap.rooms);
     this.setupInputHandlers();
 
     this.onCharacterSelect = () => {
@@ -170,8 +170,9 @@ export class Game {
       this.stage.addObject(box);
     }
 
-    for (let i = 0; i < 3; i++) {
-      const pos = this.stage.getRandomWalkableTile();
+    for (let i = 0; i < 2; i++) {
+      const pos = this.stage.getRandomEmptyRoomTile();
+      if (!pos?.x && !pos?.y) return;
       const portal = this.stage.addEventObject(
         './obj02.png',
         pos.x,

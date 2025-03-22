@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { GameState, GameStateManager } from './common/GameStateManager';
 import StartScreen from './components/scene/StartScreen.vue';
 import GameScreen from './components/scene/GameScreen.vue';
 import ClearScreen from './components/scene/ClearScreen.vue';
 import GameOverScreen from './components/scene/GameOverScreen.vue';
+import EngineTestView from './views/EngineTestView.vue';
+import { compileInputs } from 'pixi.js';
 
 const gameStateManager = new GameStateManager();
 const gameState = ref(gameStateManager.getState());
@@ -35,10 +37,14 @@ function returnToTitle() {
   gameStateManager.setState(GameState.START);
   gameState.value = gameStateManager.getState();
 }
+const isTest = computed(() => {
+  //URLから?testがあるかどうかを判定
+  return window.location.search.includes('test');
+});
 </script>
 
 <template>
-  <div id="app-container">
+  <div id="app-container" v-if="!isTest">
     <StartScreen v-if="gameState === GameState.START" @start-game="startGame" />
     <GameScreen
       v-if="gameState === GameState.PLAYING"
@@ -52,6 +58,9 @@ function returnToTitle() {
       @retry="restartGame"
       @title="returnToTitle"
     />
+  </div>
+  <div v-if="isTest">
+    <EngineTestView />
   </div>
 </template>
 
