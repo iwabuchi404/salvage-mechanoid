@@ -236,15 +236,22 @@ const closePortalDialog = () => {
         </template>
       </BaseWindow>
 
-      <div v-if="showItemList" class="item-list">
-        <h2>アイテム一覧</h2>
-        <ul>
-          <li v-for="item in playerItems" :key="item.id">
-            {{ item.name }} - {{ item.description }}
-          </li>
-        </ul>
-        <button @click="closeItemList" class="close-button">&times;</button>
-      </div>
+      <BaseWindow
+        height="300px"
+        width="460px"
+        :pos="{ x: '10px', y: '0px' }"
+        :state="showItemList"
+        :title="'アイテム一覧'"
+        @close="closeItemList"
+      >
+        <div v-if="showItemList" class="item-list">
+          <ul>
+            <li v-for="item in playerItems" :key="item.id">
+              <a>{{ item.name }} - {{ item.description }}</a>
+            </li>
+          </ul>
+        </div>
+      </BaseWindow>
       <div v-if="message" class="message-window">
         <p class="message-window__text">{{ message }}</p>
       </div>
@@ -415,24 +422,33 @@ const closePortalDialog = () => {
 }
 
 .item-list {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 20px;
-  border-radius: 10px;
   pointer-events: auto;
 }
 
 .item-list ul {
   list-style-type: none;
   padding: 0;
-}
+  padding-left: 10px;
+  padding-right: 10px;
 
-.item-list li {
   margin-bottom: 10px;
+}
+.item-list li {
+  border: solid 1px #ff964f1e;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+.item-list li a {
+  display: block;
+  padding: 10px;
+  border-bottom: #ff964f1e;
+  cursor: pointer;
+}
+.item-list li a:hover {
+  background-color: #ff964f1e;
+}
+.item-list li:last-child {
 }
 
 .player-info {

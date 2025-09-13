@@ -2,10 +2,19 @@
 import { onMounted, ref, compile, computed, watch } from 'vue';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
+import UiTab from '../uiParts/UiTab.vue';
 
 const statusShowstate = ref(false);
 const statusClose = () => {
   statusShowstate.value = false;
+};
+const tabs = ref([
+  { label: '難易度', value: 'difficulty' },
+  { label: 'グラフィック', value: 'graphic' },
+  { label: 'サウンド', value: 'sound' },
+]);
+const changeTab = (value: string) => {
+  console.log(value);
 };
 </script>
 
@@ -32,11 +41,84 @@ const statusClose = () => {
       :title="'オプション'"
       @close="statusClose"
     >
-      <ul>
-        <li>難易度</li>
-        <li>グラフィック</li>
-        <li>サウンド</li>
-      </ul>
+      <UiTab :tabs="tabs" @change="changeTab">
+        <template #difficulty>
+          <h2>難易度設定</h2>
+          <div class="difficulty-container">
+            <ul class="option-list">
+              <li class="option-item">
+                <a class="option-difficulty-btn is-active"
+                  >Easy
+                  <p class="option-difficulty-btn-label">簡単</p>
+                  <p class="option-difficulty-btn-description">
+                    敵の攻撃力が低く、ダメージが少ない
+                  </p>
+                </a>
+              </li>
+              <li class="option-item">
+                <a class="option-difficulty-btn">
+                  Normal
+                  <p class="option-difficulty-btn-label">普通</p>
+                  <p class="option-difficulty-btn-description">敵の攻撃力が普通、ダメージが普通</p>
+                </a>
+              </li>
+              <li class="option-item">
+                <a class="option-difficulty-btn">
+                  Hard
+                  <p class="option-difficulty-btn-label">難しい</p>
+                  <p class="option-difficulty-btn-description">敵の攻撃力が高く、ダメージが多い</p>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </template>
+        <template #graphic>
+          <h2>グラフィック設定</h2>
+          <div class="graphic-container">
+            <ul class="option-list">
+              <li class="option-item">
+                <span>解像度</span
+                ><select name="" id="">
+                  <option value="1">640X480</option>
+                  <option value="2">800X600</option>
+                  <option value="3">1024X768</option>
+                  <option value="4">1280X1024</option>
+                  <option value="5">1600X1200</option>
+                  <option value="6">1920X1080</option>
+                </select>
+              </li>
+              <li class="option-item">
+                <span>UIズーム倍率</span
+                ><select name="" id="">
+                  <option value="1">100%</option>
+                  <option value="2">120%</option>
+                  <option value="3">150%</option>
+                  <option value="4">200%</option>
+                </select>
+              </li>
+              <li class="option-item">
+                <span>フルスクリーン</span><input type="checkbox" name="" id="" />
+              </li>
+            </ul>
+          </div>
+        </template>
+        <template #sound>
+          <h2>サウンド設定</h2>
+          <div class="sound-container">
+            <ul class="option-list">
+              <li class="option-item">
+                <span>マスターボリューム</span><input type="range" min="0" max="100" value="50" />
+              </li>
+              <li class="option-item">
+                <span>BGMボリューム</span><input type="range" min="0" max="100" value="50" />
+              </li>
+              <li class="option-item">
+                <span>SEボリューム</span><input type="range" min="0" max="100" value="50" />
+              </li>
+            </ul>
+          </div>
+        </template>
+      </UiTab>
     </BaseWindow>
     <div class="background-elements">
       <div class="robot-silhouette"></div>
@@ -150,6 +232,170 @@ const statusClose = () => {
   background-size: cover;
   background-repeat: no-repeat;
   opacity: 0.2;
+}
+
+.difficulty-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.difficulty-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.graphic-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sound-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.option-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option-item span {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.option-item select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #f17623;
+  border-radius: 0.5rem;
+  background-color: #f17623;
+  color: #000000;
+}
+
+.option-item input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #f17623;
+  border-radius: 0.5rem;
+}
+
+.option-item input[type='checkbox'] {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #f17623;
+  border-radius: 0.5rem;
+  position: relative;
+  width: 0;
+}
+.option-item input[type='checkbox']::before {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  background-color: #85461b;
+  border: 3px solid #f17623;
+  border-radius: 0.5rem;
+}
+
+.option-item input[type='checkbox']:checked {
+  background-color: #f17623;
+  color: #000000;
+}
+
+.option-item input[type='checkbox']:checked::after {
+  content: '';
+  display: block;
+  background-color: #ff8951;
+  border-radius: 0.55rem;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 24px;
+  height: 24px;
+}
+.option-item input[type='range'] {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #f17623;
+  border-radius: 0.5rem;
+  background-color: #f17623;
+  color: #000000;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+.option-item input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: #f1752371;
+  border: 3px solid #f1752371;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: 0px 0px 6px 3px rgba(88, 36, 8, 0.8);
+}
+.option-difficulty-btn {
+  font-size: 1.8rem;
+  font-weight: bold;
+  text-align: center;
+  max-width: 460px;
+  margin: auto;
+  padding: 8px 46px;
+  border-radius: 2px;
+}
+.option-difficulty-btn:hover {
+  box-shadow: 0 0 10px #4119023b, 0 0 20px #4119023b;
+  border: 6px solid #f17623;
+  border-bottom: none;
+  border-top: none;
+}
+
+.option-difficulty-btn.is-active {
+  background-color: #f1752371;
+  color: #ffffff;
+  box-shadow: 0 0 10px #4119023b, 0 0 20px #4119023b;
+  border-radius: 2px;
+  border: 6px solid #f17623;
+  border-bottom: none;
+  border-top: none;
+}
+.option-difficulty-btn-label {
+  color: #ab907e;
+  font-size: 1rem;
+  text-align: left;
+}
+.option-difficulty-btn-description {
+  color: #ab907e;
+  font-size: 1rem;
+  text-align: left;
 }
 @keyframes wiggleLoop {
   0% {

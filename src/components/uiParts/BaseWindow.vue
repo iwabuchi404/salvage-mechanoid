@@ -69,7 +69,7 @@ watch(
         }
       "
     >
-      X
+      ×
     </button>
     <span class="window__inner"><slot></slot></span>
   </div>
@@ -103,10 +103,12 @@ watch(
   position: absolute;
   top: 0;
   right: 0;
+  color: #ffffff;
   background-color: #f17623;
   border: solid #f17623 1px;
-  padding: 1px 8px 4px 8px;
-  font-size: 1rem;
+  padding: 1px 8px 7px 8px;
+  line-height: 1;
+  font-size: 1.2rem;
   transition: all 0.15s;
   pointer-events: auto;
 }
@@ -128,7 +130,7 @@ watch(
   margin: auto;
   z-index: v-bind(zIndex);
   border: #f17623 solid 1px;
-  background-color: #361e10b6;
+  background-color: #361e10dc;
   padding: 36px 10px 10px 10px;
   transition: display 0.5s ease-in-out, height 0.3s, width 0.4s;
   transition-behavior: allow-discrete;
@@ -182,7 +184,7 @@ watch(
     background: rgba(255, 102, 0, 0.35);
   }
   100% {
-    background: rgba(255, 102, 0, 0.4);
+    background: rgba(255, 102, 0, 0.6);
   }
 }
 @keyframes gradationAnime {
