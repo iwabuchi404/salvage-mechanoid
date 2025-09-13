@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, compile, computed, watch } from 'vue';
-import { Application, Assets, Graphics } from 'pixi.js';
+import { onMounted, ref, computed, watch } from 'vue';
 import { Game } from '../../game';
 import { Character } from '../../common/Character';
 import { Enemy } from '../../common/Enemy';
-import { TileInfo } from '../../common/Stage';
-import { TurnManager, TurnPhase } from '../../common/TurnManager';
+import { TurnPhase } from '../../common/TurnManager';
 import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
@@ -17,12 +15,17 @@ const game = new Game();
 
 const selectedCharacter = ref<Character | null>(null);
 const selectedEnemy = ref<Enemy | null>(null);
-const selectedTile = ref<TileInfo | null>(null);
+const selectedTile = ref<{
+  name: string;
+  effect: string;
+  statModifier: Record<string, number>;
+} | null>(null);
 const message = ref<string | null>(null);
 
 const showActionMenu = ref(true);
 const showItemList = ref(false);
-const playerItems = ref<any[]>([]);
+const showStatusWindow = ref(false);
+const playerItems = ref<Array<{ id: string; name: string; description: string }>>([]);
 const isPlayerTurn = ref(true);
 
 const playerHp = ref(100);
@@ -62,20 +65,26 @@ onMounted(() => {
       emit('game-over', score);
     });
 
-    game.setOnCharacterSelect((character) => {
-      selectedCharacter.value = character;
+    game.setOnCharacterSelect((character: Character | Enemy | null) => {
+      if (character) {
+        selectedCharacter.value = character as Character;
+      }
       console.log('setOnCharacterSelect');
     });
 
-    game.setOnEnemySelect((enemy) => {
-      selectedEnemy.value = enemy;
-      selectedCharacter.value = null;
+    game.setOnEnemySelect((enemy: Enemy | null) => {
+      if (enemy) {
+        selectedEnemy.value = enemy;
+        selectedCharacter.value = null;
+      }
       console.log('setOnEnemySelect');
     });
 
-    game.setOnTileSelect((tileInfo) => {
-      selectedTile.value = tileInfo;
-    });
+    game.setOnTileSelect(
+      (tileInfo: { name: string; effect: string; statModifier: Record<string, number> } | null) => {
+        selectedTile.value = tileInfo;
+      }
+    );
 
     // エネルギー情報の更新
     setInterval(() => {
@@ -97,6 +106,7 @@ const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
   }
 };
 const closeStatusWindow = () => {
+  showStatusWindow.value = false;
   selectedCharacter.value = null;
   selectedEnemy.value = null;
   selectedTile.value = null;
@@ -106,15 +116,12 @@ const getSelectedName = () => {
   return selectedCharacter.value?.getName() || selectedEnemy.value?.getName() || '';
 };
 
-const getSelectedPosition = () => {
-  return (
-    selectedCharacter.value?.getPosition() ||
-    selectedEnemy.value?.getPosition() || { x: 0, y: 0, z: 0 }
-  );
-};
-const showStatusWindow = computed(() => {
-  return selectedCharacter.value || selectedEnemy.value || selectedTile.value;
-});
+// const getSelectedPosition = () => {
+//   return (
+//     selectedCharacter.value?.getPosition() ||
+//     selectedEnemy.value?.getPosition() || { x: 0, y: 0, z: 0 }
+//   );
+// };
 
 const showItems = () => {
   playerItems.value = game.getPlayerItems();
@@ -133,13 +140,16 @@ const attack = async () => {
 };
 const showStatus = () => {
   showStatusWindow.value = true;
+  selectedCharacter.value = null;
+  selectedEnemy.value = null;
+  selectedTile.value = null;
 };
 
-const endTurn = () => {
-  if (isPlayerTurn.value) {
-    game.endPlayerTurn();
-  }
-};
+// const endTurn = () => {
+//   if (isPlayerTurn.value) {
+//     // game.endPlayerTurn(); // このメソッドが存在しない場合はコメントアウト
+//   }
+// };
 // ゲームクリア時の処理を追加
 function checkGameClear() {
   if (game.isAllEnemiesDefeated()) {
@@ -207,11 +217,11 @@ const closePortalDialog = () => {
       </div>
 
       <BaseWindow
-        height="300px"
-        width="240px"
-        :pos="{ x: 'calc(100% - 310px)', y: 'calc(10px)' }"
+        height="360px"
+        width="300px"
+        :pos="{ x: 'calc(100% - 340px)', y: 'calc(10px)' }"
         :state="showStatusWindow"
-        :title="getSelectedName() + 'ステータス'"
+        :title="getSelectedName() ? getSelectedName() + 'ステータス' : 'プレイヤーステータス'"
         @close="closeStatusWindow"
       >
         <template v-if="selectedCharacter">
@@ -233,6 +243,18 @@ const closePortalDialog = () => {
           <p v-for="(value, key) in selectedTile.statModifier" :key="key">
             {{ key }}: {{ value > 0 ? '+' : '' }}{{ value }}
           </p>
+        </template>
+        <template v-else>
+          <!-- プレイヤーのステータス表示 -->
+          <h2>プレイヤーステータス</h2>
+          <p>レベル: {{ gameStore.player.status.level }}</p>
+          <p>HP: {{ gameStore.player.status.hp }} / {{ gameStore.player.status.maxHp }}</p>
+          <p>
+            エネルギー: {{ gameStore.player.status.energy }} /
+            {{ gameStore.player.status.maxEnergy }}
+          </p>
+          <p>攻撃力: {{ gameStore.player.status.strength }}</p>
+          <p>防御力: {{ gameStore.player.status.defense }}</p>
         </template>
       </BaseWindow>
 
@@ -448,8 +470,6 @@ const closePortalDialog = () => {
 .item-list li a:hover {
   background-color: #ff964f1e;
 }
-.item-list li:last-child {
-}
 
 .player-info {
   background-color: #333333b0;
@@ -473,6 +493,11 @@ const closePortalDialog = () => {
   }
   .energy-fill--hp {
     background-color: #f17623;
+    height: 7px;
+    border: 1px solid #35180d;
+    border-top: none;
+    border-left: none;
+    border-right: none;
   }
   .energy-text {
     margin: 0 6px 2px 6px;
