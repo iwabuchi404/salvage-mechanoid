@@ -155,12 +155,12 @@ export class SpriteComponent implements Component {
       // アイソメトリック座標をスクリーン座標に変換
       const screenPos = coordSystem.isometricToScreen(x, y, z);
 
-      // カメラ位置を考慮してスプライトの位置を設定
-      this.sprite.x = screenPos.x + camera.x;
-      this.sprite.y = screenPos.y + camera.y;
+      // スプライトの基本位置を設定（カメラ位置はRendererSystemで適用）
+      this.sprite.x = screenPos.x;
+      this.sprite.y = screenPos.y;
 
-      // 深度ソートのためのzIndexを設定（Y座標が大きいほど手前に表示）
-      this.sprite.zIndex = y * 1000 + x;
+      // 深度ソートのためのzIndexを設定（Y座標が小さいほど手前に表示され、Z座標（高さ）も考慮）
+      this.sprite.zIndex = (y + z * 100) * 1000 + x;
     }
   }
 

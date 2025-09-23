@@ -7,6 +7,7 @@ import { MapGenerator } from '../engine/world/MapGenerator';
 import { Player } from '../engine/entity/Player';
 import { Vector3, EventName, TileType } from '../engine/types';
 import { useGameStore } from '../stores/gameStore';
+import { WorldSystem } from '../engine/world/WorldSystem';
 
 /**
  * ゲームクラス - ゲームの主要な機能を統合
@@ -441,59 +442,5 @@ export class Game {
   }
 }
 
-/**
- * WorldSystemクラス - エンジンに登録するためのラッパー
- */
-class WorldSystem implements System {
-  private tileMap: TileMap;
-
-  constructor(tileMap: TileMap) {
-    this.tileMap = tileMap;
-  }
-
-  async initialize(engine: Engine): Promise<void> {
-    // 初期化処理
-  }
-
-  update(deltaTime: number): void {
-    // 更新処理
-  }
-
-  /**
-   * 指定位置が通行可能かどうかをチェック
-   */
-  isWalkable(x: number, y: number, z = 0): boolean {
-    return this.tileMap.isWalkable(x, y, z);
-  }
-
-  /**
-   * タイルマップを取得
-   */
-  getTileMap(): TileMap {
-    return this.tileMap;
-  }
-
-  /**
-   * ランダムな通行可能なタイルを取得
-   */
-  getRandomWalkableTile(): Vector3 | null {
-    const size = this.tileMap.getSize();
-    const maxAttempts = 100;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const x = Math.floor(Math.random() * size.width);
-      const y = Math.floor(Math.random() * size.height);
-      const z = 0; // 基本的にはz=0のレイヤーを使用
-
-      if (this.tileMap.isWalkable(x, y, z)) {
-        return { x, y, z };
-      }
-    }
-
-    return null;
-  }
-}
-
 // Systemインターフェースを使うためのインポート
 import { System } from '../engine/System';
-// import { WorldSystem } from '../engine/world/WorldSystem';

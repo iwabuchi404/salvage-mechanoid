@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 import { Character } from './Character';
 import { Enemy, EnemyFactory } from './Enemy';
 import { GameObject } from './GameObject';
-import { MapGenerator } from './MapGenerator';
+import { MapGenerator } from '../engine/world/MapGenerator';
 import { EventObject, EventCallback } from './EventObject';
 import { Direction, TileType, Tile, TileInfo } from './types';
 

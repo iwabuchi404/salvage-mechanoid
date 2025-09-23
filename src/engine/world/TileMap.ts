@@ -326,13 +326,4 @@ export class TileMap {
     return nearestTile;
   }
 
-  /**
-   * 2点間のマンハッタン距離を計算
-   * @param pos1 1つ目の位置
-   * @param pos2 2つ目の位置
-   * @returns マンハッタン距離
-   */
-  getDistance(pos1: Vector3, pos2: Vector3): number {
-    return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) + Math.abs(pos1.z - pos2.z);
-  }
 }

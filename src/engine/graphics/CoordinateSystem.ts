@@ -23,7 +23,7 @@ export class CoordinateSystem {
   isometricToScreen(x: number, y: number, z = 0): Vector2 {
     return {
       x: ((x - y) * this.tileWidth) / 2,
-      y: ((x + y) * this.tileHeight) / 3 - z * (this.tileHeight / 2),
+      y: ((x + y) * this.tileHeight) / 2 - z * (this.tileHeight / 2),
     };
   }
 
@@ -34,8 +34,11 @@ export class CoordinateSystem {
    * @returns マップ座標（Z座標は含まない）
    */
   screenToIsometric(screenX: number, screenY: number): Vector2 {
-    const x = (screenX / (this.tileWidth / 2) + screenY / (this.tileHeight / 3)) / 2;
-    const y = (screenY / (this.tileHeight / 3) - screenX / (this.tileWidth / 2)) / 2;
+    const halfTileWidth = this.tileWidth / 2;
+    const halfTileHeight = this.tileHeight / 2;
+
+    const x = (screenX / halfTileWidth + screenY / halfTileHeight) / 2;
+    const y = (screenY / halfTileHeight - screenX / halfTileWidth) / 2;
     return { x, y };
   }
 

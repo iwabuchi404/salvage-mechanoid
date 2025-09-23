@@ -1,4 +1,5 @@
 import { Entity } from '../../engine/entity/Entity';
+import { Component } from './Component';
 import { TransformComponent } from '../../engine/entity/components/Transform';
 import { SpriteComponent } from '../../engine/entity/components/Sprite';
 import { MovementComponent } from '../../engine/entity/components/Movement';
@@ -507,7 +508,5 @@ class EnergyComponent implements Component {
   }
 }
 
-// Componentインターフェースを使用するためのインポート
-import { Component } from '../../engine/entity/Component';
 // TileTypeを使用するためのインポート
 import { TileType } from '../../engine/types';

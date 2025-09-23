@@ -75,7 +75,7 @@ export class MovementComponent implements Component {
    * 毎フレームの更新処理
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
-  update(deltaTime: number): void {
+  update(): void {
     if (!this.entity || !this._isMoving) return;
 
     const transform = this.entity.getComponent<TransformComponent>('transform');
@@ -211,22 +211,19 @@ export class MovementComponent implements Component {
 
   /**
    * 指定位置に移動可能かどうかをチェック
-   * 実際のチェックロジックはWorldSystemなどで実装する必要がある
    * @param x X座標
    * @param y Y座標
    * @param z Z座標
    * @returns 移動可能な場合はtrue
    */
   private canMoveTo(x: number, y: number, z: number): boolean {
-    // 実際の実装ではWorldSystemなどに問い合わせる
-    // ここではプレースホルダーとして単純にtrueを返す
-    const worldSystem = Engine.instance.getSystem<any>('world');
-    if (worldSystem && worldSystem.isWalkable) {
-      return worldSystem.isWalkable(x, y, z);
+    const worldSystem = Engine.instance.getSystem('world');
+    if (worldSystem && typeof worldSystem === 'object' && 'isWalkable' in worldSystem) {
+      return (worldSystem as any).isWalkable(x, y, z);
     }
 
-    // WorldSystemがない場合はデフォルトでtrueを返す
-    return true;
+    // WorldSystemがない場合は範囲内チェックのみ行う
+    return x >= 0 && y >= 0; // 基本的な範囲チェック
   }
 
   /**

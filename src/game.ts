@@ -7,7 +7,7 @@ import { Enemy } from './common/Enemy';
 import { TurnManager, TurnPhase } from './common/TurnManager';
 import { Direction, TileInfo, TileType } from './common/types';
 import { GameObject } from './common/GameObject';
-import { MapGenerator } from './common/MapGenerator';
+import { MapGenerator } from './engine/world/MapGenerator';
 import { onCharacterDestroyed } from './common/VisualEffect';
 import { SoundManager } from './common/SoundManager';
 import { useGameStore } from './stores/gameStore';

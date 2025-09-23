@@ -7,6 +7,7 @@ import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/Transform';
+import { CoordinateSystem } from '../graphics/CoordinateSystem';
 
 /**
  * WorldSystem - ゲーム世界と地形を管理するシステム
@@ -25,6 +26,9 @@ export class WorldSystem implements System {
   // エンティティシステムへの参照
   private entitySystem: EntitySystem | null = null;
 
+  // 座標変換システム
+  private coordinateSystem: CoordinateSystem;
+
   // 現在のフロア番号
   private currentFloor = 1;
 
@@ -37,6 +41,7 @@ export class WorldSystem implements System {
    */
   constructor(tileMap: TileMap) {
     this.tileMap = tileMap;
+    this.coordinateSystem = new CoordinateSystem(160, 120); // 仮のタイルサイズ
     this.floorMaps.set(this.currentFloor, tileMap);
 
     console.log('WorldSystem created');
@@ -333,9 +338,8 @@ export class WorldSystem implements System {
   private getAllEntities(): Entity[] {
     if (!this.entitySystem) return [];
 
-    // エンティティシステムの実装によって異なる可能性がある
-    // ここではプレースホルダーとして空配列を返す
-    return this.entitySystem.getEntities ? this.entitySystem.getEntities() : [];
+    // エンティティシステムからすべてのエンティティを取得
+    return this.entitySystem.getEntities();
   }
 
   /**
@@ -462,21 +466,20 @@ export class WorldSystem implements System {
   }
 
   /**
-   * A*アルゴリズムを使用して2点間の経路を検索
+   * 基本的な経路探索（直線経路 + 障害物回避）
    * @param start 開始位置
    * @param goal 目標位置
    * @param maxDistance 最大検索距離（オプション）
    * @returns 経路の位置配列、見つからない場合は空配列
    */
   findPath(start: Vector3, goal: Vector3, maxDistance = Infinity): Vector3[] {
-    // A*アルゴリズムの実装（簡略化のため詳細は省略）
-    // 実際の実装ではオープンリスト、クローズドリスト、ヒューリスティック関数などを使用
-
-    // プレースホルダーとして直線経路を返す
-    const path: Vector3[] = [{ ...start }];
+    // 開始位置と目標位置が同じ場合は開始位置のみを返す
+    if (start.x === goal.x && start.y === goal.y && start.z === goal.z) {
+      return [{ ...start }];
+    }
 
     // 2点間の距離が最大距離を超える場合は空配列を返す
-    const distance = this.tileMap.getDistance(start, goal);
+    const distance = this.coordinateSystem.getDistance(start, goal);
     if (distance > maxDistance) {
       return [];
     }
@@ -486,13 +489,81 @@ export class WorldSystem implements System {
       return [];
     }
 
-    // 開始位置と目標位置が同じ場合は開始位置のみを返す
-    if (start.x === goal.x && start.y === goal.y && start.z === goal.z) {
-      return path;
-    }
+    // 直線経路を生成（ただし障害物を回避）
+    const path: Vector3[] = [];
+    const dx = goal.x - start.x;
+    const dy = goal.y - start.y;
 
-    // 目標位置を追加
-    path.push({ ...goal });
+    // X方向の移動
+    const stepX = dx > 0 ? 1 : -1;
+    const absDx = Math.abs(dx);
+
+    // Y方向の移動
+    const stepY = dy > 0 ? 1 : -1;
+    const absDy = Math.abs(dy);
+
+    let currentX = start.x;
+    let currentY = start.y;
+
+    path.push({ ...start });
+
+    // X方向が長い場合
+    if (absDx >= absDy) {
+      let error = absDx / 2;
+      for (let i = 0; i < absDx; i++) {
+        error -= absDy;
+        currentX += stepX;
+
+        if (error < 0) {
+          error += absDx;
+          currentY += stepY;
+
+          // 斜め移動のチェック
+          if (!this.isWalkable(currentX, currentY, start.z)) {
+            // 斜め移動ができない場合、別ルートを試す
+            currentY -= stepY;
+            if (!this.isWalkable(currentX, currentY, start.z)) {
+              return path; // 経路が見つからない
+            }
+          }
+        } else {
+          // 水平移動のチェック
+          if (!this.isWalkable(currentX, currentY, start.z)) {
+            return path; // 経路が見つからない
+          }
+        }
+
+        path.push({ x: currentX, y: currentY, z: start.z });
+      }
+    } else {
+      // Y方向が長い場合
+      let error = absDy / 2;
+      for (let i = 0; i < absDy; i++) {
+        error -= absDx;
+        currentY += stepY;
+
+        if (error < 0) {
+          error += absDy;
+          currentX += stepX;
+
+          // 斜め移動のチェック
+          if (!this.isWalkable(currentX, currentY, start.z)) {
+            // 斜め移動ができない場合、別ルートを試す
+            currentX -= stepX;
+            if (!this.isWalkable(currentX, currentY, start.z)) {
+              return path; // 経路が見つからない
+            }
+          }
+        } else {
+          // 垂直移動のチェック
+          if (!this.isWalkable(currentX, currentY, start.z)) {
+            return path; // 経路が見つからない
+          }
+        }
+
+        path.push({ x: currentX, y: currentY, z: start.z });
+      }
+    }
 
     return path;
   }
@@ -501,7 +572,7 @@ export class WorldSystem implements System {
    * 各フレームの更新処理
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
-  update(deltaTime: number): void {
+  update(): void {
     // 必要に応じて環境の更新処理を追加
     // 例: 時間経過によるタイルの変化、動的な環境効果など
   }

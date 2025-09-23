@@ -56,9 +56,9 @@ export class MapGenerator {
 
   /**
    * ランダムなマップを生成
-   * @returns 生成されたマップデータ（2次元配列、数値はTileType列挙型に対応）
+   * @returns 生成されたマップデータと部屋情報
    */
-  generateMap(): number[][] {
+  generateMap(): { map: number[][]; rooms: Room[] } {
     console.log('Generating random map...');
 
     // マップを初期化（全てEMPTY）
@@ -75,7 +75,10 @@ export class MapGenerator {
 
     console.log(`Map generated with ${this.rooms.length} rooms`);
 
-    return this.stageData;
+    return {
+      map: this.stageData,
+      rooms: [...this.rooms]
+    };
   }
 
   /**

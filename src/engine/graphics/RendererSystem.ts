@@ -175,8 +175,8 @@ export class RendererSystem implements System {
     sprite.y = screenPos.y + this.camera.y;
 
     // 深度ソートのためのzIndexを設定
-    // Y座標が大きいほど手前に表示される
-    sprite.zIndex = position.y * 1000 + position.x;
+    // Y座標が小さいほど手前に表示され、Z座標（高さ）も考慮
+    sprite.zIndex = (position.y + position.z * 100) * 1000 + position.x;
 
     // スプライトをレイヤーに追加（まだ追加されていない場合）
     if (!sprite.parent) {

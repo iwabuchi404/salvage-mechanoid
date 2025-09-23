@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref, compile, computed, watch } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 
-const props = withDefaults(
-  defineProps<{
-    type: string;
-    tag?: 'a' | 'btn';
-    href?: string;
-    width?: string;
-  }>(),
-  {
-    tag: 'btn',
-    width: 'auto',
-  }
-);
+interface Props {
+  type: string;
+  tag?: 'a' | 'btn';
+  href?: string;
+  width?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  tag: 'btn' as const,
+  width: 'auto',
+});
 
 const emit = defineEmits<{
   (e: 'click'): void;
@@ -33,7 +32,7 @@ const emit = defineEmits<{
   width: v-bind(width);
   font-size: 1.5rem;
   padding: 1rem 2rem;
-  background-color: rgba(138, 58, 5, 0.4);
+  background-color: rgba(138, 58, 5, 0.5);
   border: none;
   border: 2px solid #f17623;
   border-bottom: none;
