@@ -3,9 +3,24 @@ import { RendererSystem } from '../engine/graphics/RendererSystem';
 import { EntitySystem } from '../engine/entity/EntitySystem';
 import { EventSystem } from '../engine/events/EventSystem';
 import { TileMap } from '../engine/world/TileMap';
-import { MapGenerator } from '../engine/world/MapGenerator';
+import { FlexibleMapGenerator } from '../engine/world/FlexibleMapGenerator';
+import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
 import { Player } from '../engine/entity/Player';
-import { Vector3, EventName, TileType } from '../engine/types';
+import { Obstacle } from '../engine/entity/Obstacle';
+import { Item } from '../engine/entity/Item';
+import { Enemy } from '../engine/entity/Enemy';
+import {
+  Vector3,
+  EventName,
+  TileType,
+  StageType,
+  PlacedObstacle,
+  PlacedItem,
+  PlacedEnemy,
+  Room,
+  Corridor,
+  TacticalElement,
+} from '../engine/types';
 import { useGameStore } from '../stores/gameStore';
 import { WorldSystem } from '../engine/world/WorldSystem';
 
@@ -21,6 +36,19 @@ export class Game {
 
   // プレイヤーエンティティ
   private player: Player | null = null;
+
+  // リソース生成システム
+  private resourceSystem: ResourceGenerationSystem | null = null;
+
+  // 生成されたリソースを保存
+  private placedObstacles: PlacedObstacle[] = [];
+  private placedItems: PlacedItem[] = [];
+  private placedEnemies: PlacedEnemy[] = [];
+
+  // マップ生成情報を保存
+  private currentRooms: Room[] = [];
+  private currentCorridors: Corridor[] = [];
+  private currentTacticalElements: TacticalElement[] = [];
 
   // ゲームが初期化済みかどうか
   private initialized = false;
@@ -63,11 +91,8 @@ export class Game {
     // プレイヤーを作成
     await this.createPlayer();
 
-    // 敵を配置
-    await this.spawnEnemies();
-
-    // アイテムを配置
-    await this.spawnItems();
+    // リソース（障害物・アイテム・敵）を生成
+    await this.generateResources();
 
     // イベントリスナーを設定
     this.setupEventListeners();
@@ -107,23 +132,104 @@ export class Game {
 
   /**
    * マップを生成
+   * @param stageType ステージタイプ（オプション、デフォルトはTACTICAL_COMBAT）
    */
-  private async generateMap(): Promise<void> {
-    console.log('Generating map...');
+  private async generateMap(stageType: StageType = StageType.TACTICAL_COMBAT): Promise<void> {
+    console.log(`Generating map with stage type: ${stageType}...`);
 
-    // マップジェネレーターを使用
-    const mapGenerator = new MapGenerator(50, 50, 4, 8);
-    const mapData = mapGenerator.generateMap();
+    // 新しいFlexibleMapGeneratorを使用
+    const mapGenerator = new FlexibleMapGenerator(50, 50);
 
-    // タイルマップを作成
-    this.tileMap = new TileMap(50, 50);
-    this.tileMap.importMapData(mapData);
+    // ステージタイプに応じてマップ生成
+    if (stageType === StageType.CLASSIC) {
+      // クラシックモード：従来の方式
+      const mapData = await mapGenerator.generateMap(4, 8, stageType);
+
+      // タイルマップを作成
+      this.tileMap = new TileMap(50, 50);
+      this.tileMap.importMapData(mapData.map);
+
+      console.log('Map generated with Classic mode');
+      console.log(`Generated ${mapData.rooms.length} rooms`);
+    } else {
+      // 戦術的モード：新しい戦術的システム
+      const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
+        minRoomSize: 4,
+        maxRoomSize: 8,
+        energyTightness: 'balanced',
+        playerLevel: 1,
+      });
+
+      // タイルマップを作成
+      this.tileMap = new TileMap(50, 50);
+      this.tileMap.importMapData(tacticalData.map);
+
+      // マップ生成情報を保存
+      this.currentRooms = tacticalData.rooms;
+      this.currentCorridors = tacticalData.corridors;
+      this.currentTacticalElements = tacticalData.tacticalElements;
+
+      // 戦術的要素の情報を表示
+      console.log(`Map generated with Tactical mode: ${stageType}`);
+      console.log(`Generated ${tacticalData.rooms.length} rooms`);
+      console.log(`Energy points: ${tacticalData.energyPoints.length}`);
+      console.log(`Tactical elements: ${tacticalData.tacticalElements.length}`);
+      console.log(`Terrain effects: ${tacticalData.terrainEffects.size}`);
+      console.log(
+        `Estimated energy consumption: ${tacticalData.tacticalMetadata.estimatedEnergyConsumption}`
+      );
+      console.log(
+        `Available energy recovery: ${tacticalData.tacticalMetadata.availableEnergyRecovery}`
+      );
+      console.log(`Difficulty rating: ${tacticalData.tacticalMetadata.difficultyRating}`);
+
+      // 戦術的データをゲームストアに保存（将来の拡張用）
+      // TODO: ゲームストアに戦術的データ保存機能を追加
+      console.log('Tactical data ready for game store integration:', {
+        energyPointsCount: tacticalData.energyPoints.length,
+        tacticalElementsCount: tacticalData.tacticalElements.length,
+        terrainEffectsCount: tacticalData.terrainEffects.size,
+      });
+    }
 
     // WorldSystemを作成してエンジンに登録（タイルマップを使用）
     const worldSystem = new WorldSystem(this.tileMap);
     this.engine.registerSystem('world', worldSystem);
+  }
 
-    console.log('Map generated');
+  /**
+   * 異なるステージタイプでマップを生成（公開メソッド）
+   * @param stageType 生成するステージタイプ
+   */
+  async generateMapWithStageType(stageType: StageType): Promise<void> {
+    // 既存のマップをクリア
+    if (this.tileMap) {
+      // WorldSystemを削除（removeSystemメソッドがない場合はスキップ）
+      try {
+        // this.engine.removeSystem('world'); // TODO: Engine.removeSystemメソッドの実装が必要
+        console.log('Clearing existing world system');
+      } catch (error) {
+        console.warn('Could not remove world system:', error);
+      }
+      this.tileMap = null;
+    }
+
+    // 新しいマップを生成
+    await this.generateMap(stageType);
+
+    // プレイヤー位置をリセット
+    if (this.player) {
+      const startPosition = this.findStartPosition();
+      if (startPosition) {
+        // プレイヤーの位置更新（setPositionメソッドがない場合は直接設定）
+        try {
+          // this.player.position = startPosition; // TODO: Player.positionプロパティの実装が必要
+          console.log('Player position should be reset to:', startPosition);
+        } catch (error) {
+          console.warn('Could not reset player position:', error);
+        }
+      }
+    }
   }
 
   /**
@@ -180,124 +286,114 @@ export class Game {
   }
 
   /**
-   * 敵を配置
+   * リソース（障害物・アイテム・敵）を生成
    */
-  private async spawnEnemies(): Promise<void> {
-    console.log('Spawning enemies...');
+  private async generateResources(): Promise<void> {
+    console.log('Generating resources...');
 
-    // WorldSystemを使って敵を配置
-    const worldSystem = this.engine.getSystem<WorldSystem>('world');
-    if (!worldSystem) {
-      console.warn('WorldSystem not found, skipping enemy spawning');
+    if (!this.tileMap) {
+      console.warn('TileMap not found, skipping resource generation');
       return;
     }
 
-    // 敵の数を決定（マップのサイズに基づく）
+    // WorldSystemから必要な情報を取得
+    const worldSystem = this.engine.getSystem<WorldSystem>('world');
+    if (!worldSystem) {
+      console.warn('WorldSystem not found, skipping resource generation');
+      return;
+    }
+
     const tileMap = worldSystem.getTileMap();
+
+    // マップデータを取得
     const mapSize = tileMap.getSize();
-    const enemyCount = Math.floor(Math.sqrt(mapSize.width * mapSize.height) / 3);
-
-    // 敵を配置
-    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
-
-    for (let i = 0; i < enemyCount; i++) {
-      // ランダムな歩行可能な位置を取得
-      const position = worldSystem.getRandomWalkableTile();
-      if (!position) continue;
-
-      // プレイヤーの近くには配置しない
-      if (this.player) {
-        const playerPos = this.player.getPosition();
-        const distance = Math.abs(position.x - playerPos.x) + Math.abs(position.y - playerPos.y);
-        if (distance < 5) continue;
-      }
-
-      // 敵のタイプをランダムに決定
-      const enemyType = Math.random() < 0.7 ? 'slime' : 'goblin';
-
-      // 敵エンティティを作成
-      const enemy = await this.createEnemy(enemyType, position);
-      if (enemy && entitySystem) {
-        entitySystem.registerEntity(enemy);
+    const map: number[][] = [];
+    for (let y = 0; y < mapSize.height; y++) {
+      map[y] = [];
+      for (let x = 0; x < mapSize.width; x++) {
+        const tile = tileMap.getTile(x, y, 0);
+        map[y][x] = tile ? tile.type : 0;
       }
     }
 
-    console.log(`${enemyCount} enemies spawned`);
+    // 保存されている部屋と通路の情報を使用
+    const rooms = this.currentRooms;
+    const corridors = this.currentCorridors;
+    const tacticalElements = this.currentTacticalElements;
+
+    // リソース生成システムを初期化
+    this.resourceSystem = new ResourceGenerationSystem(mapSize.width, mapSize.height);
+
+    // プレイヤーレベルと難易度を取得
+    const playerLevel = this.gameStore.player.status.level || 1;
+    const currentFloor = worldSystem.getCurrentFloor();
+
+    // リソースを生成
+    const resources = this.resourceSystem.generateResources(
+      map,
+      rooms,
+      corridors,
+      tacticalElements,
+      {
+        playerLevel: playerLevel,
+        difficulty: currentFloor,
+      }
+    );
+
+    // 生成されたリソースを保存
+    this.placedObstacles = resources.obstacles;
+    this.placedItems = resources.items;
+    this.placedEnemies = resources.enemies;
+
+    console.log(
+      `Resources generated: ${resources.obstacles.length} obstacles, ${resources.items.length} items, ${resources.enemies.length} enemies`
+    );
+
+    // エンティティシステムに登録
+    await this.registerResourceEntities(resources.obstacles, resources.items, resources.enemies);
   }
 
   /**
-   * 敵エンティティを作成
-   * @param type 敵のタイプ
-   * @param position 位置
+   * リソースエンティティをEntitySystemに登録
    */
-  private async createEnemy(type: string, position: Vector3): Promise<any> {
-    // ここでは実際の敵クラスではなくプレースホルダーを返す
-    // 実際の実装では、Enemy クラスのインスタンスを返す
-
-    const enemy = {
-      id: `enemy_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      type: 'enemy',
-      position: { ...position },
-    };
-
-    return enemy;
-  }
-
-  /**
-   * アイテムを配置
-   */
-  private async spawnItems(): Promise<void> {
-    console.log('Spawning items...');
-
-    // WorldSystemを使ってアイテムを配置
-    const worldSystem = this.engine.getSystem<WorldSystem>('world');
-    if (!worldSystem) {
-      console.warn('WorldSystem not found, skipping item spawning');
+  private async registerResourceEntities(
+    obstacles: PlacedObstacle[],
+    items: PlacedItem[],
+    enemies: PlacedEnemy[]
+  ): Promise<void> {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!entitySystem) {
+      console.warn('EntitySystem not found, skipping entity registration');
       return;
     }
 
-    // アイテムの数を決定
-    const itemCount = Math.floor(Math.random() * 10) + 5;
+    console.log('Registering resource entities...');
 
-    // アイテムを配置
-    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
-
-    for (let i = 0; i < itemCount; i++) {
-      // ランダムな歩行可能な位置を取得
-      const position = worldSystem.getRandomWalkableTile();
-      if (!position) continue;
-
-      // アイテムのタイプをランダムに決定
-      const itemTypes = ['energy', 'health', 'key', 'weapon'];
-      const itemType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-
-      // アイテムエンティティを作成
-      const item = await this.createItem(itemType, position);
-      if (item && entitySystem) {
-        entitySystem.registerEntity(item);
-      }
+    // 障害物を登録
+    for (const obstacleData of obstacles) {
+      const obstacle = new Obstacle(obstacleData);
+      await obstacle.initialize();
+      entitySystem.registerEntity(obstacle);
     }
+    console.log(`Registered ${obstacles.length} obstacles`);
 
-    console.log(`${itemCount} items spawned`);
-  }
+    // アイテムを登録
+    for (const itemData of items) {
+      const item = new Item(itemData);
+      await item.initialize();
+      entitySystem.registerEntity(item);
+    }
+    console.log(`Registered ${items.length} items`);
 
-  /**
-   * アイテムエンティティを作成
-   * @param type アイテムのタイプ
-   * @param position 位置
-   */
-  private async createItem(type: string, position: Vector3): Promise<any> {
-    // ここでは実際のアイテムクラスではなくプレースホルダーを返す
-    // 実際の実装では、Item クラスのインスタンスを返す
+    // 敵を登録
+    for (const enemyData of enemies) {
+      const enemy = new Enemy(enemyData);
+      await enemy.initialize();
+      entitySystem.registerEntity(enemy);
+    }
+    console.log(`Registered ${enemies.length} enemies`);
 
-    const item = {
-      id: `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      type: 'item',
-      itemType: type,
-      position: { ...position },
-    };
-
-    return item;
+    console.log('All resource entities registered successfully');
   }
 
   /**

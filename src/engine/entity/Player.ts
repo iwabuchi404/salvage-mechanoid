@@ -345,21 +345,23 @@ export class Player extends Entity {
         this.gameStore.setPortalActive(true);
         break;
 
-      case TileType.HEAL:
+      case TileType.HEAL: {
         // 回復イベント
         const health = this.getComponent<HealthComponent>('health');
         if (health) {
           health.heal(20);
         }
         break;
+      }
 
-      case TileType.DAMAGE:
+      case TileType.DAMAGE: {
         // ダメージイベント
         const healthComp = this.getComponent<HealthComponent>('health');
         if (healthComp) {
           healthComp.takeDamage(10);
         }
         break;
+      }
     }
   }
 

@@ -55,13 +55,15 @@ export class TileMap {
     const key = this.getTileKey(tile.position.x, tile.position.y, tile.position.z);
     this.tiles.set(key, tile);
 
-    // タイル変更イベントを発行
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
-      eventSystem.emit('tile_changed', {
-        position: tile.position,
-        type: tile.type,
-      });
+    // タイル変更イベントを発行（Engineが存在する場合のみ）
+    if (Engine.instance) {
+      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+      if (eventSystem) {
+        eventSystem.emit('tile_changed', {
+          position: tile.position,
+          type: tile.type,
+        });
+      }
     }
   }
 
@@ -325,5 +327,4 @@ export class TileMap {
 
     return nearestTile;
   }
-
 }

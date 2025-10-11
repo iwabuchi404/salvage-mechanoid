@@ -7,7 +7,9 @@ import { Enemy } from './common/Enemy';
 import { TurnManager, TurnPhase } from './common/TurnManager';
 import { Direction, TileInfo, TileType } from './common/types';
 import { GameObject } from './common/GameObject';
-import { MapGenerator } from './engine/world/MapGenerator';
+import { FlexibleMapGenerator } from './engine/world/FlexibleMapGenerator';
+import { ResourceGenerationSystem } from './engine/world/ResourceGenerationSystem';
+import { StageType, Room, Corridor, TacticalElement } from './engine/types';
 import { onCharacterDestroyed } from './common/VisualEffect';
 import { SoundManager } from './common/SoundManager';
 import { useGameStore } from './stores/gameStore';
@@ -66,10 +68,12 @@ export class Game {
       [1, 1, 1, 2, 2, 2],
     ];
 
-    const mapGenerator = new MapGenerator(50, 50, 4, 8);
-    const generatedMap = mapGenerator.generateMap();
-    this.stage = new Stage(generatedMap.map, { width: 160, height: 120 }, 800, 600);
-    this.stage.setRooms(generatedMap.rooms);
+    // マップ生成は非同期なのでinitialize()で行う
+    // とりあえずダミーマップで初期化
+    const dummyMap = Array(50)
+      .fill(null)
+      .map(() => Array(50).fill(0));
+    this.stage = new Stage(dummyMap, { width: 160, height: 120 }, 800, 600);
     this.setupInputHandlers();
 
     this.onCharacterSelect = () => {
@@ -110,6 +114,19 @@ export class Game {
   public async initialize(_canvas: HTMLCanvasElement) {
     this.app = await this.createPixi(_canvas);
 
+    // 新しいFlexibleMapGeneratorでマップ生成（戦術的モード）
+    const mapGenerator = new FlexibleMapGenerator(50, 50);
+    const generatedMap = await mapGenerator.generateTacticalMap(StageType.TACTICAL_COMBAT, {
+      minRoomSize: 4,
+      maxRoomSize: 8,
+      energyTightness: 'balanced',
+      playerLevel: 1,
+    });
+
+    // 生成されたマップでStageを再初期化
+    this.stage = new Stage(generatedMap.map, { width: 160, height: 120 }, 800, 600);
+    this.stage.setRooms(generatedMap.rooms);
+
     await this.stage.initialize(this.app);
 
     // タイル選択時の処理
@@ -134,45 +151,52 @@ export class Game {
     // this.stage.addCharacter(this.player, 2, 2, 0);
     this.stage.updateCameraPosition();
 
-    // テスト用に敵を追加
-    // const enemy1 = await this.stage.addEnemy('enemy1', 'SLIME', 1, 2, 0);
-    // const enemy2 = await this.stage.addEnemy('enemy2', 'SLIME', 3, 6, 0);
-    // const enemy3 = await this.stage.addEnemy('enemy3', 'GOBLIN', 3, 5, 0);
-    for (let i = 0; i < 3; i++) {
-      const enemyPosition = this.stage.getRandomWalkableTile();
-      const enemy = await this.stage.addEnemy(
-        `enemy${i}`,
-        'SLIME',
-        enemyPosition.x,
-        enemyPosition.y,
-        0
-      );
-    }
+    // 新しいResourceGenerationSystemでリソースを配置
+    const resourceSystem = new ResourceGenerationSystem(50, 50);
+    const resources = resourceSystem.generateResources(
+      generatedMap.map,
+      generatedMap.rooms,
+      generatedMap.corridors,
+      generatedMap.tacticalElements,
+      {
+        playerLevel: 1,
+        difficulty: 1.0,
+      }
+    );
 
-    for (let i = 0; i < 6; i++) {
-      const enemyPosition = this.stage.getRandomWalkableTile();
-      const enemy = await this.stage.addEnemy(
-        `enemy${i}`,
-        'GOBLIN',
-        enemyPosition.x,
-        enemyPosition.y,
-        0
-      );
-    }
-    //boxオブジェクトを追加
-    // const box = new GameObject(this.stage, boxTexture, 5, 8, 0, { x: 0, y: 0.9 });
-    // this.stage.addObject(box);
+    console.log(
+      `Generated resources: ${resources.obstacles.length} obstacles, ${resources.items.length} items, ${resources.enemies.length} enemies`
+    );
 
-    const boxTexture = './obj01.png';
-    for (let i = 0; i < 6; i++) {
-      const enemyPosition = this.stage.getRandomWalkableTile();
-      const box = new GameObject(this.stage, boxTexture, enemyPosition.x, enemyPosition.y, 0, true);
+    // 障害物を配置
+    for (const obstacle of resources.obstacles) {
+      const box = new GameObject(this.stage, './obj01.png', obstacle.x, obstacle.y, 0, true);
       this.stage.addObject(box);
     }
 
+    // 敵を配置
+    for (const enemyData of resources.enemies) {
+      // EnemyTypeを旧システムの敵タイプにマッピング
+      const enemyTypeMapping: { [key: string]: 'SLIME' | 'GOBLIN' } = {
+        scout: 'SLIME',
+        soldier: 'GOBLIN',
+        heavy: 'GOBLIN',
+        turret: 'GOBLIN',
+        boss: 'GOBLIN',
+      };
+      await this.stage.addEnemy(
+        enemyData.id,
+        enemyTypeMapping[enemyData.type] || 'SLIME',
+        enemyData.x,
+        enemyData.y,
+        0
+      );
+    }
+
+    // ポータルを配置（部屋の中心付近に2個）
     for (let i = 0; i < 2; i++) {
       const pos = this.stage.getRandomEmptyRoomTile();
-      if (!pos?.x && !pos?.y) return;
+      if (!pos?.x && !pos?.y) continue;
       const portal = this.stage.addEventObject(
         './obj02.png',
         pos.x,

@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue';
 import { Game } from '../../game';
-import { Character } from '../../common/Character';
-import { Enemy } from '../../common/Enemy';
-import { TurnPhase } from '../../common/TurnManager';
 import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
@@ -13,8 +10,6 @@ const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
 const game = new Game();
 
-const selectedCharacter = ref<Character | null>(null);
-const selectedEnemy = ref<Enemy | null>(null);
 const selectedTile = ref<{
   name: string;
   effect: string;
@@ -28,12 +23,6 @@ const showStatusWindow = ref(false);
 const playerItems = ref<Array<{ id: string; name: string; description: string }>>([]);
 const isPlayerTurn = ref(true);
 
-const playerHp = ref(100);
-const playerMaxHp = ref(100);
-
-const playerEnergy = ref(100);
-const playerMaxEnergy = ref(100);
-
 const energyPercentage = computed(
   () => (gameStore.player.status.energy / gameStore.player.status.maxEnergy) * 100
 );
@@ -46,55 +35,19 @@ const emit = defineEmits<{
   (e: 'game-over', score: number): void;
 }>();
 
-onMounted(() => {
+onMounted(async () => {
   if (mainCanvas.value) {
     console.log('init');
-    // initPixi(mainCanvas.value);
-    game.initialize(mainCanvas.value);
-
-    // ターンの変更を監視
-    watch(
-      () => game.getCurrentPhase(),
-      (newPhase) => {
-        isPlayerTurn.value = newPhase === TurnPhase.PLAYER;
-      }
-    );
+    await game.initialize(mainCanvas.value);
 
     game.setOnGameOver((score: number) => {
       console.log('call setOnGameOver');
       emit('game-over', score);
     });
 
-    game.setOnCharacterSelect((character: Character | Enemy | null) => {
-      if (character) {
-        selectedCharacter.value = character as Character;
-      }
-      console.log('setOnCharacterSelect');
+    game.setOnTileSelect((tileInfo: any) => {
+      selectedTile.value = tileInfo;
     });
-
-    game.setOnEnemySelect((enemy: Enemy | null) => {
-      if (enemy) {
-        selectedEnemy.value = enemy;
-        selectedCharacter.value = null;
-      }
-      console.log('setOnEnemySelect');
-    });
-
-    game.setOnTileSelect(
-      (tileInfo: { name: string; effect: string; statModifier: Record<string, number> } | null) => {
-        selectedTile.value = tileInfo;
-      }
-    );
-
-    // エネルギー情報の更新
-    setInterval(() => {
-      if (game.player) {
-        playerEnergy.value = game.player.getEnergy();
-        playerMaxEnergy.value = game.player.getMaxEnergy();
-        playerHp.value = game.player.getStatus().hp;
-        playerMaxHp.value = game.player.getStatus().maxHp;
-      }
-    }, 100);
 
     window.addEventListener('resize', resizeGame);
     resizeGame(); // 初期サイズを設定
@@ -107,13 +60,11 @@ const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
 };
 const closeStatusWindow = () => {
   showStatusWindow.value = false;
-  selectedCharacter.value = null;
-  selectedEnemy.value = null;
   selectedTile.value = null;
 };
 
 const getSelectedName = () => {
-  return selectedCharacter.value?.getName() || selectedEnemy.value?.getName() || '';
+  return '';
 };
 
 // const getSelectedPosition = () => {
@@ -140,8 +91,6 @@ const attack = async () => {
 };
 const showStatus = () => {
   showStatusWindow.value = true;
-  selectedCharacter.value = null;
-  selectedEnemy.value = null;
   selectedTile.value = null;
 };
 
@@ -158,23 +107,25 @@ function checkGameClear() {
 }
 
 const resizeGame = () => {
-  if (mainCanvas.value && game) {
-    const containerWidth = mainCanvas.value.clientWidth;
-    const containerHeight = mainCanvas.value.clientHeight;
-    const aspectRatio = 4 / 3; // 800 / 600
-
-    let newWidth, newHeight;
-
-    if (containerWidth / containerHeight > aspectRatio) {
-      newHeight = containerHeight;
-      newWidth = newHeight * aspectRatio;
-    } else {
-      newWidth = containerWidth;
-      newHeight = newWidth / aspectRatio;
-    }
-
-    game.resize(newWidth, newHeight);
+  if (!mainCanvas.value || !game) {
+    return;
   }
+
+  const containerWidth = mainCanvas.value.clientWidth;
+  const containerHeight = mainCanvas.value.clientHeight;
+  const aspectRatio = 4 / 3; // 800 / 600
+
+  let newWidth, newHeight;
+
+  if (containerWidth / containerHeight > aspectRatio) {
+    newHeight = containerHeight;
+    newWidth = newHeight * aspectRatio;
+  } else {
+    newWidth = containerWidth;
+    newHeight = newWidth / aspectRatio;
+  }
+
+  game.resize(newWidth, newHeight);
 };
 
 const moveToNextFloor = () => {
@@ -224,20 +175,7 @@ const closePortalDialog = () => {
         :title="getSelectedName() ? getSelectedName() + 'ステータス' : 'プレイヤーステータス'"
         @close="closeStatusWindow"
       >
-        <template v-if="selectedCharacter">
-          <p>レベル: {{ selectedCharacter.getStatus().level }}</p>
-          <p>
-            HP: {{ selectedCharacter.getStatus().hp }} /
-            {{ selectedCharacter.getStatus().maxHp }}
-          </p>
-          <p>攻撃力: {{ selectedCharacter.getStatus().strength }}</p>
-          <p>防御力: {{ selectedCharacter.getStatus().defense }}</p>
-        </template>
-        <template v-else-if="selectedEnemy">
-          <p>HP: {{ selectedEnemy.getStatus().hp }}</p>
-          <p>攻撃力: {{ selectedEnemy.getAttack() }}</p>
-        </template>
-        <template v-else-if="selectedTile">
+        <template v-if="selectedTile">
           <h2>{{ selectedTile.name }}</h2>
           <p>Effect: {{ selectedTile.effect }}</p>
           <p v-for="(value, key) in selectedTile.statModifier" :key="key">

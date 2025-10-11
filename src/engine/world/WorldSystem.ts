@@ -346,11 +346,11 @@ export class WorldSystem implements System {
    * フロアを変更
    * @param floorNumber 目標フロア番号
    */
-  changeFloor(floorNumber: number): void {
+  async changeFloor(floorNumber: number): Promise<void> {
     // 既存のフロアマップがあれば使用、なければ新規生成
     if (!this.floorMaps.has(floorNumber)) {
       // 新しいフロアのマップを生成
-      this.generateNewFloor(floorNumber);
+      await this.generateNewFloor(floorNumber);
     }
 
     // フロアを切り替え
@@ -371,28 +371,43 @@ export class WorldSystem implements System {
    * 新しいフロアを生成
    * @param floorNumber フロア番号
    */
-  private generateNewFloor(floorNumber: number): void {
+  private async generateNewFloor(floorNumber: number): Promise<void> {
     // フロア番号に基づいて難易度を調整
     const difficulty = Math.min(1 + (floorNumber - 1) * 0.1, 2);
 
-    // マップジェネレーターを使用してマップを作成
-    const mapGenerator = new MapGenerator(
-      50, // マップの幅
-      50, // マップの高さ
-      Math.max(3, Math.floor(4 / difficulty)), // 最小部屋サイズ（難易度が上がると小さくなる）
-      Math.max(5, Math.floor(8 / difficulty)) // 最大部屋サイズ（難易度が上がると小さくなる）
-    );
+    // フロア番号に応じて戦術的ステージタイプを決定
+    const stageTypes = [
+      StageType.TACTICAL_COMBAT,
+      StageType.STEALTH_MISSION,
+      StageType.ENERGY_MANAGEMENT,
+      StageType.RESOURCE_CONTROL,
+      StageType.INFORMATION_WAR,
+      StageType.SURVIVAL_CHALLENGE,
+    ];
+    const stageType = stageTypes[(floorNumber - 1) % stageTypes.length];
 
-    const mapData = mapGenerator.generateMap();
+    // 新しいFlexibleMapGeneratorを使用
+    const mapGenerator = new FlexibleMapGenerator(50, 50);
+
+    // 戦術的マップを生成
+    const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
+      minRoomSize: Math.max(3, Math.floor(4 / difficulty)),
+      maxRoomSize: Math.max(5, Math.floor(8 / difficulty)),
+      energyTightness: floorNumber <= 2 ? 'relaxed' : floorNumber <= 4 ? 'balanced' : 'tight',
+      playerLevel: floorNumber,
+    });
 
     // 新しいタイルマップを作成
     const newMap = new TileMap(50, 50);
-    newMap.importMapData(mapData);
+    newMap.importMapData(tacticalData.map);
 
     // フロアマップに保存
     this.floorMaps.set(floorNumber, newMap);
 
-    console.log(`Generated new floor ${floorNumber}`);
+    console.log(`Generated new floor ${floorNumber} with stage type: ${stageType}`);
+    console.log(`  Rooms: ${tacticalData.rooms.length}`);
+    console.log(`  Energy points: ${tacticalData.energyPoints.length}`);
+    console.log(`  Tactical elements: ${tacticalData.tacticalElements.length}`);
   }
 
   /**
@@ -590,4 +605,5 @@ export class WorldSystem implements System {
 }
 
 // 必要なインポート
-import { MapGenerator } from './MapGenerator';
+import { FlexibleMapGenerator } from './FlexibleMapGenerator';
+import { StageType } from '../types';
