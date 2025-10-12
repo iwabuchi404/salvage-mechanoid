@@ -88,7 +88,13 @@ export abstract class CharacterBase {
       this.sprite.texture = this.textures[direction];
     }
   }
-  public getStatus(): typeof this.status {
+  public getStatus(): {
+    level: number;
+    hp: number;
+    maxHp: number;
+    strength: number;
+    defense: number;
+  } {
     return { ...this.status };
   }
 

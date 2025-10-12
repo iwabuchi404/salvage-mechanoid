@@ -71,7 +71,15 @@ export class Character extends CharacterBase {
     return this.gameStore.player.items;
   }
 
-  public getStatus(): typeof this.status {
+  public getStatus(): {
+    level: number;
+    hp: number;
+    maxHp: number;
+    energy: number;
+    maxEnergy: number;
+    strength: number;
+    defense: number;
+  } {
     return { ...this.gameStore.player.status };
   }
   public getEnergy(): number {
