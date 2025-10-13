@@ -5,6 +5,7 @@ import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
+import ItemPickupDialog from '../uiParts/ItemPickupDialog.vue';
 
 const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
@@ -54,8 +55,13 @@ onMounted(async () => {
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
+  console.log(`GameScreen.movePlayer called with direction: ${direction}`);
+  console.log(`isPlayerTurn: ${isPlayerTurn.value}`);
   if (isPlayerTurn.value) {
+    console.log('Calling game.movePlayer()');
     game.movePlayer(direction);
+  } else {
+    console.log('Not player turn, ignoring move request');
   }
 };
 const closeStatusWindow = () => {
@@ -75,13 +81,32 @@ const getSelectedName = () => {
 // };
 
 const showItems = () => {
-  playerItems.value = game.getPlayerItems();
+  // 新しいインベントリシステムを使用
+  playerItems.value = gameStore.inventory.map((item) => ({
+    id: item.id,
+    name: item.name,
+    description: item.description,
+  }));
   showItemList.value = true;
   // showActionMenu.value = false;
 };
 const closeItemList = () => {
   showItemList.value = false;
   showActionMenu.value = true;
+};
+
+// アイテムを使用
+const useInventoryItem = (itemId: string) => {
+  const success = gameStore.useItem(itemId);
+  if (success) {
+    message.value = 'アイテムを使用しました';
+    setTimeout(() => {
+      message.value = '';
+    }, 2000);
+
+    // アイテムリストを更新
+    showItems();
+  }
 };
 const attack = async () => {
   if (isPlayerTurn.value) {
@@ -197,24 +222,40 @@ const closePortalDialog = () => {
       </BaseWindow>
 
       <BaseWindow
-        height="300px"
-        width="460px"
+        height="400px"
+        width="500px"
         :pos="{ x: '10px', y: '0px' }"
         :state="showItemList"
-        :title="'アイテム一覧'"
+        :title="'インベントリ'"
         @close="closeItemList"
       >
         <div v-if="showItemList" class="item-list">
-          <ul>
-            <li v-for="item in playerItems" :key="item.id">
-              <a>{{ item.name }} - {{ item.description }}</a>
+          <div class="inventory-header">
+            <span
+              >アイテム数: {{ gameStore.inventory.length }} / {{ gameStore.maxInventorySize }}</span
+            >
+          </div>
+          <ul v-if="gameStore.inventory.length > 0">
+            <li v-for="item in gameStore.inventory" :key="item.id" class="inventory-item">
+              <div class="item-info-row">
+                <div class="item-details">
+                  <strong>{{ item.name }}</strong>
+                  <span v-if="item.stackable" class="item-quantity">x{{ item.quantity }}</span>
+                  <p class="item-desc">{{ item.description }}</p>
+                </div>
+                <BaseButton @click="useInventoryItem(item.id)" :type="'small'">使用</BaseButton>
+              </div>
             </li>
           </ul>
+          <div v-else class="empty-inventory">インベントリは空です</div>
         </div>
       </BaseWindow>
       <div v-if="message" class="message-window">
         <p class="message-window__text">{{ message }}</p>
       </div>
+
+      <!-- アイテム取得確認ダイアログ -->
+      <ItemPickupDialog />
       <BaseWindow
         height="240px"
         width="480px"
@@ -442,5 +483,62 @@ const closePortalDialog = () => {
     font-size: 12px;
     font-family: 'DotGothic16', sans-serif;
   }
+}
+
+/* インベントリUI */
+.inventory-header {
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.inventory-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.inventory-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.item-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-details strong {
+  display: inline-block;
+  margin-right: 8px;
+  color: #ffd700;
+}
+
+.item-quantity {
+  color: #88ff88;
+  font-size: 14px;
+}
+
+.item-desc {
+  margin: 4px 0 0 0;
+  color: #ccc;
+  font-size: 13px;
+}
+
+.empty-inventory {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-style: italic;
 }
 </style>

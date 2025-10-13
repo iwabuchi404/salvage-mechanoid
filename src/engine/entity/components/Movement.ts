@@ -120,6 +120,10 @@ export class MovementComponent implements Component {
    * @returns 移動が開始された場合はtrue
    */
   moveInDirection(direction: Direction): boolean {
+    console.log(
+      `MovementComponent: moveInDirection called for ${this.entity?.id}, direction: ${direction}, isMoving: ${this._isMoving}`
+    );
+
     if (!this.entity || this._isMoving) return false;
 
     const transform = this.entity.getComponent<TransformComponent>('transform');
@@ -127,6 +131,7 @@ export class MovementComponent implements Component {
 
     // 現在の位置を取得
     const currentPos = transform.position;
+    console.log(`Current position: (${currentPos.x}, ${currentPos.y})`);
 
     // 方向を設定
     this._direction = direction;
@@ -148,13 +153,17 @@ export class MovementComponent implements Component {
         break;
     }
 
+    console.log(`Next position: (${nextPos.x}, ${nextPos.y})`);
+
     // 移動可能かチェック
     if (!this.canMoveTo(nextPos.x, nextPos.y, nextPos.z)) {
+      console.log('Cannot move to next position');
       // 移動方向のイベントだけ発行
       this.emitDirectionChangedEvent();
       return false;
     }
 
+    console.log('Starting move animation');
     // 移動を開始
     return this.startMoving(nextPos);
   }
@@ -287,6 +296,11 @@ export class MovementComponent implements Component {
   private emitMoveCompletedEvent(): void {
     if (!this.entity) return;
 
+    console.log(
+      `MovementComponent: emitting move_completed for entity ${this.entity.id} at position`,
+      this._moveTargetPosition
+    );
+
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
     if (eventSystem) {
       eventSystem.emit('move_completed', {
@@ -294,6 +308,9 @@ export class MovementComponent implements Component {
         position: this._moveTargetPosition,
         direction: this._direction,
       });
+      console.log('move_completed event emitted successfully');
+    } else {
+      console.warn('EventSystem not found, cannot emit move_completed');
     }
   }
 

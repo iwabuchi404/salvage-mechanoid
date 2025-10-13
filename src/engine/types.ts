@@ -672,7 +672,7 @@ export interface ObstaclePlacementConfig {
 // ============================================================
 
 /**
- * アイテムのタイプ
+ * アイテムのタイプ（マップ生成用）
  */
 export enum ItemType {
   ENERGY = 'energy', // エネルギー回復
@@ -682,6 +682,17 @@ export enum ItemType {
   ARMOR = 'armor', // 防具
   UPGRADE = 'upgrade', // アップグレード
   CONSUMABLE = 'consumable', // 消耗品
+}
+
+/**
+ * インベントリ用アイテムタイプ
+ */
+export enum InventoryItemType {
+  HEALTH_PACK = 'health_pack', // HP回復
+  ENERGY_CELL = 'energy_cell', // エネルギー回復
+  WEAPON_UPGRADE = 'weapon_upgrade', // 攻撃力アップ
+  ARMOR_UPGRADE = 'armor_upgrade', // 防御力アップ
+  KEY_ITEM = 'key_item', // 特殊アイテム
 }
 
 /**
@@ -792,4 +803,64 @@ export interface EnemyPlacementConfig {
   allowBoss: boolean; // ボスを配置するか
   enemyTypes: EnemyType[]; // 使用可能な敵タイプ
   placementRules: EnemyPlacementRule[]; // 配置ルール
+}
+
+// ========================================
+// 特殊オブジェクト関連
+// ========================================
+
+/**
+ * 配置されたポータル
+ */
+export interface PlacedPortal {
+  id: string;
+  x: number;
+  y: number;
+  destinationFloor?: number; // 行き先フロア（未指定なら次フロア）
+  active: boolean; // アクティブかどうか
+}
+
+/**
+ * 配置されたエネルギーチャージャー
+ */
+export interface PlacedCharger {
+  id: string;
+  x: number;
+  y: number;
+  chargeAmount: number; // 回復量
+  maxUses: number; // 最大使用回数（-1で無限）
+  remainingUses: number; // 残り使用回数
+  rechargeTime?: number; // 再チャージ時間（ターン数）
+}
+
+// ============================================================
+// インベントリシステム
+// ============================================================
+
+/**
+ * アイテム効果タイプ
+ */
+export type ItemEffectType = 'heal' | 'energy' | 'stat_boost' | 'special';
+
+/**
+ * アイテム効果定義
+ */
+export interface ItemEffect {
+  type: ItemEffectType;
+  value?: number; // 回復量や上昇値
+  statType?: 'strength' | 'defense' | 'maxHp' | 'maxEnergy'; // ステータスブースト用
+  duration?: number; // 一時効果の持続時間（ターン数）
+}
+
+/**
+ * インベントリアイテム情報
+ */
+export interface InventoryItem {
+  id: string; // ユニークID
+  type: InventoryItemType; // アイテムタイプ
+  name: string; // 表示名
+  description: string; // 説明文
+  effect: ItemEffect; // 効果
+  stackable: boolean; // スタック可能か
+  quantity: number; // 所持数
 }

@@ -8,6 +8,7 @@ import { Vector3, Direction } from '../../engine/types';
 import { Camera } from '../../engine/graphics/Camera';
 import { Engine } from '../../engine/Engine';
 import { EventSystem } from '../../engine/events/EventSystem';
+import { EntitySystem } from '../../engine/entity/EntitySystem';
 import { useGameStore } from '../../stores/gameStore';
 
 /**
@@ -93,7 +94,9 @@ export class Player extends Entity {
 
     // 移動完了イベント
     eventSystem.on('move_completed', (data) => {
+      console.log('move_completed event received', data.entityId, this.id);
       if (data.entityId === this.id) {
+        console.log('Processing move_completed for player at', data.position);
         // ゲームストアの位置を更新
         this.gameStore.player.position = { ...data.position };
 
@@ -102,6 +105,10 @@ export class Player extends Entity {
 
         // 現在のタイルのイベントをチェック
         this.checkTileEvent(data.position);
+
+        // アイテム衝突判定
+        console.log('Calling checkItemCollision');
+        this.checkItemCollision(data.position);
       }
     });
 
@@ -136,17 +143,26 @@ export class Player extends Entity {
    * @returns 移動が成功したかどうか
    */
   move(direction: Direction): boolean {
+    console.log(`Player.move() called with direction: ${direction}`);
+    console.log(`Current energy: ${this.currentEnergy}`);
+
     // エネルギーチェック
     if (this.currentEnergy <= 0) {
+      console.log('Energy is 0, triggering emergency shutdown');
       this.handleEmergencyShutdown();
       return false;
     }
 
     // 移動コンポーネントを取得
     const movement = this.getComponent<MovementComponent>('movement');
-    if (!movement) return false;
+    console.log('MovementComponent:', movement);
+    if (!movement) {
+      console.warn('MovementComponent not found!');
+      return false;
+    }
 
     // 指定方向に移動
+    console.log('Calling movement.moveInDirection()');
     return movement.moveInDirection(direction);
   }
 
@@ -363,6 +379,54 @@ export class Player extends Entity {
         break;
       }
     }
+  }
+
+  /**
+   * アイテム衝突判定
+   * @param position プレイヤーの位置
+   */
+  private checkItemCollision(position: Vector3): void {
+    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity');
+    if (!entitySystem) {
+      console.warn('EntitySystem not found');
+      return;
+    }
+
+    // 同じ座標のアイテムエンティティを探す
+    const entities = entitySystem.getEntities();
+    console.log(
+      `Checking item collision at (${position.x}, ${position.y}), total entities: ${entities.length}`
+    );
+
+    let itemCount = 0;
+    for (const entity of entities) {
+      if (entity.hasTag('item')) {
+        itemCount++;
+        const transform = entity.getComponent('transform') as TransformComponent;
+        if (transform) {
+          console.log(
+            `Item found at (${transform.position.x}, ${transform.position.y}), player at (${position.x}, ${position.y})`
+          );
+        }
+        if (
+          transform &&
+          transform.position.x === position.x &&
+          transform.position.y === position.y
+        ) {
+          console.log('Item collision detected! Emitting item_found event');
+          // アイテム発見イベントを発行
+          const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+          if (eventSystem) {
+            eventSystem.emit('item_found', {
+              playerId: this.id,
+              itemEntity: entity,
+              position: { ...position },
+            });
+          }
+        }
+      }
+    }
+    console.log(`Total items on map: ${itemCount}`);
   }
 
   /**

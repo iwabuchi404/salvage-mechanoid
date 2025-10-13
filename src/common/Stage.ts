@@ -68,6 +68,8 @@ export class Stage {
   private rooms: any[]; // 部屋の情報を保持する配列
   private gameObjects: GameObject[] = [];
   private eventObjects: EventObject[] = [];
+  private items: any[] = []; // マップ上のアイテム情報
+  private itemGraphics: PIXI.Graphics[] = []; // アイテムのグラフィック
 
   constructor(
     stageData: number[][],
@@ -449,6 +451,10 @@ export class Stage {
     this.objects.set(key, gameObject);
     this.characterContainer?.addChild(gameObject.getSprite());
     this.sortCharacters();
+  }
+
+  public addGraphicsToCamera(graphics: PIXI.Graphics) {
+    this.characterContainer?.addChild(graphics);
   }
 
   public removeGameObject(x: number, y: number, z: number): void {
@@ -984,6 +990,145 @@ export class Stage {
         eventObject.triggerEvent(character);
       }
     }
+
+    // アイテム衝突判定を追加
+    this.checkItemCollision(position);
+  }
+
+  /**
+   * アイテムデータを追加（game.tsから呼ばれる）
+   */
+  public addItemData(itemData: any, graphics: PIXI.Graphics): void {
+    this.items.push(itemData);
+    (graphics as any).itemId = itemData.id; // グラフィックにIDを紐づけ
+    this.itemGraphics.push(graphics);
+  }
+
+  /**
+   * アイテム衝突判定
+   */
+  private checkItemCollision(position: { x: number; y: number; z: number }): void {
+    // グリッド座標上のアイテムを探す
+    const items = this.items.filter((item: any) => item.x === position.x && item.y === position.y);
+
+    if (items.length > 0) {
+      const item = items[0];
+      console.log(`Item found at (${position.x}, ${position.y}):`, item);
+
+      // UIダイアログを表示するイベントを発行
+      import('../stores/uiStore').then(({ useUIStore }) => {
+        import('../stores/gameStore').then(({ useGameStore }) => {
+          const uiStore = useUIStore();
+
+          // アイテムデータをInventoryItemに変換
+          const inventoryItem = this.convertToInventoryItem(item);
+
+          uiStore.showItemPickupDialog(inventoryItem, {
+            x: position.x,
+            y: position.y,
+          });
+
+          // アイテムIDを保存（後で削除するため）
+          uiStore.itemPickupDialog.itemEntityId = item.id;
+        });
+      });
+    }
+  }
+
+  /**
+   * アイテムを削除
+   */
+  public removeItem(itemId: string): boolean {
+    const index = this.items.findIndex((item: any) => item.id === itemId);
+    if (index === -1) {
+      console.warn(`Item not found: ${itemId}`);
+      return false;
+    }
+
+    const item = this.items[index];
+    this.items.splice(index, 1);
+
+    // グラフィックを削除
+    const graphicsIndex = this.itemGraphics.findIndex((g: any) => (g as any).itemId === itemId);
+    if (graphicsIndex !== -1) {
+      const graphics = this.itemGraphics[graphicsIndex];
+      if (graphics.parent) {
+        graphics.parent.removeChild(graphics);
+      }
+      graphics.destroy();
+      this.itemGraphics.splice(graphicsIndex, 1);
+    }
+
+    console.log(`Removed item: ${itemId}`);
+    return true;
+  }
+
+  /**
+   * マップ生成アイテムをInventoryItemに変換
+   */
+  private convertToInventoryItem(item: any): any {
+    const itemDataMap: { [key: string]: any } = {
+      // ItemType enum からのマッピング
+      health: {
+        name: '修理キット',
+        description: 'HPを30回復する緊急修理用パーツ',
+        effect: { type: 'heal', value: 30 },
+        stackable: true,
+      },
+      energy: {
+        name: 'エナジーセル',
+        description: 'エネルギーを50回復する高密度バッテリー',
+        effect: { type: 'energy', value: 50 },
+        stackable: true,
+      },
+      weapon: {
+        name: 'ウェポンパーツ',
+        description: '攻撃力を永続的に5上昇させる武器強化パーツ',
+        effect: { type: 'stat_boost', statType: 'strength', value: 5 },
+        stackable: false,
+      },
+      armor: {
+        name: 'アーマープレート',
+        description: '防御力を永続的に3上昇させる装甲強化素材',
+        effect: { type: 'stat_boost', statType: 'defense', value: 3 },
+        stackable: false,
+      },
+      key: {
+        name: 'セキュリティキーカード',
+        description: 'ロックされたエリアを解放する特殊なキー',
+        effect: { type: 'special' },
+        stackable: false,
+      },
+      upgrade: {
+        name: 'システムアップグレード',
+        description: '最大HPとエネルギーを上昇させる',
+        effect: { type: 'stat_boost', statType: 'maxHp', value: 10 },
+        stackable: false,
+      },
+      consumable: {
+        name: '万能ツール',
+        description: '様々な用途に使える消耗品',
+        effect: { type: 'special' },
+        stackable: true,
+      },
+    };
+
+    const itemData = itemDataMap[item.type] || {
+      name: 'サルベージ品',
+      description: '正体不明のアイテム',
+      effect: { type: 'heal', value: 10 },
+      stackable: false,
+    };
+
+    return {
+      id: item.id,
+      type: item.type,
+      stackable: itemData.stackable,
+      quantity: 1,
+      name: itemData.name,
+      description: itemData.description,
+      effect: itemData.effect,
+    };
   }
 
   private addObjectToScene(gameObject: GameObject): void {

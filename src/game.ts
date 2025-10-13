@@ -94,6 +94,14 @@ export class Game {
     this.onGameOver = () => {
       // console.log('onTileSelect init');
     };
+
+    // アイテム削除イベントのリスナーを登録
+    window.addEventListener('removeItem', ((event: CustomEvent) => {
+      const itemId = event.detail.itemId;
+      if (this.stage) {
+        this.stage.removeItem(itemId);
+      }
+    }) as EventListener);
   }
 
   async createPixi(_canvas: HTMLCanvasElement) {
@@ -165,13 +173,50 @@ export class Game {
     );
 
     console.log(
-      `Generated resources: ${resources.obstacles.length} obstacles, ${resources.items.length} items, ${resources.enemies.length} enemies`
+      `Generated resources: ${resources.obstacles.length} obstacles, ${resources.items.length} items, ${resources.enemies.length} enemies, ${resources.portals.length} portals, ${resources.chargers.length} chargers`
     );
 
     // 障害物を配置
     for (const obstacle of resources.obstacles) {
       const box = new GameObject(this.stage, './obj01.png', obstacle.x, obstacle.y, 0, true);
       this.stage.addObject(box);
+    }
+
+    // アイテムを配置
+    console.log(`Placing ${resources.items.length} items on stage`);
+    for (const itemData of resources.items) {
+      // PIXI.Graphicsで●を描画
+      const itemGraphics = new PIXI.Graphics();
+
+      // アイテムの種類に応じて色を変える
+      const colorMap: { [key: string]: number } = {
+        health_pack: 0x00ff00, // 緑（体力回復）
+        energy_cell: 0x00ffff, // シアン（エネルギー）
+        weapon_upgrade: 0xff9900, // オレンジ（武器）
+        armor_upgrade: 0x0099ff, // 青（防具）
+        key_item: 0xffff00, // 黄色（キーアイテム）
+      };
+      const color = colorMap[itemData.type] || 0xffffff; // デフォルトは白
+
+      // ●を描画（半径10の円）
+      itemGraphics.circle(0, 0, 10);
+      itemGraphics.fill(color);
+      itemGraphics.stroke({ width: 2, color: 0x000000 }); // 黒い縁取り
+
+      // アイソメトリック座標をスクリーン座標に変換
+      const screenPos = this.stage.isometricToScreen(itemData.x, itemData.y);
+      itemGraphics.x = screenPos.x;
+      itemGraphics.y = screenPos.y - 20; // 少し浮かせる
+
+      console.log(
+        `Item at grid(${itemData.x}, ${itemData.y}) -> screen(${screenPos.x}, ${screenPos.y})`
+      );
+
+      // Stageのカメラコンテナに追加（他のオブジェクトと同じレイヤー）
+      this.stage.addGraphicsToCamera(itemGraphics);
+
+      // Stageにアイテムデータを追加
+      this.stage.addItemData(itemData, itemGraphics);
     }
 
     // 敵を配置
@@ -193,14 +238,12 @@ export class Game {
       );
     }
 
-    // ポータルを配置（部屋の中心付近に2個）
-    for (let i = 0; i < 2; i++) {
-      const pos = this.stage.getRandomEmptyRoomTile();
-      if (!pos?.x && !pos?.y) continue;
+    // ポータルを配置（新システム）
+    for (const portalData of resources.portals) {
       const portal = this.stage.addEventObject(
         './obj02.png',
-        pos.x,
-        pos.y,
+        portalData.x,
+        portalData.y,
         0,
         (character) => {
           if (character === this.player) {
@@ -212,6 +255,32 @@ export class Game {
         { x: 0.5, y: 0.8 }
       );
       this.stage.addObject(portal);
+    }
+
+    // エネルギーチャージャーを配置（新システム）
+    for (const chargerData of resources.chargers) {
+      const charger = this.stage.addEventObject(
+        './obj01.png', // 仮の画像、後で専用画像に変更可能
+        chargerData.x,
+        chargerData.y,
+        0,
+        (character) => {
+          if (character === this.player && chargerData.remainingUses > 0) {
+            // エネルギー回復処理
+            const currentEnergy = this.gameStore.player.status.energy;
+            const maxEnergy = this.gameStore.player.status.maxEnergy;
+            const newEnergy = Math.min(currentEnergy + chargerData.chargeAmount, maxEnergy);
+            this.gameStore.player.status.energy = newEnergy;
+            chargerData.remainingUses--;
+            console.log(
+              `Energy charged! +${chargerData.chargeAmount} (${chargerData.remainingUses} uses left)`
+            );
+          }
+        },
+        false,
+        { x: 0.5, y: 0.8 }
+      );
+      this.stage.addObject(charger);
     }
 
     this.stage.setOnCharacterSelect((character) => {

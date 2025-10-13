@@ -20,8 +20,11 @@ import {
   Room,
   Corridor,
   TacticalElement,
+  InventoryItemType,
+  ItemType,
 } from '../engine/types';
 import { useGameStore } from '../stores/gameStore';
+import { useUIStore } from '../stores/uiStore';
 import { WorldSystem } from '../engine/world/WorldSystem';
 
 /**
@@ -55,6 +58,7 @@ export class Game {
 
   // ゲームストア（Pinia）
   private gameStore = useGameStore();
+  private uiStore = useUIStore();
 
   // UIコールバック
   private onGameOver: ((score: number) => void) | null = null;
@@ -354,6 +358,27 @@ export class Game {
   }
 
   /**
+   * ItemTypeをInventoryItemTypeにマッピング
+   */
+  private mapItemTypeToInventoryType(itemType: ItemType): InventoryItemType | null {
+    switch (itemType) {
+      case ItemType.HEALTH:
+        return InventoryItemType.HEALTH_PACK;
+      case ItemType.ENERGY:
+        return InventoryItemType.ENERGY_CELL;
+      case ItemType.WEAPON:
+      case ItemType.UPGRADE:
+        return InventoryItemType.WEAPON_UPGRADE;
+      case ItemType.ARMOR:
+        return InventoryItemType.ARMOR_UPGRADE;
+      case ItemType.KEY:
+        return InventoryItemType.KEY_ITEM;
+      default:
+        return null;
+    }
+  }
+
+  /**
    * リソースエンティティをEntitySystemに登録
    */
   private async registerResourceEntities(
@@ -380,10 +405,31 @@ export class Game {
     // アイテムを登録
     for (const itemData of items) {
       const item = new Item(itemData);
+
+      // ItemTypeからInventoryItemTypeへのマッピング
+      const inventoryType = this.mapItemTypeToInventoryType(itemData.type);
+      console.log(`Item ${itemData.id}: ${itemData.type} -> ${inventoryType}`);
+      if (inventoryType) {
+        item.setInventoryItemType(inventoryType);
+      } else {
+        console.warn(`Could not map ItemType ${itemData.type} to InventoryItemType`);
+      }
+
       await item.initialize();
       entitySystem.registerEntity(item);
     }
     console.log(`Registered ${items.length} items`);
+
+    // 登録されたアイテムエンティティを確認
+    const registeredItems = entitySystem.getEntities().filter((e) => e.hasTag('item'));
+    console.log(`Total item entities in system: ${registeredItems.length}`);
+    registeredItems.forEach((item) => {
+      const transform = item.getComponent('transform');
+      if (transform && 'position' in transform) {
+        const pos = (transform as { position: { x: number; y: number } }).position;
+        console.log(`Item ${item.id} at position (${pos.x}, ${pos.y})`);
+      }
+    });
 
     // 敵を登録
     for (const enemyData of enemies) {
@@ -430,6 +476,30 @@ export class Game {
         this.onCharacterSelect(data.character);
       }
     });
+
+    // アイテム発見イベント
+    eventSystem.on('item_found', (data) => {
+      console.log('item_found event received in Game.ts', data);
+      const itemEntity = data.itemEntity as Item;
+      const inventoryItem = itemEntity.toInventoryItem();
+
+      console.log('inventoryItem:', inventoryItem);
+
+      if (inventoryItem) {
+        // UIダイアログを表示
+        console.log('Showing item pickup dialog');
+        this.uiStore.showItemPickupDialog(inventoryItem, {
+          x: data.position.x,
+          y: data.position.y,
+        });
+
+        // アイテムエンティティIDをuiStoreに保存
+        this.uiStore.itemPickupDialog.itemEntityId = itemEntity.id;
+        console.log('Dialog state:', this.uiStore.itemPickupDialog);
+      } else {
+        console.warn('inventoryItem is null, cannot show dialog');
+      }
+    });
   }
 
   /**
@@ -469,8 +539,14 @@ export class Game {
    * @param direction 移動方向
    */
   movePlayer(direction: 'up' | 'down' | 'left' | 'right'): void {
-    if (!this.player) return;
+    console.log(`Game.movePlayer() called with direction: ${direction}`);
+    console.log('this.player:', this.player);
+    if (!this.player) {
+      console.warn('Player not found!');
+      return;
+    }
 
+    console.log('Calling this.player.move()');
     this.player.move(direction);
   }
 

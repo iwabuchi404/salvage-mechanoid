@@ -2,6 +2,8 @@ import {
   PlacedObstacle,
   PlacedItem,
   PlacedEnemy,
+  PlacedPortal,
+  PlacedCharger,
   ObstaclePlacementConfig,
   ItemPlacementConfig,
   EnemyPlacementConfig,
@@ -13,10 +15,12 @@ import {
   Room,
   Corridor,
   TacticalElement,
+  EnergyPoint,
 } from '../types';
 import { ObstaclePlacer } from './placement/ObstaclePlacer';
 import { ItemPlacer } from './placement/ItemPlacer';
 import { EnemyPlacer } from './placement/EnemyPlacer';
+import { SpecialObjectPlacer } from './placement/SpecialObjectPlacer';
 
 /**
  * リソース生成システム
@@ -28,6 +32,7 @@ export class ResourceGenerationSystem {
   private obstaclePlacer: ObstaclePlacer;
   private itemPlacer: ItemPlacer;
   private enemyPlacer: EnemyPlacer;
+  private specialObjectPlacer: SpecialObjectPlacer;
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -35,6 +40,7 @@ export class ResourceGenerationSystem {
     this.obstaclePlacer = new ObstaclePlacer(width, height);
     this.itemPlacer = new ItemPlacer(width, height);
     this.enemyPlacer = new EnemyPlacer(width, height);
+    this.specialObjectPlacer = new SpecialObjectPlacer(width, height);
   }
 
   /**
@@ -57,11 +63,17 @@ export class ResourceGenerationSystem {
       skipObstacles?: boolean;
       skipItems?: boolean;
       skipEnemies?: boolean;
+      skipPortals?: boolean;
+      skipChargers?: boolean;
+      energyPoints?: EnergyPoint[];
+      playerStartPos?: { x: number; y: number };
     } = {}
   ): {
     obstacles: PlacedObstacle[];
     items: PlacedItem[];
     enemies: PlacedEnemy[];
+    portals: PlacedPortal[];
+    chargers: PlacedCharger[];
   } {
     console.log('ResourceGenerationSystem: Starting resource generation...');
     const startTime = performance.now();
@@ -104,14 +116,39 @@ export class ResourceGenerationSystem {
       );
     }
 
+    // 4. ポータル配置
+    let portals: PlacedPortal[] = [];
+    if (!options.skipPortals) {
+      portals = this.specialObjectPlacer.placePortals(
+        map,
+        rooms,
+        2, // デフォルト2個
+        options.playerStartPos
+      );
+    }
+
+    // 5. エネルギーチャージャー配置
+    let chargers: PlacedCharger[] = [];
+    if (!options.skipChargers) {
+      chargers = this.specialObjectPlacer.placeEnergyChargers(
+        map,
+        rooms,
+        options.energyPoints || [],
+        playerLevel,
+        difficulty
+      );
+    }
+
     const endTime = performance.now();
     console.log(
       `ResourceGenerationSystem: Generated ${obstacles.length} obstacles, ${items.length} items, ${
         enemies.length
-      } enemies in ${(endTime - startTime).toFixed(2)}ms`
+      } enemies, ${portals.length} portals, ${chargers.length} chargers in ${(
+        endTime - startTime
+      ).toFixed(2)}ms`
     );
 
-    return { obstacles, items, enemies };
+    return { obstacles, items, enemies, portals, chargers };
   }
 
   /**
