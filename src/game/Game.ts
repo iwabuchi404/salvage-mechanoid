@@ -3,7 +3,7 @@ import { RendererSystem } from '../engine/graphics/RendererSystem';
 import { EntitySystem } from '../engine/entity/EntitySystem';
 import { EventSystem } from '../engine/events/EventSystem';
 import { TileMap } from '../engine/world/TileMap';
-import { FlexibleMapGenerator } from '../engine/world/FlexibleMapGenerator';
+import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
 import { Player } from '../engine/entity/Player';
 import { Obstacle } from '../engine/entity/Obstacle';
@@ -141,8 +141,8 @@ export class Game {
   private async generateMap(stageType: StageType = StageType.TACTICAL_COMBAT): Promise<void> {
     console.log(`Generating map with stage type: ${stageType}...`);
 
-    // 新しいFlexibleMapGeneratorを使用
-    const mapGenerator = new FlexibleMapGenerator(50, 50);
+    // MapGeneratorFacadeを使用
+    const mapGenerator = new MapGeneratorFacade(50, 50);
 
     // ステージタイプに応じてマップ生成
     if (stageType === StageType.CLASSIC) {

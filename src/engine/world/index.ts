@@ -7,7 +7,7 @@ export { FlexibleMapGenerator } from './FlexibleMapGenerator';
 export { TacticalMapGenerator } from './TacticalMapGenerator';
 
 // マップ生成インターフェース
-export { 
+export {
   MapGeneratorInterface,
   RoomGeneratorInterface,
   CorridorGeneratorInterface,

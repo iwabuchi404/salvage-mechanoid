@@ -386,8 +386,8 @@ export class WorldSystem implements System {
     ];
     const stageType = stageTypes[(floorNumber - 1) % stageTypes.length];
 
-    // 新しいFlexibleMapGeneratorを使用
-    const mapGenerator = new FlexibleMapGenerator(50, 50);
+    // MapGeneratorFacadeを使用
+    const mapGenerator = new MapGeneratorFacade(50, 50);
 
     // 戦術的マップを生成
     const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -605,5 +605,5 @@ export class WorldSystem implements System {
 }
 
 // 必要なインポート
-import { FlexibleMapGenerator } from './FlexibleMapGenerator';
+import { MapGeneratorFacade } from './MapGeneratorFacade';
 import { StageType } from '../types';

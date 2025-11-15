@@ -2,7 +2,6 @@ import {
   GenerationConfig,
   MapGenerationResult,
   TacticalMapGenerationResult,
-  RoomGenerationConfig,
   Room,
   RoomType,
   TileType,
@@ -42,25 +41,14 @@ export class FlexibleMapGenerator {
   }
 
   /**
-   * マップを生成（新しいインターフェース）
+   * マップを生成（基本マップ生成のみ）
    * @param config 生成設定
-   * @param skipTactical 戦術的生成をスキップするフラグ（内部使用）
    * @returns 生成されたマップデータ
    */
-  async generate(config: GenerationConfig, skipTactical = false): Promise<MapGenerationResult> {
+  async generate(config: GenerationConfig): Promise<MapGenerationResult> {
     await this.initialize();
 
-    // ステージタイプが指定されている場合は戦術的生成を使用
-    // ただし、skipTacticalがtrueの場合はスキップ（無限ループ防止）
-    if (!skipTactical && config.stageType && config.stageType !== StageType.CLASSIC) {
-      console.log(`Using tactical generation for stage type: ${config.stageType}`);
-      const { TacticalMapGenerator } = await import('./TacticalMapGenerator');
-      const tacticalGenerator = new TacticalMapGenerator(this.width, this.height);
-      return await tacticalGenerator.generateTacticalMapWithConfig(config);
-    }
-
-    // クラシックモード：従来の生成方式
-    console.log('Using classic generation mode');
+    console.log('Generating base map with FlexibleMapGenerator');
 
     // ルーム生成アルゴリズムを取得
     const roomGenerator = mapGeneratorFactory.getRoomGenerator(config.algorithm);

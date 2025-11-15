@@ -62,17 +62,40 @@ export class MapGenerator {
       ],
     };
 
-    const result = this.bspGenerator.generateMap(config);
+    const generationResult = this.bspGenerator.generate(config);
+
+    // マップデータを初期化
+    const map: number[][] = [];
+    for (let y = 0; y < this.height; y++) {
+      map[y] = [];
+      for (let x = 0; x < this.width; x++) {
+        map[y][x] = TileType.EMPTY;
+      }
+    }
+
+    // 部屋をマップに描画
+    for (const room of generationResult.rooms) {
+      for (let dy = 0; dy < room.height; dy++) {
+        for (let dx = 0; dx < room.width; dx++) {
+          if (room.y + dy < this.height && room.x + dx < this.width) {
+            map[room.y + dy][room.x + dx] = TileType.GRASS;
+          }
+        }
+      }
+    }
 
     // 通路を生成
-    this.connectRooms(result.map, result.rooms);
+    this.connectRooms(map, generationResult.rooms);
 
     // ランダムな特徴を追加
-    this.addRandomFeatures(result.map);
+    this.addRandomFeatures(map);
 
-    console.log(`Map generated with ${result.rooms.length} rooms`);
+    console.log(`Map generated with ${generationResult.rooms.length} rooms`);
 
-    return result;
+    return {
+      map: map,
+      rooms: generationResult.rooms,
+    };
   }
 
   /**

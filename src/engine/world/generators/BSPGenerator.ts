@@ -4,9 +4,8 @@ import {
   RoomGenerationResult,
   Room,
   RoomType,
-  MapGenerationAlgorithm,
-  TileType,
-} from '../../types';
+} from '../MapGeneratorInterface';
+import { MapGenerationAlgorithm } from '../../types';
 
 /**
  * BSP (Binary Space Partitioning) 部屋生成アルゴリズム
@@ -283,48 +282,5 @@ export class BSPGenerator extends BaseRoomGenerator {
         }
       }
     }
-  }
-
-  /**
-   * BSP生成用のマップデータを作成（既存システムとの互換性用）
-   * @param config 生成設定
-   * @returns マップデータと部屋情報
-   */
-  generateMap(config?: RoomGenerationConfig): { map: number[][]; rooms: Room[] } {
-    const defaultConfig: RoomGenerationConfig = {
-      minSize: 4,
-      maxSize: 8,
-      density: 0.7,
-      connectivity: 0.8,
-      roomTypes: [RoomType.NORMAL, RoomType.BOSS, RoomType.TREASURE],
-    };
-
-    const finalConfig = config || defaultConfig;
-    const result = this.generate(finalConfig);
-
-    // マップデータを初期化
-    const map: number[][] = [];
-    for (let y = 0; y < this.height; y++) {
-      map[y] = [];
-      for (let x = 0; x < this.width; x++) {
-        map[y][x] = TileType.EMPTY;
-      }
-    }
-
-    // 部屋をマップに描画
-    for (const room of result.rooms) {
-      for (let dy = 0; dy < room.height; dy++) {
-        for (let dx = 0; dx < room.width; dx++) {
-          if (room.y + dy < this.height && room.x + dx < this.width) {
-            map[room.y + dy][room.x + dx] = TileType.GRASS;
-          }
-        }
-      }
-    }
-
-    return {
-      map: map,
-      rooms: result.rooms,
-    };
   }
 }

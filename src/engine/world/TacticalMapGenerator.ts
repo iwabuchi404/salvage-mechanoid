@@ -9,7 +9,6 @@ import {
   TacticalElementType,
   TileEffect,
   Room,
-  MapGenerationAlgorithm,
 } from '../types';
 import { FlexibleMapGenerator } from './FlexibleMapGenerator';
 import { EnergyPointPlacer } from './tactical/EnergyPointPlacer';
@@ -19,31 +18,33 @@ import { TacticalElementPlacer } from './tactical/TacticalElementPlacer';
 /**
  * 戦術的マップジェネレーター
  * ステージタイプに応じて戦術的要素を付加したマップを生成
+ *
+ * FlexibleMapGeneratorをコンポジションで使用し、
+ * 基本マップに戦術的要素を追加する責務を持つ
  */
-export class TacticalMapGenerator extends FlexibleMapGenerator {
+export class TacticalMapGenerator {
+  private baseGenerator: FlexibleMapGenerator;
   private energyPointPlacer: EnergyPointPlacer;
   private terrainEffectPlacer: TerrainEffectPlacer;
   private tacticalElementPlacer: TacticalElementPlacer;
 
   constructor(width: number, height: number) {
-    super(width, height);
+    this.baseGenerator = new FlexibleMapGenerator(width, height);
     this.energyPointPlacer = new EnergyPointPlacer(width, height);
     this.terrainEffectPlacer = new TerrainEffectPlacer(width, height);
     this.tacticalElementPlacer = new TacticalElementPlacer(width, height);
   }
 
   /**
-   * ステージタイプに基づいて戦術的マップを生成
+   * 戦術的マップを生成（メインメソッド）
    * @param config 生成設定
    * @returns 戦術的マップ生成結果
    */
-  async generateTacticalMapWithConfig(
-    config: GenerationConfig
-  ): Promise<TacticalMapGenerationResult> {
+  async generate(config: GenerationConfig): Promise<TacticalMapGenerationResult> {
     console.log(`Generating tactical map for stage type: ${config.stageType || 'classic'}`);
 
-    // 1. 基本マップを生成（skipTactical=trueで無限ループを防止）
-    const baseMap = await super.generate(config, true);
+    // 1. 基本マップを生成（コンポジションで使用）
+    const baseMap = await this.baseGenerator.generate(config);
 
     // 2. ステージタイプが指定されていない場合はクラシックモード
     if (!config.stageType || config.stageType === StageType.CLASSIC) {
@@ -54,6 +55,18 @@ export class TacticalMapGenerator extends FlexibleMapGenerator {
     const tacticalElements = await this.addTacticalElements(baseMap, config);
 
     return tacticalElements;
+  }
+
+  /**
+   * ステージタイプに基づいて戦術的マップを生成（互換性メソッド）
+   * @param config 生成設定
+   * @returns 戦術的マップ生成結果
+   * @deprecated generate()を使用してください
+   */
+  async generateTacticalMapWithConfig(
+    config: GenerationConfig
+  ): Promise<TacticalMapGenerationResult> {
+    return this.generate(config);
   }
 
   /**
