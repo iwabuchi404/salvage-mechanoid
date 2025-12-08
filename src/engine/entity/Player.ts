@@ -25,6 +25,14 @@ export class Player extends Entity {
   // ゲームストア
   private gameStore = useGameStore();
 
+  // 方向別テクスチャパス
+  private static readonly TEXTURE_PATHS: Record<Direction, string> = {
+    up: './robo01bk_r.png',
+    down: './robo01_l.png',
+    left: './robo01bk_l.png',
+    right: './robo01_r.png',
+  };
+
   /**
    * コンストラクタ
    * @param id エンティティID
@@ -49,17 +57,9 @@ export class Player extends Entity {
    * 初期化
    */
   async initialize(): Promise<void> {
-    // スプライトコンポーネントを追加
-    const texturePaths = {
-      up: './robo01bk_r.png',
-      down: './robo01_l.png',
-      left: './robo01bk_l.png',
-      right: './robo01_r.png',
-    };
-
     // テクスチャの読み込み
-    const direction = 'down'; // デフォルト方向
-    const texturePath = texturePaths[direction];
+    const direction: Direction = 'down'; // デフォルト方向
+    const texturePath = Player.TEXTURE_PATHS[direction];
 
     const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
     this.addComponent(spriteComponent);
@@ -81,6 +81,9 @@ export class Player extends Entity {
     const energyComponent = new EnergyComponent(this.maxEnergy, this.currentEnergy);
     this.addComponent(energyComponent);
 
+    // 親クラスの initialize() を呼び出してコンポーネントを初期化
+    await super.initialize();
+
     // イベントリスナーを設定
     this.setupEventListeners();
   }
@@ -94,9 +97,7 @@ export class Player extends Entity {
 
     // 移動完了イベント
     eventSystem.on('move_completed', (data) => {
-      console.log('move_completed event received', data.entityId, this.id);
       if (data.entityId === this.id) {
-        console.log('Processing move_completed for player at', data.position);
         // ゲームストアの位置を更新
         this.gameStore.player.position = { ...data.position };
 
@@ -107,8 +108,14 @@ export class Player extends Entity {
         this.checkTileEvent(data.position);
 
         // アイテム衝突判定
-        console.log('Calling checkItemCollision');
         this.checkItemCollision(data.position);
+      }
+    });
+
+    // 方向変更イベント - テクスチャを変更
+    eventSystem.on('direction_changed', (data) => {
+      if (data.entityId === this.id) {
+        this.updateDirectionTexture(data.direction as Direction);
       }
     });
 
@@ -138,31 +145,38 @@ export class Player extends Entity {
   }
 
   /**
+   * 方向に応じてテクスチャを更新
+   * @param direction 新しい方向
+   */
+  private updateDirectionTexture(direction: Direction): void {
+    const sprite = this.getComponent<SpriteComponent>('sprite');
+    if (!sprite) return;
+
+    const texturePath = Player.TEXTURE_PATHS[direction];
+    if (texturePath) {
+      sprite.changeTexture(texturePath);
+    }
+  }
+
+  /**
    * 指定方向に移動
    * @param direction 移動方向
    * @returns 移動が成功したかどうか
    */
   move(direction: Direction): boolean {
-    console.log(`Player.move() called with direction: ${direction}`);
-    console.log(`Current energy: ${this.currentEnergy}`);
-
     // エネルギーチェック
     if (this.currentEnergy <= 0) {
-      console.log('Energy is 0, triggering emergency shutdown');
       this.handleEmergencyShutdown();
       return false;
     }
 
     // 移動コンポーネントを取得
     const movement = this.getComponent<MovementComponent>('movement');
-    console.log('MovementComponent:', movement);
     if (!movement) {
-      console.warn('MovementComponent not found!');
       return false;
     }
 
     // 指定方向に移動
-    console.log('Calling movement.moveInDirection()');
     return movement.moveInDirection(direction);
   }
 
@@ -271,32 +285,40 @@ export class Player extends Entity {
   }
 
   /**
-   * エネルギー状態に応じた効果を更新
-   * @param percentage エネルギーのパーセンテージ（0〜100）
+   * エネルギー状態に応じた効果を更新（旧システムから流用）
+   * @param _percentage エネルギーのパーセンテージ（0〜100）
    */
-  private updateEnergyEffects(percentage: number): void {
+  private updateEnergyEffects(_percentage: number): void {
+    const energy = this.currentEnergy;
+    const maxEnergy = this.maxEnergy;
+
     // エネルギーが0の場合は緊急シャットダウン
-    if (percentage <= 0) {
+    if (energy === 0) {
       this.handleEmergencyShutdown();
       return;
     }
 
     // エネルギーが15%以下の場合はクリティカルモード
-    if (percentage <= 15) {
-      // HP減少効果
+    if (energy <= maxEnergy * 0.15) {
+      // HP減少効果（1ダメージ）
       const health = this.getComponent<HealthComponent>('health');
       if (health) {
-        health.takeDamage(1, true, true);
+        health.takeDamage(1);
+
+        // HPが0になった場合はゲームオーバー
+        if (health.currentHp <= 0) {
+          this.onDeath();
+        }
       }
     }
   }
 
   /**
-   * 緊急シャットダウン処理
+   * 緊急シャットダウン処理（旧システムから流用）
+   * エネルギーが0になった場合の処理
+   * 3ターン行動不能 + 強制帰還（実装予定）
    */
   private handleEmergencyShutdown(): void {
-    console.log('Emergency Shutdown!');
-
     // 3ターン行動不能の処理
     // ゲームオーバーイベントを発行
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
@@ -308,8 +330,6 @@ export class Player extends Entity {
    * 死亡時の処理
    */
   private onDeath(): void {
-    console.log('Player died');
-
     // ゲームオーバーイベントを発行
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
     if (eventSystem) {
@@ -324,19 +344,44 @@ export class Player extends Entity {
   setCameraTarget(camera: Camera): void {
     this.camera = camera;
 
-    // トランスフォームコンポーネントの更新時にカメラも更新するように設定
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (transform && camera) {
-      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-      if (eventSystem) {
-        eventSystem.on('entity_moved', (data) => {
-          if (data.entityId === this.id && this.camera) {
-            const screenX = (-data.position.x * 160) / 2;
-            const screenY = (-data.position.y * 120) / 3;
-            this.camera.setTargetPosition(screenX, screenY);
+    // カメラのスムージング係数を設定（0.15 = 適度なスムーズさ）
+    camera.setSmoothingFactor(0.15);
+
+    // プレイヤーが移動したときにカメラを更新
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem && camera) {
+      eventSystem.on('move_completed', (data) => {
+        if (data.entityId === this.id && this.camera) {
+          // 座標変換システムを使用してスクリーン座標を取得
+          const rendererSystem = Engine.instance.getSystem<any>('renderer');
+          if (rendererSystem) {
+            const coordSystem = rendererSystem.getCoordinateSystem();
+            const screenPos = coordSystem.isometricToScreen(
+              data.position.x,
+              data.position.y,
+              data.position.z
+            );
+
+            // カメラをスムーズに移動（setTargetPositionを使用）
+            // これにより、カメラがプレイヤーに滑らかに追従する
+            this.camera.setTargetPosition(screenPos.x - 400, screenPos.y - 300);
           }
-        });
-      }
+        }
+      });
+
+      // 移動中もカメラを追従させる（アニメーション中のスムーズな追従）
+      eventSystem.on('move_started', (data) => {
+        if (data.entityId === this.id && this.camera) {
+          const rendererSystem = Engine.instance.getSystem<any>('renderer');
+          if (rendererSystem) {
+            const coordSystem = rendererSystem.getCoordinateSystem();
+            const screenPos = coordSystem.isometricToScreen(data.to.x, data.to.y, data.to.z);
+
+            // 移動先に向かってカメラをスムーズに移動開始
+            this.camera.setTargetPosition(screenPos.x - 400, screenPos.y - 300);
+          }
+        }
+      });
     }
   }
 
@@ -355,12 +400,9 @@ export class Player extends Entity {
     if (!tile) return;
 
     // タイルタイプに応じたイベント処理
+    // 注意: ポータルはエンティティとして実装されているため、
+    // TileType.PORTALのタイルイベントは処理しない
     switch (tile.type) {
-      case TileType.PORTAL:
-        // ポータルイベント
-        this.gameStore.setPortalActive(true);
-        break;
-
       case TileType.HEAL: {
         // 回復イベント
         const health = this.getComponent<HealthComponent>('health');
@@ -388,32 +430,20 @@ export class Player extends Entity {
   private checkItemCollision(position: Vector3): void {
     const entitySystem = Engine.instance.getSystem<EntitySystem>('entity');
     if (!entitySystem) {
-      console.warn('EntitySystem not found');
       return;
     }
 
     // 同じ座標のアイテムエンティティを探す
     const entities = entitySystem.getEntities();
-    console.log(
-      `Checking item collision at (${position.x}, ${position.y}), total entities: ${entities.length}`
-    );
 
-    let itemCount = 0;
     for (const entity of entities) {
       if (entity.hasTag('item')) {
-        itemCount++;
         const transform = entity.getComponent('transform') as TransformComponent;
-        if (transform) {
-          console.log(
-            `Item found at (${transform.position.x}, ${transform.position.y}), player at (${position.x}, ${position.y})`
-          );
-        }
         if (
           transform &&
           transform.position.x === position.x &&
           transform.position.y === position.y
         ) {
-          console.log('Item collision detected! Emitting item_found event');
           // アイテム発見イベントを発行
           const eventSystem = Engine.instance.getSystem<EventSystem>('event');
           if (eventSystem) {
@@ -426,7 +456,6 @@ export class Player extends Entity {
         }
       }
     }
-    console.log(`Total items on map: ${itemCount}`);
   }
 
   /**
@@ -465,6 +494,15 @@ export class Player extends Entity {
   getMaxEnergy(): number {
     return this.gameStore.player.status.maxEnergy;
   }
+
+  /**
+   * 更新処理
+   * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
+   */
+  update(deltaTime: number): void {
+    // 親クラスのupdate()を呼び出してコンポーネントを更新
+    super.update(deltaTime);
+  }
 }
 
 /**
@@ -498,7 +536,9 @@ class EnergyComponent implements Component {
   /**
    * 更新
    */
-  update(deltaTime: number): void {
+  update(_deltaTime: number): void {
+    // EnergyComponentはComponentインターフェースを実装しているだけなので
+    // 親クラスのupdate()は呼び出さない
     // 自動回復などの処理を追加可能
   }
 

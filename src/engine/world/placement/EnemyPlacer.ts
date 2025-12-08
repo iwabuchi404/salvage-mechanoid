@@ -34,6 +34,7 @@ export class EnemyPlacer {
    * @param items アイテムのリスト（配置済み）
    * @param tacticalElements 戦術要素のリスト
    * @param config 敵配置設定
+   * @param occupiedPositions 配置禁止位置のセット（プレイヤー位置等）
    * @returns 配置された敵のリスト
    */
   placeEnemies(
@@ -43,7 +44,8 @@ export class EnemyPlacer {
     obstacles: PlacedObstacle[],
     items: PlacedItem[],
     tacticalElements: TacticalElement[],
-    config: EnemyPlacementConfig
+    config: EnemyPlacementConfig,
+    occupiedPositions: Set<string> = new Set()
   ): PlacedEnemy[] {
     console.log('EnemyPlacer: Starting enemy placement...');
     const startTime = performance.now();
@@ -78,12 +80,59 @@ export class EnemyPlacer {
     const finalCount = Math.max(0, enemyCount - enemies.length);
     enemies.push(...this.placeGeneralEnemies(rooms, obstacles, items, config, finalCount));
 
-    const endTime = performance.now();
-    console.log(
-      `EnemyPlacer: Placed ${enemies.length} enemies in ${(endTime - startTime).toFixed(2)}ms`
+    // 9. 障害物やアイテムと重複する敵をフィルタリング（占有済み位置も考慮）
+    const filteredEnemies = this.filterOverlappingEnemies(
+      enemies,
+      obstacles,
+      items,
+      occupiedPositions
     );
 
-    return enemies;
+    const endTime = performance.now();
+    console.log(
+      `EnemyPlacer: Placed ${filteredEnemies.length} enemies in ${(endTime - startTime).toFixed(
+        2
+      )}ms`
+    );
+
+    return filteredEnemies;
+  }
+
+  /**
+   * 障害物やアイテムと重複する敵をフィルタリング
+   */
+  private filterOverlappingEnemies(
+    enemies: PlacedEnemy[],
+    obstacles: PlacedObstacle[],
+    items: PlacedItem[],
+    externalOccupied: Set<string> = new Set()
+  ): PlacedEnemy[] {
+    // 外部の占有位置を引き継ぐ
+    const occupiedPositions = new Set<string>(externalOccupied);
+
+    // 障害物の位置を記録
+    for (const obstacle of obstacles) {
+      occupiedPositions.add(`${obstacle.x},${obstacle.y}`);
+    }
+
+    // アイテムの位置を記録
+    for (const item of items) {
+      occupiedPositions.add(`${item.x},${item.y}`);
+    }
+
+    // 重複しない敵のみを返す（敵同士の重複もチェック）
+    const result: PlacedEnemy[] = [];
+    const enemyPositions = new Set<string>();
+
+    for (const enemy of enemies) {
+      const posKey = `${enemy.x},${enemy.y}`;
+      if (!occupiedPositions.has(posKey) && !enemyPositions.has(posKey)) {
+        result.push(enemy);
+        enemyPositions.add(posKey);
+      }
+    }
+
+    return result;
   }
 
   /**

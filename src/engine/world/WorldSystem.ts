@@ -265,15 +265,16 @@ export class WorldSystem implements System {
    * @param x X座標
    * @param y Y座標
    * @param z Z座標
+   * @param excludeEntityId 除外するエンティティID（自分自身を除外する場合など）
    * @returns 通行可能な場合はtrue
    */
-  isWalkable(x: number, y: number, z = 0): boolean {
+  isWalkable(x: number, y: number, z = 0, excludeEntityId?: string): boolean {
     // タイルの通行可能性をチェック
     const tileWalkable = this.tileMap.isWalkable(x, y, z);
     if (!tileWalkable) return false;
 
     // エンティティとの衝突をチェック
-    return !this.isPositionOccupied(x, y, z);
+    return !this.isPositionOccupied(x, y, z, excludeEntityId);
   }
 
   /**
@@ -281,21 +282,43 @@ export class WorldSystem implements System {
    * @param x X座標
    * @param y Y座標
    * @param z Z座標
+   * @param excludeEntityId 除外するエンティティID（自分自身を除外する場合など）
    * @returns エンティティが存在する場合はtrue
    */
-  isPositionOccupied(x: number, y: number, z = 0): boolean {
+  isPositionOccupied(x: number, y: number, z = 0, excludeEntityId?: string): boolean {
     if (!this.entitySystem) return false;
+
+    // チェック対象の座標を整数に丸める
+    const checkX = Math.round(x);
+    const checkY = Math.round(y);
+    const checkZ = Math.round(z);
 
     // 全エンティティを取得
     for (const entity of this.getAllEntities()) {
+      // 除外対象のエンティティはスキップ
+      if (excludeEntityId && entity.id === excludeEntityId) {
+        continue;
+      }
+
+      // アイテムタグを持つエンティティは衝突判定しない
+      if (entity.hasTag('item')) {
+        continue;
+      }
+
+      // イベントオブジェクト（ポータル、チャージャー）は衝突判定しない
+      if (entity.hasTag('event_object') || entity.hasTag('portal') || entity.hasTag('charger')) {
+        continue;
+      }
+
       const transform = entity.getComponent<TransformComponent>('transform');
       if (transform) {
         const pos = transform.position;
-        if (
-          Math.round(pos.x) === Math.round(x) &&
-          Math.round(pos.y) === Math.round(y) &&
-          Math.round(pos.z) === Math.round(z)
-        ) {
+        // 整数座標で比較（Math.roundで四捨五入）
+        const entityX = Math.round(pos.x);
+        const entityY = Math.round(pos.y);
+        const entityZ = Math.round(pos.z);
+
+        if (entityX === checkX && entityY === checkY && entityZ === checkZ) {
           return true;
         }
       }
@@ -481,13 +504,15 @@ export class WorldSystem implements System {
   }
 
   /**
-   * 基本的な経路探索（直線経路 + 障害物回避）
+   * A*アルゴリズムによる経路探索
+   * 旧システム（Stage.ts）から移植
    * @param start 開始位置
    * @param goal 目標位置
    * @param maxDistance 最大検索距離（オプション）
+   * @param excludeEntityId 衝突判定から除外するエンティティID
    * @returns 経路の位置配列、見つからない場合は空配列
    */
-  findPath(start: Vector3, goal: Vector3, maxDistance = Infinity): Vector3[] {
+  findPath(start: Vector3, goal: Vector3, maxDistance = 50, excludeEntityId?: string): Vector3[] {
     // 開始位置と目標位置が同じ場合は開始位置のみを返す
     if (start.x === goal.x && start.y === goal.y && start.z === goal.z) {
       return [{ ...start }];
@@ -499,88 +524,150 @@ export class WorldSystem implements System {
       return [];
     }
 
-    // 目標位置が通行不可能な場合は空配列を返す
-    if (!this.isWalkable(goal.x, goal.y, goal.z)) {
-      return [];
+    // A*アルゴリズムで経路を探索
+    const openSet: PathNode[] = [];
+    const closedSet: Set<string> = new Set();
+    const startNode = new PathNode(start.x, start.y, start.z);
+    const goalNode = new PathNode(goal.x, goal.y, goal.z);
+
+    startNode.g = 0;
+    startNode.h = this.heuristic(startNode, goalNode);
+    startNode.f = startNode.g + startNode.h;
+
+    openSet.push(startNode);
+
+    while (openSet.length > 0) {
+      // F値が最小のノードを取得
+      const currentNode = this.getLowestFScoreNode(openSet);
+
+      // ゴールに到達したか確認
+      if (this.isGoalNode(currentNode, goalNode)) {
+        return this.reconstructPath(currentNode);
+      }
+
+      // 現在のノードをopenSetから削除し、closedSetに追加
+      this.removeFromArray(openSet, currentNode);
+      closedSet.add(this.nodeToString(currentNode));
+
+      // 隣接ノードを取得
+      const neighbors = this.getNeighborNodes(currentNode, excludeEntityId);
+
+      for (const neighbor of neighbors) {
+        // 既に処理済みならスキップ
+        if (closedSet.has(this.nodeToString(neighbor))) {
+          continue;
+        }
+
+        const tentativeGScore = currentNode.g + 1;
+
+        // openSetに含まれていない場合は追加
+        if (!this.isInOpenSet(openSet, neighbor)) {
+          openSet.push(neighbor);
+        } else if (tentativeGScore >= neighbor.g) {
+          // より良いパスではない場合はスキップ
+          continue;
+        }
+
+        // より良いパスが見つかったので更新
+        neighbor.parent = currentNode;
+        neighbor.g = tentativeGScore;
+        neighbor.h = this.heuristic(neighbor, goalNode);
+        neighbor.f = neighbor.g + neighbor.h;
+      }
     }
 
-    // 直線経路を生成（ただし障害物を回避）
+    // パスが見つからない場合
+    return [];
+  }
+
+  /**
+   * F値が最小のノードを取得
+   */
+  private getLowestFScoreNode(nodes: PathNode[]): PathNode {
+    return nodes.reduce((lowest, node) => (node.f < lowest.f ? node : lowest));
+  }
+
+  /**
+   * ゴールノードかどうかを判定
+   */
+  private isGoalNode(node: PathNode, goal: PathNode): boolean {
+    return node.x === goal.x && node.y === goal.y && node.z === goal.z;
+  }
+
+  /**
+   * 配列からノードを削除
+   */
+  private removeFromArray(arr: PathNode[], node: PathNode): void {
+    const index = arr.indexOf(node);
+    if (index > -1) {
+      arr.splice(index, 1);
+    }
+  }
+
+  /**
+   * ノードがopenSetに含まれているかを判定
+   */
+  private isInOpenSet(openSet: PathNode[], node: PathNode): boolean {
+    return openSet.some((n) => n.x === node.x && n.y === node.y && n.z === node.z);
+  }
+
+  /**
+   * ノードを文字列に変換（ハッシュキー用）
+   */
+  private nodeToString(node: PathNode): string {
+    return `${node.x},${node.y},${node.z}`;
+  }
+
+  /**
+   * パスを再構築
+   */
+  private reconstructPath(node: PathNode): Vector3[] {
     const path: Vector3[] = [];
-    const dx = goal.x - start.x;
-    const dy = goal.y - start.y;
+    let current: PathNode | null = node;
+    while (current != null) {
+      path.unshift({ x: current.x, y: current.y, z: current.z });
+      current = current.parent;
+    }
+    return path;
+  }
 
-    // X方向の移動
-    const stepX = dx > 0 ? 1 : -1;
-    const absDx = Math.abs(dx);
+  /**
+   * 隣接ノードを取得
+   */
+  private getNeighborNodes(node: PathNode, excludeEntityId?: string): PathNode[] {
+    const neighbors: PathNode[] = [];
+    const directions = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
 
-    // Y方向の移動
-    const stepY = dy > 0 ? 1 : -1;
-    const absDy = Math.abs(dy);
+    for (const dir of directions) {
+      const newX = node.x + dir.dx;
+      const newY = node.y + dir.dy;
 
-    let currentX = start.x;
-    let currentY = start.y;
-
-    path.push({ ...start });
-
-    // X方向が長い場合
-    if (absDx >= absDy) {
-      let error = absDx / 2;
-      for (let i = 0; i < absDx; i++) {
-        error -= absDy;
-        currentX += stepX;
-
-        if (error < 0) {
-          error += absDx;
-          currentY += stepY;
-
-          // 斜め移動のチェック
-          if (!this.isWalkable(currentX, currentY, start.z)) {
-            // 斜め移動ができない場合、別ルートを試す
-            currentY -= stepY;
-            if (!this.isWalkable(currentX, currentY, start.z)) {
-              return path; // 経路が見つからない
-            }
-          }
-        } else {
-          // 水平移動のチェック
-          if (!this.isWalkable(currentX, currentY, start.z)) {
-            return path; // 経路が見つからない
-          }
-        }
-
-        path.push({ x: currentX, y: currentY, z: start.z });
-      }
-    } else {
-      // Y方向が長い場合
-      let error = absDy / 2;
-      for (let i = 0; i < absDy; i++) {
-        error -= absDx;
-        currentY += stepY;
-
-        if (error < 0) {
-          error += absDy;
-          currentX += stepX;
-
-          // 斜め移動のチェック
-          if (!this.isWalkable(currentX, currentY, start.z)) {
-            // 斜め移動ができない場合、別ルートを試す
-            currentX -= stepX;
-            if (!this.isWalkable(currentX, currentY, start.z)) {
-              return path; // 経路が見つからない
-            }
-          }
-        } else {
-          // 垂直移動のチェック
-          if (!this.isWalkable(currentX, currentY, start.z)) {
-            return path; // 経路が見つからない
-          }
-        }
-
-        path.push({ x: currentX, y: currentY, z: start.z });
+      // 通行可能かチェック（excludeEntityIdを使用して自分自身を除外）
+      if (this.isWalkable(newX, newY, node.z, excludeEntityId)) {
+        neighbors.push(new PathNode(newX, newY, node.z));
       }
     }
 
-    return path;
+    return neighbors;
+  }
+
+  /**
+   * ヒューリスティック関数（マンハッタン距離）
+   */
+  private heuristic(a: PathNode, b: PathNode): number {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+  }
+
+  /**
+   * 2点間の距離を取得
+   */
+  getDistance(pos1: Vector3, pos2: Vector3): number {
+    return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y) + Math.abs(pos1.z - pos2.z);
   }
 
   /**
@@ -607,3 +694,30 @@ export class WorldSystem implements System {
 // 必要なインポート
 import { MapGeneratorFacade } from './MapGeneratorFacade';
 import { StageType } from '../types';
+
+/**
+ * A*パスファインディング用のノードクラス
+ */
+class PathNode {
+  x: number;
+  y: number;
+  z: number;
+  g: number; // 開始ノードからのコスト
+  h: number; // ゴールまでの推定コスト
+  f: number; // g + h
+  parent: PathNode | null;
+
+  constructor(x: number, y: number, z: number) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.g = 0;
+    this.h = 0;
+    this.f = 0;
+    this.parent = null;
+  }
+
+  equals(other: PathNode): boolean {
+    return this.x === other.x && this.y === other.y && this.z === other.z;
+  }
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue';
-import { Game } from '../../game';
+import { Game } from '../../game/Game';
 import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
@@ -38,16 +38,40 @@ const emit = defineEmits<{
 
 onMounted(async () => {
   if (mainCanvas.value) {
-    console.log('init');
     await game.initialize(mainCanvas.value);
 
     game.setOnGameOver((score: number) => {
-      console.log('call setOnGameOver');
       emit('game-over', score);
     });
 
     game.setOnTileSelect((tileInfo: any) => {
       selectedTile.value = tileInfo;
+      showStatusWindow.value = true; // タイル選択時にステータスウィンドウを表示
+    });
+
+    game.setOnEnemySelect((enemyInfo: any) => {
+      // 敵の情報をselectedTileに格納して表示
+      selectedTile.value = {
+        name: enemyInfo.id || 'Enemy',
+        effect: 'Enemy Entity',
+        statModifier: {},
+      };
+      showStatusWindow.value = true;
+    });
+
+    game.setOnCharacterSelect((characterInfo: any) => {
+      // キャラクターの情報をselectedTileに格納して表示
+      selectedTile.value = {
+        name: characterInfo.id || 'Character',
+        effect: 'Character Entity',
+        statModifier: {},
+      };
+      showStatusWindow.value = true;
+    });
+
+    // ターン変更コールバックを設定
+    game.setOnTurnChange((playerTurn: boolean) => {
+      isPlayerTurn.value = playerTurn;
     });
 
     window.addEventListener('resize', resizeGame);
@@ -55,13 +79,8 @@ onMounted(async () => {
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
-  console.log(`GameScreen.movePlayer called with direction: ${direction}`);
-  console.log(`isPlayerTurn: ${isPlayerTurn.value}`);
   if (isPlayerTurn.value) {
-    console.log('Calling game.movePlayer()');
     game.movePlayer(direction);
-  } else {
-    console.log('Not player turn, ignoring move request');
   }
 };
 const closeStatusWindow = () => {
@@ -72,13 +91,6 @@ const closeStatusWindow = () => {
 const getSelectedName = () => {
   return '';
 };
-
-// const getSelectedPosition = () => {
-//   return (
-//     selectedCharacter.value?.getPosition() ||
-//     selectedEnemy.value?.getPosition() || { x: 0, y: 0, z: 0 }
-//   );
-// };
 
 const showItems = () => {
   // 新しいインベントリシステムを使用
@@ -119,11 +131,6 @@ const showStatus = () => {
   selectedTile.value = null;
 };
 
-// const endTurn = () => {
-//   if (isPlayerTurn.value) {
-//     // game.endPlayerTurn(); // このメソッドが存在しない場合はコメントアウト
-//   }
-// };
 // ゲームクリア時の処理を追加
 function checkGameClear() {
   if (game.isAllEnemiesDefeated()) {
@@ -151,10 +158,6 @@ const resizeGame = () => {
   }
 
   game.resize(newWidth, newHeight);
-};
-
-const moveToNextFloor = () => {
-  // game.moveToNextFloor();
 };
 
 const closePortalDialog = () => {
@@ -265,11 +268,11 @@ const closePortalDialog = () => {
         @close="closePortalDialog"
       >
         <p>ポータルが見つかりました。次の階層に進みますか？</p>
+        <p style="color: #ffd700; margin-top: 10px">
+          ※ フロア移動機能は新システムで自動的に処理されます
+        </p>
         <div class="u-d--flex u-flex--center u-mg--t10">
-          <BaseButton @click="closePortalDialog" :type="'small'">キャンセル</BaseButton>
-          <BaseButton class="u-mg--l12" @click="moveToNextFloor" :type="'small'"
-            >次の階層へ</BaseButton
-          >
+          <BaseButton @click="closePortalDialog" :type="'small'">閉じる</BaseButton>
         </div>
       </BaseWindow>
     </div>

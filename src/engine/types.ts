@@ -122,10 +122,10 @@ export enum TurnPhase {
 export enum MapGenerationAlgorithm {
   BSP = 'bsp',
   CELLULAR_AUTOMATA = 'cellular',
-  VORONOI = 'voronoi',
-  MAZE = 'maze',
-  RANDOM_WALK = 'random-walk',
-  MIXED = 'mixed',
+  VORONOI = 'voronoi', // 未実装（将来の拡張用）
+  MAZE = 'maze', // 未実装（将来の拡張用）
+  RANDOM_WALK = 'random-walk', // 未実装（将来の拡張用）
+  MIXED = 'mixed', // 未実装（将来の拡張用）
 }
 
 /**

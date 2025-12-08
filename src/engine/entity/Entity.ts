@@ -1,5 +1,4 @@
 import { Component } from './Component';
-import { Vector3 } from '../types';
 
 /**
  * エンティティクラス - ゲーム内のオブジェクトを表現
@@ -19,13 +18,13 @@ export class Entity {
   private tags: Set<string> = new Set();
 
   // コンポーネントのマップ（タイプ -> コンポーネント）
-  private components: Map<string, Component> = new Map();
+  protected components: Map<string, Component> = new Map();
 
   // 親エンティティ
   private parent: Entity | null = null;
 
   // 子エンティティのリスト
-  private children: Entity[] = [];
+  protected children: Entity[] = [];
 
   /**
    * コンストラクタ
@@ -35,7 +34,6 @@ export class Entity {
   constructor(id: string, type: string) {
     this.id = id;
     this.type = type;
-    console.log(`Entity created: ${id} (${type})`);
   }
 
   /**
@@ -62,18 +60,22 @@ export class Entity {
    * @returns このエンティティ（メソッドチェーン用）
    */
   addComponent(component: Component): Entity {
-    if (this.components.has(component.type)) {
-      console.warn(
-        `Component of type ${component.type} already exists on entity ${this.id}, overwriting`
-      );
-    }
-
     this.components.set(component.type, component);
     component.entity = this;
-    component.initialize();
-
-    console.log(`Added component ${component.type} to entity ${this.id}`);
     return this;
+  }
+
+  /**
+   * エンティティとすべてのコンポーネントを初期化
+   * サブクラスでオーバーライドして追加の初期化処理を実行可能
+   */
+  async initialize(): Promise<void> {
+    // すべてのコンポーネントを初期化
+    for (const component of this.components.values()) {
+      if (component.initialize && typeof component.initialize === 'function') {
+        await component.initialize();
+      }
+    }
   }
 
   /**
@@ -102,12 +104,16 @@ export class Entity {
   removeComponent(type: string): boolean {
     const component = this.components.get(type);
     if (component) {
+      // コンポーネントのdestroy()を呼び出す（存在する場合）
+      if ('destroy' in component && typeof component.destroy === 'function') {
+        component.destroy();
+      }
+
       // コンポーネントのクリーンアップ
       component.entity = null;
 
       // マップから削除
       this.components.delete(type);
-      console.log(`Removed component ${type} from entity ${this.id}`);
       return true;
     }
     return false;
@@ -226,7 +232,5 @@ export class Entity {
     if (this.parent) {
       this.parent.removeChild(this);
     }
-
-    console.log(`Entity destroyed: ${this.id}`);
   }
 }

@@ -21,9 +21,14 @@ export class CoordinateSystem {
    * @returns スクリーン座標
    */
   isometricToScreen(x: number, y: number, z = 0): Vector2 {
+    // 旧システムと同じ計算式を使用（tileHeight / 3 を使用）
+    // これは実際の画像の高さが tileHeight * 3 であることを考慮
+    const halfTileWidth = this.tileWidth / 2;
+    const tileHeightThird = this.tileHeight / 3;
+
     return {
-      x: ((x - y) * this.tileWidth) / 2,
-      y: ((x + y) * this.tileHeight) / 2 - z * (this.tileHeight / 2),
+      x: (x - y) * halfTileWidth,
+      y: (x + y) * tileHeightThird - z * tileHeightThird,
     };
   }
 
@@ -34,11 +39,12 @@ export class CoordinateSystem {
    * @returns マップ座標（Z座標は含まない）
    */
   screenToIsometric(screenX: number, screenY: number): Vector2 {
+    // 旧システムと同じ計算式を使用（tileHeight / 3 を使用）
     const halfTileWidth = this.tileWidth / 2;
-    const halfTileHeight = this.tileHeight / 2;
+    const tileHeightThird = this.tileHeight / 3;
 
-    const x = (screenX / halfTileWidth + screenY / halfTileHeight) / 2;
-    const y = (screenY / halfTileHeight - screenX / halfTileWidth) / 2;
+    const x = (screenX / halfTileWidth + screenY / tileHeightThird) / 2;
+    const y = (screenY / tileHeightThird - screenX / halfTileWidth) / 2;
     return { x, y };
   }
 

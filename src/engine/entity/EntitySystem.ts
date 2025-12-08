@@ -26,11 +26,6 @@ export class EntitySystem implements System {
 
     // イベントシステムを取得
     this.eventSystem = engine.getSystem<EventSystem>('event') || null;
-    if (!this.eventSystem) {
-      console.warn('EventSystem not found, entity events will not be processed');
-    }
-
-    console.log('EntitySystem initialized');
   }
 
   /**
@@ -38,18 +33,12 @@ export class EntitySystem implements System {
    * @param entity 登録するエンティティ
    */
   registerEntity(entity: Entity): void {
-    if (this.entities.has(entity.id)) {
-      console.warn(`Entity with ID ${entity.id} already exists, overwriting`);
-    }
-
     this.entities.set(entity.id, entity);
 
     // エンティティ作成イベントを発行
     if (this.eventSystem) {
       this.eventSystem.emit(EventName.ENTITY_CREATED, { entity });
     }
-
-    console.log(`Entity registered: ${entity.id} (${entity.type})`);
   }
 
   /**
@@ -115,7 +104,6 @@ export class EntitySystem implements System {
       // マップから削除
       this.entities.delete(id);
 
-      console.log(`Entity removed: ${id}`);
       return true;
     }
 
@@ -166,6 +154,5 @@ export class EntitySystem implements System {
     }
 
     this.entities.clear();
-    console.log('All entities cleared');
   }
 }

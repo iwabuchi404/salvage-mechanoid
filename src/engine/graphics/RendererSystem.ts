@@ -167,18 +167,12 @@ export class RendererSystem implements System {
       sprite.tint = tint;
     }
 
-    // アイソメトリック座標をスクリーン座標に変換
-    const screenPos = this.coordinateSystem.isometricToScreen(position.x, position.y, position.z);
-
-    // スプライトの位置をカメラ位置を考慮して設定
-    sprite.x = screenPos.x + this.camera.x;
-    sprite.y = screenPos.y + this.camera.y;
-
     // 深度ソートのためのzIndexを設定
     // Y座標が小さいほど手前に表示され、Z座標（高さ）も考慮
     sprite.zIndex = (position.y + position.z * 100) * 1000 + position.x;
 
     // スプライトをレイヤーに追加（まだ追加されていない場合）
+    // 位置の設定はSpriteComponent.update()で行われるため、ここでは設定しない
     if (!sprite.parent) {
       this.layers.get(layer)!.addChild(sprite);
       console.log(
@@ -206,8 +200,49 @@ export class RendererSystem implements System {
     // カメラの更新
     this.camera.update(deltaTime);
 
+    // カメラが移動した場合のみテレイン更新（パフォーマンス最適化）
+    if (this.camera.x !== this.lastCameraX || this.camera.y !== this.lastCameraY) {
+      this.updateTerrainLayerPositions();
+      this.lastCameraX = this.camera.x;
+      this.lastCameraY = this.camera.y;
+    }
+
     // 必要に応じて他の更新処理を追加
     // 例: アニメーションの更新、パーティクルシステムの更新など
+  }
+
+  // カメラ位置のキャッシュ（最適化用）
+  private lastCameraX = 0;
+  private lastCameraY = 0;
+
+  /**
+   * すべてのレイヤーのスプライト位置をカメラオフセットに合わせて更新
+   */
+  private updateTerrainLayerPositions(): void {
+    // カメラ追従が必要なレイヤーを更新
+    const cameraFollowLayers = [
+      LayerName.TERRAIN,
+      LayerName.OBJECTS,
+      LayerName.CHARACTERS,
+      LayerName.EFFECTS,
+    ];
+
+    for (const layerName of cameraFollowLayers) {
+      const layer = this.layers.get(layerName);
+      if (!layer) continue;
+
+      for (const child of layer.children) {
+        const sprite = child as PIXI.Sprite & {
+          __baseScreenX?: number;
+          __baseScreenY?: number;
+        };
+
+        if (sprite.__baseScreenX === undefined || sprite.__baseScreenY === undefined) continue;
+
+        sprite.x = sprite.__baseScreenX - this.camera.x;
+        sprite.y = sprite.__baseScreenY - this.camera.y;
+      }
+    }
   }
 
   /**
@@ -255,5 +290,90 @@ export class RendererSystem implements System {
    */
   getApp(): PIXI.Application | null {
     return this.app;
+  }
+
+  /**
+   * タイルマップを描画
+   * @param tileMap タイルマップデータ（2D配列）
+   * @param tileWidth タイルの幅
+   * @param tileHeight タイルの高さ
+   */
+  async renderTileMap(tileMap: number[][]): Promise<void> {
+    console.log(`Rendering tilemap: ${tileMap[0]?.length}x${tileMap.length}`);
+
+    const terrainLayer = this.layers.get(LayerName.TERRAIN);
+    if (!terrainLayer) {
+      console.warn('Terrain layer not found');
+      return;
+    }
+
+    // 既存のタイルをクリア
+    terrainLayer.removeChildren();
+
+    // タイルマップを描画
+    for (let y = 0; y < tileMap.length; y++) {
+      for (let x = 0; x < tileMap[y].length; x++) {
+        const tileType = tileMap[y][x];
+
+        // 空タイル（0）はスキップ
+        if (tileType === 0) continue;
+
+        // タイルのテクスチャを決定
+        const texturePath = this.getTileTexture(tileType);
+
+        try {
+          // テクスチャを読み込み
+          const texture = await PIXI.Assets.load(texturePath);
+
+          // スプライトを作成
+          const sprite = new PIXI.Sprite(texture) as PIXI.Sprite & {
+            __baseScreenX?: number;
+            __baseScreenY?: number;
+          };
+          sprite.anchor.set(0.5, 0.5); // 旧システムに合わせてタイル中心をアンカーに
+
+          // アイソメトリック座標をスクリーン座標に変換
+          const screenPos = this.coordinateSystem.isometricToScreen(x, y, 0);
+          sprite.__baseScreenX = screenPos.x;
+          sprite.__baseScreenY = screenPos.y;
+
+          // カメラオフセットを適用（カメラが移動すると、スプライトは逆方向に移動）
+          sprite.x = screenPos.x - this.camera.x;
+          sprite.y = screenPos.y - this.camera.y;
+
+          // 各タイルタイプで異なる画像を使用するため、色調変更は不要
+
+          // 深度ソート用のzIndexを設定
+          sprite.zIndex = y * 1000 + x;
+
+          terrainLayer.addChild(sprite);
+        } catch (error) {
+          console.warn(`Failed to load tile texture: ${texturePath}`, error);
+        }
+      }
+    }
+
+    console.log(`Rendered ${terrainLayer.children.length} tiles`);
+  }
+
+  /**
+   * タイルタイプに応じたテクスチャパスを取得
+   * @param tileType タイルタイプ
+   * @returns テクスチャパス
+   */
+  private getTileTexture(tileType: number): string {
+    // publicフォルダ内の画像を使用
+    switch (tileType) {
+      case 1: // GRASS (床)
+        return './image.png';
+      case 2: // WATER
+        return './image02.png';
+      case 3: // MOUNTAIN (壁)
+        return './image03.png';
+      case 4: // TILE
+        return './image.png';
+      default:
+        return './image.png';
+    }
   }
 }

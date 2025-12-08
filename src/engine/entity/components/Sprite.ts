@@ -7,6 +7,14 @@ import { TransformComponent } from './Transform';
 import { LayerName } from '../../types';
 
 /**
+ * 拡張スプライト型 - baseScreenX/Y を持つスプライト
+ */
+type ExtendedSprite = PIXI.Sprite & {
+  __baseScreenX?: number;
+  __baseScreenY?: number;
+};
+
+/**
  * スプライトコンポーネント - エンティティの視覚的表現を管理
  */
 export class SpriteComponent implements Component {
@@ -21,9 +29,9 @@ export class SpriteComponent implements Component {
   entity: Entity | null = null;
 
   /**
-   * PIXIスプライト
+   * PIXIスプライト（拡張型）
    */
-  private sprite: PIXI.Sprite | null = null;
+  private sprite: ExtendedSprite | null = null;
 
   /**
    * レイヤー名
@@ -123,7 +131,19 @@ export class SpriteComponent implements Component {
     const transform = this.entity.getComponent<TransformComponent>('transform');
     if (transform) {
       const pos = transform.position;
-      this.updateSpritePosition(pos.x, pos.y, pos.z);
+
+      // 位置が変わった場合のみ更新（最適化）
+      // __baseScreenX/Y が未設定の場合も更新する
+      if (
+        this.sprite.__baseScreenX === undefined ||
+        this.sprite.__baseScreenY === undefined ||
+        this.lastPosition.x !== pos.x ||
+        this.lastPosition.y !== pos.y ||
+        this.lastPosition.z !== pos.z
+      ) {
+        this.updateSpritePosition(pos.x, pos.y, pos.z);
+        this.lastPosition = { x: pos.x, y: pos.y, z: pos.z };
+      }
 
       // 回転も更新
       this.sprite.rotation = transform.rotation;
@@ -138,7 +158,13 @@ export class SpriteComponent implements Component {
   }
 
   /**
+   * 前回の位置（最適化用）
+   */
+  private lastPosition: { x: number; y: number; z: number } = { x: -1, y: -1, z: -1 };
+
+  /**
    * スプライトの位置を更新
+   * タイルと同じ方式（__baseScreenX/Y保持）でカメラオフセットを処理
    * @param x X座標
    * @param y Y座標
    * @param z Z座標
@@ -155,12 +181,23 @@ export class SpriteComponent implements Component {
       // アイソメトリック座標をスクリーン座標に変換
       const screenPos = coordSystem.isometricToScreen(x, y, z);
 
-      // スプライトの基本位置を設定（カメラ位置はRendererSystemで適用）
-      this.sprite.x = screenPos.x;
-      this.sprite.y = screenPos.y;
+      // ベーススクリーン座標を保存（RendererSystemがカメラ移動時に更新する）
+      this.sprite.__baseScreenX = screenPos.x;
+      this.sprite.__baseScreenY = screenPos.y;
 
-      // 深度ソートのためのzIndexを設定（Y座標が小さいほど手前に表示され、Z座標（高さ）も考慮）
-      this.sprite.zIndex = (y + z * 100) * 1000 + x;
+      // スプライトの位置を設定（カメラオフセットを適用）
+      this.sprite.x = screenPos.x - camera.x;
+      this.sprite.y = screenPos.y - camera.y;
+
+      // 深度ソートのためのzIndexを設定
+      // アイソメトリックビューでは、Y座標が大きいほど手前（下）に表示される
+      // X座標も考慮して、右下にあるものほど手前に表示
+      // 基本式: (y + x) * 1000 でソート（y+xが大きいほど手前）
+      const baseZIndex = (y + x) * 1000;
+      // レイヤーに応じたオフセットを追加
+      // objects（障害物）とcharacters（キャラクター）は同じ深度計算を使用
+      // 同じタイル位置にいる場合、Y座標で自然にソートされる
+      this.sprite.zIndex = baseZIndex + z * 100;
     }
   }
 
@@ -229,7 +266,7 @@ export class SpriteComponent implements Component {
   /**
    * スプライトインスタンスを取得
    */
-  getSprite(): PIXI.Sprite | null {
+  getSprite(): ExtendedSprite | null {
     return this.sprite;
   }
 
@@ -257,5 +294,30 @@ export class SpriteComponent implements Component {
         anchor: this.anchor,
       });
     }
+  }
+
+  /**
+   * コンポーネントの破棄処理
+   * スプライトをレイヤーから削除し、リソースを解放
+   */
+  destroy(): void {
+    if (this.sprite) {
+      const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
+      if (rendererSystem) {
+        // レイヤーからスプライトを削除
+        rendererSystem.removeSprite(this.sprite, this.layer);
+      }
+
+      // 親コンテナから削除
+      if (this.sprite.parent) {
+        this.sprite.parent.removeChild(this.sprite);
+      }
+
+      // スプライトを破棄
+      this.sprite.destroy();
+      this.sprite = null;
+    }
+
+    this.entity = null;
   }
 }

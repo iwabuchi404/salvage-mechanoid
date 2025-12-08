@@ -2,17 +2,24 @@ import { Engine } from '../engine/Engine';
 import { RendererSystem } from '../engine/graphics/RendererSystem';
 import { EntitySystem } from '../engine/entity/EntitySystem';
 import { EventSystem } from '../engine/events/EventSystem';
+import { AudioSystem } from '../engine/audio/AudioSystem';
+import { TurnSystem } from '../engine/turn/TurnSystem';
+import { EffectSystem } from '../engine/effects/EffectSystem';
+import { CombatSystem } from '../engine/combat/CombatSystem';
+import { InteractionSystem } from '../engine/interaction/InteractionSystem';
+import { InputSystem } from '../engine/input/InputSystem';
 import { TileMap } from '../engine/world/TileMap';
 import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
+import { FloorManager } from '../engine/world/FloorManager';
 import { Player } from '../engine/entity/Player';
 import { Obstacle } from '../engine/entity/Obstacle';
 import { Item } from '../engine/entity/Item';
 import { Enemy } from '../engine/entity/Enemy';
+import { createPortal, createEnergyCharger } from '../engine/entity/EventObjectEntity';
 import {
   Vector3,
   EventName,
-  TileType,
   StageType,
   PlacedObstacle,
   PlacedItem,
@@ -43,6 +50,9 @@ export class Game {
   // リソース生成システム
   private resourceSystem: ResourceGenerationSystem | null = null;
 
+  // フロアマネージャー
+  private floorManager: FloorManager | null = null;
+
   // 生成されたリソースを保存
   private placedObstacles: PlacedObstacle[] = [];
   private placedItems: PlacedItem[] = [];
@@ -65,13 +75,13 @@ export class Game {
   private onTileSelect: ((tileInfo: any) => void) | null = null;
   private onEnemySelect: ((enemy: any) => void) | null = null;
   private onCharacterSelect: ((character: any) => void) | null = null;
+  private onTurnChange: ((isPlayerTurn: boolean) => void) | null = null;
 
   /**
    * コンストラクタ
    */
   constructor() {
     this.engine = Engine.instance;
-    console.log('Game instance created');
   }
 
   /**
@@ -80,14 +90,14 @@ export class Game {
    */
   async initialize(canvas: HTMLCanvasElement): Promise<void> {
     if (this.initialized) {
-      console.warn('Game is already initialized');
       return;
     }
 
-    console.log('Initializing game...');
-
     // システムを初期化
     await this.initializeSystems(canvas);
+
+    // フロアマネージャーを初期化
+    this.floorManager = new FloorManager(this.engine, 10);
 
     // マップを生成
     await this.generateMap();
@@ -101,11 +111,16 @@ export class Game {
     // イベントリスナーを設定
     this.setupEventListeners();
 
+    // BGMを開始
+    const audioSystem = this.engine.getSystem<AudioSystem>('audio');
+    if (audioSystem) {
+      audioSystem.playBGM('bgm01');
+    }
+
     // エンジンを開始
     this.engine.start();
 
     this.initialized = true;
-    console.log('Game initialization complete');
   }
 
   /**
@@ -113,8 +128,6 @@ export class Game {
    * @param canvas 描画先のキャンバス要素
    */
   private async initializeSystems(canvas: HTMLCanvasElement): Promise<void> {
-    console.log('Initializing systems...');
-
     // レンダリングシステム
     const rendererSystem = new RendererSystem(160, 120);
     rendererSystem.setCanvas(canvas);
@@ -128,10 +141,41 @@ export class Game {
     const eventSystem = new EventSystem();
     this.engine.registerSystem('event', eventSystem);
 
+    // オーディオシステム
+    const audioSystem = new AudioSystem();
+    this.engine.registerSystem('audio', audioSystem);
+
+    // ターンシステム
+    const turnSystem = new TurnSystem();
+    this.engine.registerSystem('turn', turnSystem);
+
+    // エフェクトシステム
+    const effectSystem = new EffectSystem();
+    this.engine.registerSystem('effect', effectSystem);
+
+    // 戦闘システム
+    const combatSystem = new CombatSystem();
+    this.engine.registerSystem('combat', combatSystem);
+
+    // インタラクションシステム
+    const interactionSystem = new InteractionSystem();
+    this.engine.registerSystem('interaction', interactionSystem);
+
+    // 入力システム（初期化前に登録）
+    const inputSystem = new InputSystem();
+    this.engine.registerSystem('input', inputSystem);
+
     // すべてのシステムを初期化
     await this.engine.initialize();
 
-    console.log('Systems initialized');
+    // RendererSystem初期化後にPIXIのcanvasをInputSystemに設定
+    const app = rendererSystem.getApp();
+    if (app && app.canvas) {
+      inputSystem.setCanvas(app.canvas as HTMLCanvasElement);
+      console.log('InputSystem canvas set to PIXI canvas');
+    } else {
+      console.warn('Failed to get PIXI canvas for InputSystem');
+    }
   }
 
   /**
@@ -139,8 +183,6 @@ export class Game {
    * @param stageType ステージタイプ（オプション、デフォルトはTACTICAL_COMBAT）
    */
   private async generateMap(stageType: StageType = StageType.TACTICAL_COMBAT): Promise<void> {
-    console.log(`Generating map with stage type: ${stageType}...`);
-
     // MapGeneratorFacadeを使用
     const mapGenerator = new MapGeneratorFacade(50, 50);
 
@@ -152,9 +194,6 @@ export class Game {
       // タイルマップを作成
       this.tileMap = new TileMap(50, 50);
       this.tileMap.importMapData(mapData.map);
-
-      console.log('Map generated with Classic mode');
-      console.log(`Generated ${mapData.rooms.length} rooms`);
     } else {
       // 戦術的モード：新しい戦術的システム
       const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -173,32 +212,47 @@ export class Game {
       this.currentCorridors = tacticalData.corridors;
       this.currentTacticalElements = tacticalData.tacticalElements;
 
-      // 戦術的要素の情報を表示
-      console.log(`Map generated with Tactical mode: ${stageType}`);
-      console.log(`Generated ${tacticalData.rooms.length} rooms`);
-      console.log(`Energy points: ${tacticalData.energyPoints.length}`);
-      console.log(`Tactical elements: ${tacticalData.tacticalElements.length}`);
-      console.log(`Terrain effects: ${tacticalData.terrainEffects.size}`);
-      console.log(
-        `Estimated energy consumption: ${tacticalData.tacticalMetadata.estimatedEnergyConsumption}`
-      );
-      console.log(
-        `Available energy recovery: ${tacticalData.tacticalMetadata.availableEnergyRecovery}`
-      );
-      console.log(`Difficulty rating: ${tacticalData.tacticalMetadata.difficultyRating}`);
-
       // 戦術的データをゲームストアに保存（将来の拡張用）
       // TODO: ゲームストアに戦術的データ保存機能を追加
-      console.log('Tactical data ready for game store integration:', {
-        energyPointsCount: tacticalData.energyPoints.length,
-        tacticalElementsCount: tacticalData.tacticalElements.length,
-        terrainEffectsCount: tacticalData.terrainEffects.size,
-      });
     }
 
     // WorldSystemを作成してエンジンに登録（タイルマップを使用）
     const worldSystem = new WorldSystem(this.tileMap);
     this.engine.registerSystem('world', worldSystem);
+    await worldSystem.initialize(this.engine);
+
+    // タイルマップの描画は、カメラ位置設定後に行う
+    // （プレイヤー作成後に renderTileMap を呼び出す）
+  }
+
+  /**
+   * タイルマップを描画
+   */
+  private async renderTileMap(): Promise<void> {
+    if (!this.tileMap) {
+      return;
+    }
+
+    const rendererSystem = this.engine.getSystem<RendererSystem>('renderer');
+    if (!rendererSystem) {
+      return;
+    }
+
+    // TileMapから2D配列データを取得
+    const mapData: number[][] = [];
+    const height = this.tileMap.getHeight();
+    const width = this.tileMap.getWidth();
+
+    for (let y = 0; y < height; y++) {
+      mapData[y] = [];
+      for (let x = 0; x < width; x++) {
+        const tile = this.tileMap.getTile(x, y);
+        mapData[y][x] = tile ? (tile.type as any) : 0; // TileTypeをnumberにキャスト
+      }
+    }
+
+    // タイルマップを描画
+    await rendererSystem.renderTileMap(mapData);
   }
 
   /**
@@ -211,9 +265,8 @@ export class Game {
       // WorldSystemを削除（removeSystemメソッドがない場合はスキップ）
       try {
         // this.engine.removeSystem('world'); // TODO: Engine.removeSystemメソッドの実装が必要
-        console.log('Clearing existing world system');
-      } catch (error) {
-        console.warn('Could not remove world system:', error);
+      } catch (_error) {
+        // WorldSystemの削除に失敗
       }
       this.tileMap = null;
     }
@@ -228,9 +281,8 @@ export class Game {
         // プレイヤーの位置更新（setPositionメソッドがない場合は直接設定）
         try {
           // this.player.position = startPosition; // TODO: Player.positionプロパティの実装が必要
-          console.log('Player position should be reset to:', startPosition);
-        } catch (error) {
-          console.warn('Could not reset player position:', error);
+        } catch (_error) {
+          // プレイヤー位置のリセットに失敗
         }
       }
     }
@@ -240,8 +292,6 @@ export class Game {
    * プレイヤーを作成
    */
   private async createPlayer(): Promise<void> {
-    console.log('Creating player...');
-
     // 開始位置を見つける（ランダムな部屋の中央）
     const startPosition = this.findStartPosition();
 
@@ -268,11 +318,20 @@ export class Game {
     if (rendererSystem) {
       const camera = rendererSystem.getCamera();
       this.player.setCameraTarget(camera);
+
+      // カメラの初期位置をプレイヤーの位置に設定
+      const coordinateSystem = rendererSystem.getCoordinateSystem();
+      const screenPos = coordinateSystem.isometricToScreen(
+        startPosition.x,
+        startPosition.y,
+        startPosition.z
+      );
+      // カメラの位置 = プレイヤーのスクリーン座標 - 画面中央オフセット
+      camera.setPosition(screenPos.x - 400, screenPos.y - 300); // 画面中央に配置（800x600の中心）
     }
 
-    console.log(
-      `Player created at position: (${startPosition.x}, ${startPosition.y}, ${startPosition.z})`
-    );
+    // カメラ位置設定後にタイルマップを再描画
+    await this.renderTileMap();
   }
 
   /**
@@ -293,17 +352,13 @@ export class Game {
    * リソース（障害物・アイテム・敵）を生成
    */
   private async generateResources(): Promise<void> {
-    console.log('Generating resources...');
-
     if (!this.tileMap) {
-      console.warn('TileMap not found, skipping resource generation');
       return;
     }
 
     // WorldSystemから必要な情報を取得
     const worldSystem = this.engine.getSystem<WorldSystem>('world');
     if (!worldSystem) {
-      console.warn('WorldSystem not found, skipping resource generation');
       return;
     }
 
@@ -332,6 +387,16 @@ export class Game {
     const playerLevel = this.gameStore.player.status.level || 1;
     const currentFloor = worldSystem.getCurrentFloor();
 
+    // プレイヤー位置を取得（配置禁止エリアとして使用）
+    let playerStartPos: { x: number; y: number } | undefined;
+    if (this.player) {
+      const transform = this.player.getComponent('transform');
+      if (transform && 'position' in transform) {
+        const pos = (transform as { position: Vector3 }).position;
+        playerStartPos = { x: Math.round(pos.x), y: Math.round(pos.y) };
+      }
+    }
+
     // リソースを生成
     const resources = this.resourceSystem.generateResources(
       map,
@@ -341,6 +406,7 @@ export class Game {
       {
         playerLevel: playerLevel,
         difficulty: currentFloor,
+        playerStartPos: playerStartPos,
       }
     );
 
@@ -348,10 +414,6 @@ export class Game {
     this.placedObstacles = resources.obstacles;
     this.placedItems = resources.items;
     this.placedEnemies = resources.enemies;
-
-    console.log(
-      `Resources generated: ${resources.obstacles.length} obstacles, ${resources.items.length} items, ${resources.enemies.length} enemies`
-    );
 
     // エンティティシステムに登録
     await this.registerResourceEntities(resources.obstacles, resources.items, resources.enemies);
@@ -388,11 +450,8 @@ export class Game {
   ): Promise<void> {
     const entitySystem = this.engine.getSystem<EntitySystem>('entity');
     if (!entitySystem) {
-      console.warn('EntitySystem not found, skipping entity registration');
       return;
     }
-
-    console.log('Registering resource entities...');
 
     // 障害物を登録
     for (const obstacleData of obstacles) {
@@ -400,7 +459,6 @@ export class Game {
       await obstacle.initialize();
       entitySystem.registerEntity(obstacle);
     }
-    console.log(`Registered ${obstacles.length} obstacles`);
 
     // アイテムを登録
     for (const itemData of items) {
@@ -408,38 +466,137 @@ export class Game {
 
       // ItemTypeからInventoryItemTypeへのマッピング
       const inventoryType = this.mapItemTypeToInventoryType(itemData.type);
-      console.log(`Item ${itemData.id}: ${itemData.type} -> ${inventoryType}`);
       if (inventoryType) {
         item.setInventoryItemType(inventoryType);
-      } else {
-        console.warn(`Could not map ItemType ${itemData.type} to InventoryItemType`);
       }
 
       await item.initialize();
       entitySystem.registerEntity(item);
     }
-    console.log(`Registered ${items.length} items`);
-
-    // 登録されたアイテムエンティティを確認
-    const registeredItems = entitySystem.getEntities().filter((e) => e.hasTag('item'));
-    console.log(`Total item entities in system: ${registeredItems.length}`);
-    registeredItems.forEach((item) => {
-      const transform = item.getComponent('transform');
-      if (transform && 'position' in transform) {
-        const pos = (transform as { position: { x: number; y: number } }).position;
-        console.log(`Item ${item.id} at position (${pos.x}, ${pos.y})`);
-      }
-    });
 
     // 敵を登録
-    for (const enemyData of enemies) {
-      const enemy = new Enemy(enemyData);
-      await enemy.initialize();
-      entitySystem.registerEntity(enemy);
+    for (let i = 0; i < enemies.length; i++) {
+      const enemyData = enemies[i];
+      try {
+        const enemy = new Enemy(enemyData);
+        await enemy.initialize();
+        entitySystem.registerEntity(enemy);
+      } catch (error) {
+        console.error(`Failed to register enemy ${i}:`, error);
+      }
     }
-    console.log(`Registered ${enemies.length} enemies`);
 
-    console.log('All resource entities registered successfully');
+    // イベントオブジェクトを配置
+    await this.placeEventObjects(entitySystem);
+  }
+
+  /**
+   * イベントオブジェクトを配置
+   * @param entitySystem エンティティシステム
+   */
+  private async placeEventObjects(entitySystem: EntitySystem): Promise<void> {
+    if (!this.tileMap) {
+      return;
+    }
+
+    const eventSystem = this.engine.getSystem<EventSystem>('event');
+    const audioSystem = this.engine.getSystem<AudioSystem>('audio');
+
+    // 空いている床タイルを取得
+    const floorTiles: Vector3[] = [];
+    for (let y = 0; y < this.tileMap.getHeight(); y++) {
+      for (let x = 0; x < this.tileMap.getWidth(); x++) {
+        const tile = this.tileMap.getTile(x, y);
+        if (tile && (tile.type as any) === 'floor') {
+          // エンティティが既に存在しないかチェック
+          const entities = entitySystem.getEntities();
+          const occupied = entities.some((entity) => {
+            const transform = entity.getComponent('transform');
+            if (transform && 'position' in transform) {
+              const pos = (transform as { position: Vector3 }).position;
+              return pos.x === x && pos.y === y;
+            }
+            return false;
+          });
+
+          if (!occupied) {
+            floorTiles.push({ x, y, z: 0 });
+          }
+        }
+      }
+    }
+
+    if (floorTiles.length === 0) {
+      return;
+    }
+
+    // ポータルを1つ配置（階段の代わり）
+    const portalPos = floorTiles[Math.floor(Math.random() * floorTiles.length)];
+    const portal = createPortal(`portal_${Date.now()}`, portalPos, async (playerId) => {
+      audioSystem?.playSE('item');
+      eventSystem?.emit('portal_activated', { playerId, position: portalPos });
+
+      // 次の階層へ移動
+      if (this.floorManager) {
+        const success = await this.floorManager.moveToNextFloor();
+        if (success) {
+          // フロア移動後、マップとリソースを再生成
+          await this.regenerateFloor();
+        } else {
+          // 最終フロアに到達した場合はゲームクリア
+          eventSystem?.emit('game_clear', { floor: this.floorManager.getCurrentFloor() });
+        }
+      }
+    });
+    await portal.initialize();
+    entitySystem.registerEntity(portal);
+
+    // エネルギーチャージャーを2-3個配置
+    const chargerCount = 2 + Math.floor(Math.random() * 2); // 2-3個
+    for (let i = 0; i < chargerCount && floorTiles.length > 0; i++) {
+      // ポータルと同じ位置を避ける
+      const availableTiles = floorTiles.filter(
+        (pos) => pos.x !== portalPos.x || pos.y !== portalPos.y
+      );
+      if (availableTiles.length === 0) break;
+
+      const chargerPos = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+      const chargeAmount = 10 + Math.floor(Math.random() * 11); // 10-20
+      const maxUses = 1 + Math.floor(Math.random() * 3); // 1-3回使用可能
+
+      const charger = createEnergyCharger(
+        `charger_${Date.now()}_${i}`,
+        chargerPos,
+        chargeAmount,
+        maxUses,
+        (playerId) => {
+          audioSystem?.playSE('item');
+
+          // プレイヤーのエネルギーを回復
+          const player = entitySystem.getEntity(playerId);
+          if (player) {
+            const energyComponent = player.getComponent('energy');
+            if (energyComponent && 'recharge' in energyComponent) {
+              (energyComponent as { recharge: (amount: number) => void }).recharge(chargeAmount);
+
+              eventSystem?.emit('energy_recharged', {
+                playerId,
+                amount: chargeAmount,
+                position: chargerPos,
+              });
+            }
+          }
+        }
+      );
+      await charger.initialize();
+      entitySystem.registerEntity(charger);
+
+      // 使用済みの位置を削除
+      const index = floorTiles.findIndex((pos) => pos.x === chargerPos.x && pos.y === chargerPos.y);
+      if (index !== -1) {
+        floorTiles.splice(index, 1);
+      }
+    }
   }
 
   /**
@@ -459,35 +616,82 @@ export class Game {
     // タイル選択イベント
     eventSystem.on('tile_selected', (data) => {
       if (this.onTileSelect) {
-        this.onTileSelect(data);
+        // タイル情報をフォーマットして送信
+        const tileInfo = {
+          name: data.tile.type || 'Unknown',
+          effect: 'None',
+          statModifier: {},
+          position: data.position,
+        };
+        this.onTileSelect(tileInfo);
       }
     });
 
-    // 敵選択イベント
+    // エンティティ選択イベント（新しいイベント）
+    eventSystem.on('entity_selected', (data) => {
+      const entity = data.entity;
+      const entityId = data.entityId;
+
+      // エンティティのタイプに応じて処理
+      if (entity.hasTag('enemy')) {
+        // 敵エンティティの場合
+        if (this.onEnemySelect) {
+          this.onEnemySelect({ entity, id: entityId, position: data.position });
+        }
+      } else if (entity.hasTag('player')) {
+        // プレイヤーの場合
+        if (this.onCharacterSelect) {
+          this.onCharacterSelect({ entity, id: entityId, position: data.position });
+        }
+      } else {
+        // その他のエンティティ（障害物、アイテムなど）
+        if (this.onTileSelect) {
+          const entityInfo = {
+            name: entityId,
+            effect: 'Entity',
+            statModifier: {},
+            position: data.position,
+          };
+          this.onTileSelect(entityInfo);
+        }
+      }
+    });
+
+    // 敵選択イベント（後方互換性のため残す）
     eventSystem.on('enemy_selected', (data) => {
       if (this.onEnemySelect) {
         this.onEnemySelect(data.enemy);
       }
     });
 
-    // キャラクター選択イベント
+    // キャラクター選択イベント（後方互換性のため残す）
     eventSystem.on('character_selected', (data) => {
       if (this.onCharacterSelect) {
         this.onCharacterSelect(data.character);
       }
     });
 
+    // プレイヤーターン開始イベント
+    eventSystem.on('player_turn_started', () => {
+      if (this.onTurnChange) {
+        this.onTurnChange(true);
+      }
+    });
+
+    // 敵ターン開始イベント
+    eventSystem.on('enemy_turn_started', () => {
+      if (this.onTurnChange) {
+        this.onTurnChange(false);
+      }
+    });
+
     // アイテム発見イベント
     eventSystem.on('item_found', (data) => {
-      console.log('item_found event received in Game.ts', data);
       const itemEntity = data.itemEntity as Item;
       const inventoryItem = itemEntity.toInventoryItem();
 
-      console.log('inventoryItem:', inventoryItem);
-
       if (inventoryItem) {
         // UIダイアログを表示
-        console.log('Showing item pickup dialog');
         this.uiStore.showItemPickupDialog(inventoryItem, {
           x: data.position.x,
           y: data.position.y,
@@ -495,11 +699,33 @@ export class Game {
 
         // アイテムエンティティIDをuiStoreに保存
         this.uiStore.itemPickupDialog.itemEntityId = itemEntity.id;
-        console.log('Dialog state:', this.uiStore.itemPickupDialog);
-      } else {
-        console.warn('inventoryItem is null, cannot show dialog');
       }
     });
+
+    // アイテム削除イベント（UIダイアログからのカスタムイベント）
+    window.addEventListener('removeItem', ((event: CustomEvent) => {
+      const itemId = event.detail.itemId;
+      this.removeItem(itemId);
+    }) as EventListener);
+  }
+
+  /**
+   * アイテムを削除
+   * @param itemId 削除するアイテムのID
+   */
+  private removeItem(itemId: string): void {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!entitySystem) return;
+
+    const entity = entitySystem.getEntity(itemId);
+    if (entity && entity.hasTag('item')) {
+      const item = entity as Item;
+      // アイテムを収集済みとしてマーク
+      item.collect();
+      // エンティティを削除
+      item.destroy();
+      entitySystem.removeEntity(itemId);
+    }
   }
 
   /**
@@ -535,18 +761,22 @@ export class Game {
   }
 
   /**
+   * ターン変更ハンドラーを設定
+   * @param callback ターン変更時に呼び出されるコールバック
+   */
+  setOnTurnChange(callback: (isPlayerTurn: boolean) => void): void {
+    this.onTurnChange = callback;
+  }
+
+  /**
    * プレイヤーを移動
    * @param direction 移動方向
    */
   movePlayer(direction: 'up' | 'down' | 'left' | 'right'): void {
-    console.log(`Game.movePlayer() called with direction: ${direction}`);
-    console.log('this.player:', this.player);
     if (!this.player) {
-      console.warn('Player not found!');
       return;
     }
 
-    console.log('Calling this.player.move()');
     this.player.move(direction);
   }
 
@@ -554,16 +784,16 @@ export class Game {
    * プレイヤーが攻撃
    */
   async playerAttack(): Promise<void> {
-    if (!this.player) return;
+    if (!this.player) {
+      return;
+    }
 
-    await this.player.attack();
-
-    // 敵がすべて倒されたかチェック
-    if (this.isAllEnemiesDefeated()) {
-      const eventSystem = this.engine.getSystem<EventSystem>('event');
-      if (eventSystem) {
-        eventSystem.emit('all_enemies_defeated', {});
-      }
+    // CombatSystemを通じて攻撃を実行
+    const eventSystem = this.engine.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit('player_attack_requested', {
+        playerId: this.player.id,
+      });
     }
   }
 
@@ -612,7 +842,46 @@ export class Game {
       rendererSystem.resize(width, height);
     }
   }
-}
 
-// Systemインターフェースを使うためのインポート
-import { System } from '../engine/System';
+  /**
+   * フロアを再生成（フロア移動後）
+   */
+  private async regenerateFloor(): Promise<void> {
+    // マップを再生成
+    await this.generateMap();
+
+    // プレイヤーを再配置
+    if (this.player && this.tileMap) {
+      const startPos = this.tileMap.getRandomFloorTile();
+      if (startPos) {
+        const transform = this.player.getComponent('transform');
+        if (transform && 'position' in transform) {
+          (transform as { position: { x: number; y: number; z: number } }).position = {
+            x: startPos.x,
+            y: startPos.y,
+            z: 0,
+          };
+        }
+      }
+    }
+
+    // リソースを再生成
+    await this.generateResources();
+  }
+
+  /**
+   * 現在のフロア番号を取得
+   * @returns フロア番号
+   */
+  getCurrentFloor(): number {
+    return this.floorManager?.getCurrentFloor() || 1;
+  }
+
+  /**
+   * 最大フロア数を取得
+   * @returns 最大フロア数
+   */
+  getMaxFloors(): number {
+    return this.floorManager?.getMaxFloors() || 10;
+  }
+}

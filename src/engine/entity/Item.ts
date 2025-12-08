@@ -1,6 +1,5 @@
 import { Entity } from './Entity';
 import { TransformComponent } from './components/Transform';
-import { SpriteComponent } from './components/Sprite';
 import {
   Vector3,
   ItemType,
@@ -8,8 +7,9 @@ import {
   PlacedItem,
   InventoryItemType,
   InventoryItem,
-  ItemEffect,
 } from '../types';
+import { Engine } from '../Engine';
+import { RendererSystem } from '../graphics/RendererSystem';
 import * as PIXI from 'pixi.js';
 
 /**
@@ -49,26 +49,101 @@ export class Item extends Entity {
    * 初期化
    */
   async initialize(): Promise<void> {
-    // スプライトコンポーネントを追加
-    const texturePath = this.getTexturePath();
-    const spriteComponent = new SpriteComponent(texturePath, 'objects', { x: 0.5, y: 0.5 });
+    // 親クラスの initialize() を呼び出してコンポーネントを初期化
+    await super.initialize();
 
-    // レアリティに応じて色を変える（将来的な拡張用）
-    // spriteComponent.setTint(this.getRarityColor());
-
-    this.addComponent(spriteComponent);
-
-    console.log(`Item initialized: ${this.id} (${this.itemType}, ${this.rarity})`);
+    // アイテムは画像がないため、PIXI.Graphics で円を描画
+    this.createItemGraphics();
   }
 
   /**
-   * アイテムタイプに応じたテクスチャパスを取得
-   * 現在は画像がないため、障害物画像を流用
+   * アイテムのグラフィックスを作成してレンダラーに登録
    */
-  private getTexturePath(): string {
-    // TODO: アイテムタイプごとの専用画像を用意
-    // 現在は暫定的にobj01.pngを使用（obj02.pngはポータル専用）
-    return './obj01.png';
+  private createItemGraphics(): void {
+    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
+    if (!rendererSystem) return;
+
+    const transform = this.getComponent<TransformComponent>('transform');
+    if (!transform) return;
+
+    // アイテムタイプに応じた色を取得
+    const color = this.getItemColor();
+
+    // PIXI.Graphics で円を描画
+    const graphics = new PIXI.Graphics();
+    graphics.circle(0, 0, 8);
+    graphics.fill(color);
+    graphics.stroke({ width: 2, color: 0x000000 });
+
+    // 座標変換
+    const coordSystem = rendererSystem.getCoordinateSystem();
+    const camera = rendererSystem.getCamera();
+    const pos = transform.position;
+    const screenPos = coordSystem.isometricToScreen(pos.x, pos.y, pos.z);
+
+    // ベーススクリーン座標を保存（Y座標は少し上にオフセット）
+    (graphics as any).__baseScreenX = screenPos.x;
+    (graphics as any).__baseScreenY = screenPos.y - 16;
+
+    // カメラオフセットを適用
+    graphics.x = screenPos.x - camera.x;
+    graphics.y = screenPos.y - camera.y - 16;
+
+    // 深度ソート用のzIndex（SpriteComponentと同じ計算式）
+    const baseZIndex = (pos.y + pos.x) * 1000;
+    graphics.zIndex = baseZIndex + pos.z * 100;
+
+    // グラフィックスを保存
+    this.graphics = graphics;
+
+    // 深度ソートを正しく行うため、キャラクターと同じレイヤー（characters）に追加
+    const layer = rendererSystem.getLayer('characters');
+    if (layer) {
+      layer.addChild(graphics);
+    }
+  }
+
+  /**
+   * アイテムタイプに応じた色を取得
+   */
+  private getItemColor(): number {
+    // インベントリアイテムタイプがある場合はそちらを優先
+    if (this.inventoryItemType) {
+      switch (this.inventoryItemType) {
+        case InventoryItemType.HEALTH_PACK:
+          return 0x00ff00; // 緑
+        case InventoryItemType.ENERGY_CELL:
+          return 0x00ffff; // シアン
+        case InventoryItemType.WEAPON_UPGRADE:
+          return 0xff9900; // オレンジ
+        case InventoryItemType.ARMOR_UPGRADE:
+          return 0x0099ff; // 青
+        case InventoryItemType.KEY_ITEM:
+          return 0xffff00; // 黄色
+        default:
+          break;
+      }
+    }
+
+    // ItemTypeに応じた色
+    switch (this.itemType) {
+      case ItemType.HEALTH:
+        return 0x00ff00; // 緑
+      case ItemType.ENERGY:
+        return 0x00ffff; // シアン
+      case ItemType.WEAPON:
+        return 0xff9900; // オレンジ
+      case ItemType.ARMOR:
+        return 0x0099ff; // 青
+      case ItemType.KEY:
+        return 0xffff00; // 黄色
+      case ItemType.UPGRADE:
+        return 0xff00ff; // マゼンタ
+      case ItemType.CONSUMABLE:
+        return 0xffffff; // 白
+      default:
+        return 0xffffff;
+    }
   }
 
   /**
@@ -352,13 +427,6 @@ export class Item extends Entity {
       this.graphics = null;
     }
 
-    // スプライトを削除
-    const sprite = this.getComponent<SpriteComponent>('sprite');
-    if (sprite) {
-      // スプライトコンポーネントの削除処理
-      this.removeComponent('sprite');
-    }
-
     // エンティティ削除
     super.destroy();
   }
@@ -368,6 +436,13 @@ export class Item extends Entity {
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
   update(deltaTime: number): void {
-    // 将来的な拡張：アイテムの浮遊アニメーション等
+    // 親クラスのupdate()を呼び出してコンポーネントを更新
+    super.update(deltaTime);
+
+    // アイテムが収集済みまたは非アクティブなら非表示
+    // 位置更新は RendererSystem.updateTerrainLayerPositions() で行われる
+    if (this.graphics) {
+      this.graphics.visible = this.active && !this.collected;
+    }
   }
 }

@@ -20,7 +20,8 @@ export class Camera {
   private _targetPosition: Vector2 | null = null;
 
   // スムージング係数（0〜1）- 値が大きいほど動きが素早くなる
-  private _smoothingFactor = 0.1;
+  // 0.15 = 適度なスムーズさ（旧システムと同等）
+  private _smoothingFactor = 0.15;
 
   /**
    * コンストラクタ

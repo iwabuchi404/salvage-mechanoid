@@ -402,21 +402,22 @@ export class FlexibleMapGenerator {
   private placeFeaturesLegacy(map: number[][], rooms: Room[], config: any): any[] {
     const features: any[] = [];
 
-    // 基本的な特徴配置（水場、山など）
-    const featureCount = Math.floor(this.width * this.height * config.density);
+    // 基本的な特徴配置（通行可能なタイルのみ）
+    const featureCount = Math.floor(this.width * this.height * config.density * 0.2); // 密度を1/5に削減
 
     for (let i = 0; i < featureCount; i++) {
       const x = Math.floor(Math.random() * this.width);
       const y = Math.floor(Math.random() * this.height);
 
       if (map[y][x] === TileType.GRASS) {
-        const tileType = Math.random() < 0.7 ? TileType.WATER : TileType.MOUNTAIN;
+        // 通行可能なDAMAGEとHEALタイルのみ配置
+        const tileType = Math.random() < 0.5 ? TileType.DAMAGE : TileType.HEAL;
         map[y][x] = tileType;
 
         features.push({
           x: x,
           y: y,
-          type: tileType === TileType.WATER ? 'water' : 'mountain',
+          type: tileType === TileType.DAMAGE ? 'damage' : 'heal',
           data: { generated: true },
         });
       }

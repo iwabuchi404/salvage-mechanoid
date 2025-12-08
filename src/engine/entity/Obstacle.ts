@@ -46,11 +46,14 @@ export class Obstacle extends Entity {
    */
   async initialize(): Promise<void> {
     // スプライトコンポーネントを追加
+    // アンカーを { x: 0.5, y: 1.0 } に設定して、スプライトの下端がタイルの位置に合うようにする
+    // 深度ソートを正しく行うため、キャラクターと同じレイヤー（characters）に配置
     const texturePath = this.getTexturePath();
-    const spriteComponent = new SpriteComponent(texturePath, 'objects', { x: 0.5, y: 0.5 });
+    const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
     this.addComponent(spriteComponent);
 
-    console.log(`Obstacle initialized: ${this.id} (${this.obstacleType})`);
+    // 親クラスの initialize() を呼び出してコンポーネントを初期化
+    await super.initialize();
   }
 
   /**
@@ -95,6 +98,9 @@ export class Obstacle extends Entity {
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
   update(deltaTime: number): void {
+    // 親クラスのupdate()を呼び出してコンポーネントを更新
+    super.update(deltaTime);
+
     // 破壊可能な障害物の体力チェック
     if (this.destructible) {
       const health = this.getComponent<HealthComponent>('health');

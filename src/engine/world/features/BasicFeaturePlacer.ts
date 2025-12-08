@@ -161,12 +161,13 @@ export class BasicFeaturePlacer extends BaseFeaturePlacer {
     const features: PlacedFeature[] = [];
     const targetCount = Math.floor(this.width * this.height * density);
 
-    // 配置可能な特徴タイプとその重み
+    // 配置可能な特徴タイプとその重み（通行可能なタイプのみ）
     const featureOptions = [
-      { type: FeatureType.WATER, weight: 0.4, tileType: TileType.WATER },
-      { type: FeatureType.MOUNTAIN, weight: 0.3, tileType: TileType.MOUNTAIN },
-      { type: FeatureType.HEAL, weight: 0.2, tileType: TileType.HEAL },
-      { type: FeatureType.PORTAL, weight: 0.1, tileType: TileType.PORTAL },
+      { type: FeatureType.HEAL, weight: 0.6, tileType: TileType.HEAL },
+      { type: FeatureType.DAMAGE, weight: 0.4, tileType: TileType.DAMAGE },
+      // WATERとMOUNTAINは通行不可のため無効化
+      // { type: FeatureType.WATER, weight: 0.4, tileType: TileType.WATER },
+      // { type: FeatureType.MOUNTAIN, weight: 0.3, tileType: TileType.MOUNTAIN },
     ];
 
     let attempts = 0;

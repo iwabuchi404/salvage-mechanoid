@@ -43,10 +43,27 @@ export class EffectManager {
 
       return new Promise((resolve) => {
         setTimeout(() => {
-          if (effect.complete) {
-            effect.complete(sprite);
+          // スプライトが破棄されている場合は何もしない
+          if (!sprite || sprite.destroyed) {
+            this.activeEffects.delete(sprite);
+            resolve();
+            return;
           }
-          console.log(`エフェクト完了: ${effectName}, スプライト位置: (${sprite.x}, ${sprite.y})`);
+
+          if (effect.complete) {
+            try {
+              effect.complete(sprite);
+            } catch (e) {
+              // スプライトが破棄されている場合はエラーを無視
+            }
+          }
+
+          // スプライトが破棄されていない場合のみログ出力
+          if (!sprite.destroyed) {
+            console.log(
+              `エフェクト完了: ${effectName}, スプライト位置: (${sprite.x}, ${sprite.y})`
+            );
+          }
 
           const activeEffectsForSprite = this.activeEffects.get(sprite);
           if (activeEffectsForSprite) {
@@ -56,9 +73,11 @@ export class EffectManager {
             }
             if (activeEffectsForSprite.length === 0) {
               this.activeEffects.delete(sprite);
-              // すべてのエフェクトが完了したら元の位置に戻す
-              sprite.position.copyFrom((sprite as any)._effectOriginalPosition);
-              delete (sprite as any)._effectOriginalPosition;
+              // すべてのエフェクトが完了したら元の位置に戻す（破棄されていない場合のみ）
+              if (!sprite.destroyed && (sprite as any)._effectOriginalPosition) {
+                sprite.position.copyFrom((sprite as any)._effectOriginalPosition);
+                delete (sprite as any)._effectOriginalPosition;
+              }
             }
           }
           resolve();
@@ -76,13 +95,32 @@ export class EffectManager {
 
   private static update(): void {
     const currentTime = Date.now();
+    const spritesToRemove: PIXI.Sprite[] = [];
+
     for (const [sprite, effects] of this.activeEffects.entries()) {
+      // スプライトが破棄されているかチェック
+      if (!sprite || sprite.destroyed) {
+        spritesToRemove.push(sprite);
+        continue;
+      }
+
       for (const { effect, startTime } of effects) {
         if (effect.update) {
           const progress = Math.min((currentTime - startTime) / effect.duration, 1);
-          effect.update(sprite, progress);
+          try {
+            effect.update(sprite, progress);
+          } catch (e) {
+            // スプライトが破棄されている場合はエラーを無視
+            spritesToRemove.push(sprite);
+            break;
+          }
         }
       }
+    }
+
+    // 破棄されたスプライトをactiveEffectsから削除
+    for (const sprite of spritesToRemove) {
+      this.activeEffects.delete(sprite);
     }
 
     if (this.activeEffects.size > 0) {

@@ -81,6 +81,19 @@ export class ResourceGenerationSystem {
     const playerLevel = options.playerLevel || 1;
     const difficulty = options.difficulty || 1;
 
+    // 占有済み位置セット（プレイヤー位置を含む）
+    const occupiedPositions = new Set<string>();
+    if (options.playerStartPos) {
+      // プレイヤー位置とその周囲1マスを配置禁止に
+      const px = options.playerStartPos.x;
+      const py = options.playerStartPos.y;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          occupiedPositions.add(`${px + dx},${py + dy}`);
+        }
+      }
+    }
+
     // 1. 障害物配置
     let obstacles: PlacedObstacle[] = [];
     if (!options.skipObstacles) {
@@ -90,15 +103,31 @@ export class ResourceGenerationSystem {
         rooms,
         corridors,
         tacticalElements,
-        obstacleConfig
+        obstacleConfig,
+        occupiedPositions
       );
+      // 障害物位置を占有済みに追加
+      for (const obs of obstacles) {
+        occupiedPositions.add(`${obs.x},${obs.y}`);
+      }
     }
 
     // 2. アイテム配置
     let items: PlacedItem[] = [];
     if (!options.skipItems) {
       const itemConfig = this.createItemConfig(rooms.length, playerLevel);
-      items = this.itemPlacer.placeItems(map, rooms, obstacles, tacticalElements, itemConfig);
+      items = this.itemPlacer.placeItems(
+        map,
+        rooms,
+        obstacles,
+        tacticalElements,
+        itemConfig,
+        occupiedPositions
+      );
+      // アイテム位置を占有済みに追加
+      for (const item of items) {
+        occupiedPositions.add(`${item.x},${item.y}`);
+      }
     }
 
     // 3. 敵配置
@@ -112,7 +141,8 @@ export class ResourceGenerationSystem {
         obstacles,
         items,
         tacticalElements,
-        enemyConfig
+        enemyConfig,
+        occupiedPositions
       );
     }
 

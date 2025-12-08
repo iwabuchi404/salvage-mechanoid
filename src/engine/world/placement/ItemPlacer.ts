@@ -29,6 +29,7 @@ export class ItemPlacer {
    * @param obstacles 障害物のリスト（配置済み）
    * @param tacticalElements 戦術要素のリスト
    * @param config アイテム配置設定
+   * @param occupiedPositions 配置禁止位置のセット
    * @returns 配置されたアイテムのリスト
    */
   placeItems(
@@ -36,7 +37,8 @@ export class ItemPlacer {
     rooms: Room[],
     obstacles: PlacedObstacle[],
     tacticalElements: TacticalElement[],
-    config: ItemPlacementConfig
+    config: ItemPlacementConfig,
+    occupiedPositions: Set<string> = new Set()
   ): PlacedItem[] {
     console.log('ItemPlacer: Starting item placement...');
     const startTime = performance.now();
@@ -59,12 +61,45 @@ export class ItemPlacer {
     const remainingCount = Math.max(0, itemCount - items.length);
     items.push(...this.placeGeneralItems(rooms, obstacles, config, remainingCount));
 
+    // 6. 障害物と占有済み位置と重複するアイテムをフィルタリング
+    const filteredItems = this.filterOverlappingItems(items, obstacles, occupiedPositions);
+
     const endTime = performance.now();
     console.log(
-      `ItemPlacer: Placed ${items.length} items in ${(endTime - startTime).toFixed(2)}ms`
+      `ItemPlacer: Placed ${filteredItems.length} items in ${(endTime - startTime).toFixed(2)}ms`
     );
 
-    return items;
+    return filteredItems;
+  }
+
+  /**
+   * 障害物と占有済み位置と重複するアイテムをフィルタリング
+   */
+  private filterOverlappingItems(
+    items: PlacedItem[],
+    obstacles: PlacedObstacle[],
+    externalOccupied: Set<string> = new Set()
+  ): PlacedItem[] {
+    const occupiedPositions = new Set<string>(externalOccupied);
+
+    // 障害物の位置を記録
+    for (const obstacle of obstacles) {
+      occupiedPositions.add(`${obstacle.x},${obstacle.y}`);
+    }
+
+    // 重複しないアイテムのみを返す（アイテム同士の重複もチェック）
+    const result: PlacedItem[] = [];
+    const itemPositions = new Set<string>();
+
+    for (const item of items) {
+      const posKey = `${item.x},${item.y}`;
+      if (!occupiedPositions.has(posKey) && !itemPositions.has(posKey)) {
+        result.push(item);
+        itemPositions.add(posKey);
+      }
+    }
+
+    return result;
   }
 
   /**

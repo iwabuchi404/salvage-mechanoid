@@ -110,12 +110,25 @@ export class Engine {
     const deltaTime = timestamp - this.lastTime;
     this.lastTime = timestamp;
 
-    // すべてのシステムを更新
+    // レンダリングシステムを最後に更新するために一時的に保持
+    const rendererSystem = this.systems.get('renderer');
+
+    // まずレンダリング以外のシステムを更新
     for (const [name, system] of this.systems.entries()) {
+      if (name === 'renderer') continue;
       try {
         system.update(deltaTime);
       } catch (error) {
         console.error(`Error updating system "${name}":`, error);
+      }
+    }
+
+    // 最後にレンダリングシステムを更新
+    if (rendererSystem) {
+      try {
+        rendererSystem.update(deltaTime);
+      } catch (error) {
+        console.error('Error updating system "renderer":', error);
       }
     }
 

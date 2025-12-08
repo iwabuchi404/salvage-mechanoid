@@ -27,6 +27,7 @@ export class ObstaclePlacer {
    * @param corridors 通路のリスト
    * @param tacticalElements 戦術要素のリスト
    * @param config 障害物配置設定
+   * @param occupiedPositions 配置禁止位置のセット
    * @returns 配置された障害物のリスト
    */
   placeObstacles(
@@ -34,7 +35,8 @@ export class ObstaclePlacer {
     rooms: Room[],
     corridors: Corridor[],
     tacticalElements: TacticalElement[],
-    config: ObstaclePlacementConfig
+    config: ObstaclePlacementConfig,
+    occupiedPositions: Set<string> = new Set()
   ): PlacedObstacle[] {
     console.log('ObstaclePlacer: Starting obstacle placement...');
     console.log('ObstaclePlacer: Config:', {
@@ -74,14 +76,24 @@ export class ObstaclePlacer {
     console.log(`ObstaclePlacer: Interactive obstacles: ${interactives.length}`);
     obstacles.push(...interactives);
 
+    // 占有済み位置と重複する障害物を除外
+    const filteredObstacles = obstacles.filter((obs) => {
+      const key = `${obs.x},${obs.y}`;
+      if (occupiedPositions.has(key)) {
+        return false;
+      }
+      return true;
+    });
+
     const endTime = performance.now();
+    const filteredCount = obstacles.length - filteredObstacles.length;
     console.log(
-      `ObstaclePlacer: Placed ${obstacles.length} obstacles in ${(endTime - startTime).toFixed(
-        2
-      )}ms`
+      `ObstaclePlacer: Placed ${
+        filteredObstacles.length
+      } obstacles (${filteredCount} filtered) in ${(endTime - startTime).toFixed(2)}ms`
     );
 
-    return obstacles;
+    return filteredObstacles;
   }
 
   /**

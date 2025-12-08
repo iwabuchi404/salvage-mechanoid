@@ -173,8 +173,8 @@ export class MapGenerator {
    * @param map マップデータ
    */
   private addRandomFeatures(map: number[][]) {
-    // 特徴の数を決定（マップサイズに比例）
-    const featureCount = Math.floor(this.width * this.height * 0.01);
+    // 特徴の数を決定（マップサイズに比例、大幅に削減）
+    const featureCount = Math.floor(this.width * this.height * 0.002); // 0.01 → 0.002に変更
 
     for (let i = 0; i < featureCount; i++) {
       const x = Math.floor(Math.random() * this.width);
@@ -182,8 +182,9 @@ export class MapGenerator {
 
       // GRASSタイルにのみ特徴を追加
       if (map[y][x] === TileType.GRASS) {
-        // ランダムに水場か山を配置
-        map[y][x] = Math.random() < 0.7 ? TileType.WATER : TileType.MOUNTAIN;
+        // 通行可能な特徴のみ配置（DAMAGE, HEALなど）
+        // WATERとMOUNTAINは配置しない
+        map[y][x] = Math.random() < 0.5 ? TileType.DAMAGE : TileType.HEAL;
       }
     }
   }

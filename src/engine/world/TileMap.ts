@@ -37,6 +37,27 @@ export class TileMap {
   }
 
   /**
+   * マップの幅を取得
+   */
+  getWidth(): number {
+    return this.width;
+  }
+
+  /**
+   * マップの高さを取得
+   */
+  getHeight(): number {
+    return this.height;
+  }
+
+  /**
+   * マップの深さを取得
+   */
+  getDepth(): number {
+    return this.depth;
+  }
+
+  /**
    * タイルの座標からユニークなキーを生成
    * @param x X座標
    * @param y Y座標
@@ -109,7 +130,11 @@ export class TileMap {
    * @returns タイル、または undefined
    */
   getTile(x: number, y: number, z = 0): Tile | undefined {
-    const key = this.getTileKey(x, y, z);
+    // 座標を整数に丸める
+    const intX = Math.round(x);
+    const intY = Math.round(y);
+    const intZ = Math.round(z);
+    const key = this.getTileKey(intX, intY, intZ);
     return this.tiles.get(key);
   }
 
@@ -121,12 +146,17 @@ export class TileMap {
    * @returns 通行可能な場合はtrue
    */
   isWalkable(x: number, y: number, z = 0): boolean {
+    // 座標を整数に丸める
+    const intX = Math.round(x);
+    const intY = Math.round(y);
+    const intZ = Math.round(z);
+
     // 範囲外は通行不可
-    if (!this.isInBounds(x, y, z)) {
+    if (!this.isInBounds(intX, intY, intZ)) {
       return false;
     }
 
-    const tile = this.getTile(x, y, z);
+    const tile = this.getTile(intX, intY, intZ);
     return tile ? tile.walkable : false;
   }
 
@@ -192,16 +222,16 @@ export class TileMap {
     // タイルタイプに応じて通行可能かどうかを判定
     // 実装に応じてカスタマイズ可能
     switch (type) {
-      case TileType.GRASS:
-      case TileType.TILE:
-      case TileType.PORTAL:
-      case TileType.HEAL:
+      case TileType.GRASS: // 1 - 草地（床）
+      case TileType.TILE: // 4 - タイル（床）
+      case TileType.PORTAL: // 5 - ポータル（通行可能）
+      case TileType.HEAL: // 7 - 回復床（通行可能）
+      case TileType.DAMAGE: // 6 - ダメージ床（通行可能だがダメージを受ける）
         return true;
 
-      case TileType.EMPTY:
-      case TileType.WATER:
-      case TileType.MOUNTAIN:
-      case TileType.DAMAGE:
+      case TileType.EMPTY: // 0 - 空（通行不可）
+      case TileType.WATER: // 2 - 水（通行不可）
+      case TileType.MOUNTAIN: // 3 - 山・壁（通行不可）
         return false;
 
       default:
@@ -227,6 +257,33 @@ export class TileMap {
   clear(): void {
     this.tiles.clear();
     console.log('TileMap cleared');
+  }
+
+  /**
+   * ランダムな床タイルの位置を取得
+   * @returns 床タイルの位置、見つからない場合はnull
+   */
+  getRandomFloorTile(): Vector2 | null {
+    const floorTiles: Vector2[] = [];
+
+    // すべての床タイルを収集
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const tile = this.getTile(x, y);
+        if (tile && (tile.type as any) === 'floor') {
+          floorTiles.push({ x, y });
+        }
+      }
+    }
+
+    if (floorTiles.length === 0) {
+      console.warn('No floor tiles found');
+      return null;
+    }
+
+    // ランダムに1つ選択
+    const randomIndex = Math.floor(Math.random() * floorTiles.length);
+    return floorTiles[randomIndex];
   }
 
   /**
