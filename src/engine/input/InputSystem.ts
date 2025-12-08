@@ -101,11 +101,11 @@ export class InputSystem implements System {
       this.handleMouseClick(event);
     });
 
-    // ホバーイベント（将来の拡張用）
+    // ホバーイベント
     this.canvas.addEventListener('mousemove', (event) => {
       if (!this.inputEnabled) return;
 
-      // 現在は何もしないが、ホバーハイライトなどに使用可能
+      this.handleMouseMove(event);
     });
   }
 
@@ -129,6 +129,46 @@ export class InputSystem implements System {
     });
 
     console.log(`Screen clicked at: (${x}, ${y})`);
+  }
+
+  /**
+   * マウス移動を処理
+   * @param event マウスイベント
+   */
+  private handleMouseMove(event: MouseEvent): void {
+    if (!this.canvas) return;
+
+    // マウスがボタンやUIエレメント上にある場合はスキップ
+    const target = event.target as HTMLElement;
+    if (target && target !== this.canvas) {
+      // ハイライトを非表示にするイベントを発行
+      this.eventSystem?.emit('screen_hovered', {
+        screenX: -1,
+        screenY: -1,
+      });
+      return;
+    }
+
+    // キャンバス相対座標を取得
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // キャンバス外の場合もスキップ
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+      this.eventSystem?.emit('screen_hovered', {
+        screenX: -1,
+        screenY: -1,
+      });
+      return;
+    }
+
+    // スクリーン座標でのホバーイベントを発行
+    // InteractionSystemで座標変換とタイル検索を行う
+    this.eventSystem?.emit('screen_hovered', {
+      screenX: x,
+      screenY: y,
+    });
   }
 
   /**

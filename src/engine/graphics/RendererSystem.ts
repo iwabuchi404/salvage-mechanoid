@@ -25,6 +25,18 @@ export class RendererSystem implements System {
   // カメラシステム
   private camera: Camera;
 
+  // ハイライトレイヤー（タイルホバー用）
+  private highlightLayer: PIXI.Container | null = null;
+
+  // 現在ホバー中のタイル座標
+  private hoveredTile: { x: number; y: number } | null = null;
+
+  // ハイライトグラフィックス
+  private highlightGraphics: PIXI.Graphics | null = null;
+
+  // タイルマップデータ（タイルの存在判定用）
+  private tileMapData: number[][] | null = null;
+
   // レンダラーの設定
   private config = {
     backgroundColor: 0x202020,
@@ -83,11 +95,15 @@ export class RendererSystem implements System {
     // レイヤーをセットアップ
     this.setupLayers();
 
+    // ハイライトレイヤーをセットアップ
+    this.setupHighlightLayer();
+
     // イベントシステムとの連携
     const eventSystem = engine.getSystem<EventSystem>('event');
     if (eventSystem) {
       eventSystem.on('render_entity', this.renderEntity.bind(this));
-      console.log("Registered for 'render_entity' events");
+      eventSystem.on('tile_hovered', this.handleTileHover.bind(this));
+      console.log("Registered for 'render_entity' and 'tile_hovered' events");
     } else {
       console.warn('EventSystem not found, rendering events will not be processed');
     }
@@ -203,6 +219,7 @@ export class RendererSystem implements System {
     // カメラが移動した場合のみテレイン更新（パフォーマンス最適化）
     if (this.camera.x !== this.lastCameraX || this.camera.y !== this.lastCameraY) {
       this.updateTerrainLayerPositions();
+      this.updateHighlight(); // カメラ移動時にハイライトも更新
       this.lastCameraX = this.camera.x;
       this.lastCameraY = this.camera.y;
     }
@@ -301,6 +318,9 @@ export class RendererSystem implements System {
   async renderTileMap(tileMap: number[][]): Promise<void> {
     console.log(`Rendering tilemap: ${tileMap[0]?.length}x${tileMap.length}`);
 
+    // タイルマップデータを保存（ハイライト判定用）
+    this.tileMapData = tileMap;
+
     const terrainLayer = this.layers.get(LayerName.TERRAIN);
     if (!terrainLayer) {
       console.warn('Terrain layer not found');
@@ -375,5 +395,128 @@ export class RendererSystem implements System {
       default:
         return './image.png';
     }
+  }
+
+  /**
+   * ハイライトレイヤーをセットアップ
+   */
+  private setupHighlightLayer(): void {
+    // タイル(TERRAIN: 100)とオブジェクト(OBJECTS: 200)の間にハイライトレイヤーを配置
+    this.highlightLayer = new PIXI.Container();
+    this.highlightLayer.sortableChildren = true;
+    this.highlightLayer.zIndex = 150; // TERRAINとOBJECTSの間
+
+    this.app!.stage.addChild(this.highlightLayer);
+
+    // ハイライトグラフィックスを作成
+    this.highlightGraphics = new PIXI.Graphics();
+    this.highlightLayer.addChild(this.highlightGraphics);
+
+    console.log('Highlight layer created with zIndex: 150 (between TERRAIN and OBJECTS)');
+  }
+
+  /**
+   * タイルホバーイベントを処理
+   * @param data イベントデータ
+   */
+  private handleTileHover(data: { position: { x: number; y: number } | null }): void {
+    // positionがnullの場合はハイライトを非表示
+    if (!data.position) {
+      this.hoveredTile = null;
+      this.clearHighlight();
+      return;
+    }
+
+    const { x, y } = data.position;
+
+    // タイルマップデータが存在し、タイルが有効かチェック
+    if (this.tileMapData) {
+      // 範囲外チェック
+      if (y < 0 || y >= this.tileMapData.length || x < 0 || x >= this.tileMapData[0]?.length) {
+        this.hoveredTile = null;
+        this.clearHighlight();
+        return;
+      }
+
+      // タイルが存在するかチェック（0は空タイル）
+      if (this.tileMapData[y][x] === 0) {
+        this.hoveredTile = null;
+        this.clearHighlight();
+        return;
+      }
+    }
+
+    // 同じタイルをホバー中の場合は何もしない
+    if (this.hoveredTile && this.hoveredTile.x === x && this.hoveredTile.y === y) {
+      return;
+    }
+
+    // 新しいタイルをホバー
+    this.hoveredTile = { x, y };
+    this.updateHighlight();
+  }
+
+  /**
+   * ハイライトをクリア
+   */
+  private clearHighlight(): void {
+    if (this.highlightGraphics) {
+      this.highlightGraphics.clear();
+    }
+  }
+
+  /**
+   * ハイライトを更新
+   */
+  private updateHighlight(): void {
+    if (!this.highlightGraphics || !this.hoveredTile) {
+      return;
+    }
+
+    // グラフィックスをクリア
+    this.highlightGraphics.clear();
+
+    // アイソメトリック座標をスクリーン座標に変換
+    const screenPos = this.coordinateSystem.isometricToScreen(
+      this.hoveredTile.x,
+      this.hoveredTile.y,
+      0
+    );
+
+    // カメラオフセットを適用
+    const displayX = screenPos.x - this.camera.x;
+    const displayY = screenPos.y - this.camera.y;
+
+    // タイルサイズを取得
+    const tileWidth = this.coordinateSystem.getTileWidth();
+    const tileHeight = this.coordinateSystem.getTileHeight();
+
+    // アイソメトリックダイヤモンド形状を描画
+    // CoordinateSystemでは tileHeight / 3 を使用しているため、
+    // 実際のダイヤモンドの高さは tileHeight / 3 * 2 = tileHeight * 2 / 3
+    const halfWidth = tileWidth / 2;
+    const halfHeight = tileHeight / 3; // tileHeight / 3 を使用
+
+    // ハイライトを少し上に調整
+    const offsetY = -tileHeight / 6; // 上方向に少しオフセット (120/6 = 20px上)
+
+    // 半透明のオレンジでハイライト
+    this.highlightGraphics.poly([
+      { x: displayX, y: displayY + offsetY - halfHeight }, // 上
+      { x: displayX + halfWidth, y: displayY + offsetY }, // 右
+      { x: displayX, y: displayY + offsetY + halfHeight }, // 下
+      { x: displayX - halfWidth, y: displayY + offsetY }, // 左
+    ]);
+    this.highlightGraphics.fill({ color: 0xffa500, alpha: 0.3 }); // オレンジ色
+
+    // 枠線を描画
+    this.highlightGraphics.poly([
+      { x: displayX, y: displayY + offsetY - halfHeight }, // 上
+      { x: displayX + halfWidth, y: displayY + offsetY }, // 右
+      { x: displayX, y: displayY + offsetY + halfHeight }, // 下
+      { x: displayX - halfWidth, y: displayY + offsetY }, // 左
+      { x: displayX, y: displayY + offsetY - halfHeight }, // 上（閉じる）
+    ]);
+    this.highlightGraphics.stroke({ width: 2, color: 0xffa500, alpha: 0.8 }); // オレンジ色
   }
 }

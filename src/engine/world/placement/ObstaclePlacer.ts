@@ -61,18 +61,18 @@ export class ObstaclePlacer {
 
     // 3. 部屋内の遮蔽物配置（後で敵が使える）
     if (config.coverDensity > 0) {
-      const cover = this.placeCoverObjects(rooms, config, map, corridors);
+      const cover = this.placeCoverObjects(rooms, config, map, corridors, obstacles);
       console.log(`ObstaclePlacer: Cover obstacles: ${cover.length}`);
       obstacles.push(...cover);
     }
 
     // 4. 破壊可能オブジェクトの配置
-    const destructibles = this.placeDestructibles(rooms, config, map, corridors);
+    const destructibles = this.placeDestructibles(rooms, config, map, corridors, obstacles);
     console.log(`ObstaclePlacer: Destructible obstacles: ${destructibles.length}`);
     obstacles.push(...destructibles);
 
     // 5. インタラクティブオブジェクトの配置
-    const interactives = this.placeInteractives(rooms, config, map, corridors);
+    const interactives = this.placeInteractives(rooms, config, map, corridors, obstacles);
     console.log(`ObstaclePlacer: Interactive obstacles: ${interactives.length}`);
     obstacles.push(...interactives);
 
@@ -138,16 +138,20 @@ export class ObstaclePlacer {
         const midX = Math.floor((corridor.startX + corridor.endX) / 2);
         const midY = Math.floor((corridor.startY + corridor.endY) / 2);
 
-        // 通路の中間地点付近に障害物配置（通路を塞がないかチェック）
-        if (this.canPlaceObstacle(map, midX, midY, obstacles)) {
-          obstacles.push({
-            id: `obstacle_choke_${Date.now()}_${obstacles.length}`,
-            type: Math.random() < 0.5 ? ObstacleType.BARREL : ObstacleType.CRATE,
-            x: midX,
-            y: midY,
-            destructible: true,
-            health: 75,
-          });
+        const candidates = this.getChokePointCandidates(map, corridor, midX, midY);
+
+        for (const { x, y } of candidates) {
+          if (this.canPlaceObstacle(map, x, y, obstacles)) {
+            obstacles.push({
+              id: `obstacle_choke_${Date.now()}_${obstacles.length}`,
+              type: Math.random() < 0.5 ? ObstacleType.BARREL : ObstacleType.CRATE,
+              x,
+              y,
+              destructible: true,
+              health: 75,
+            });
+            break; // 1つ配置したら次の通路へ
+          }
         }
       }
     }
@@ -161,10 +165,12 @@ export class ObstaclePlacer {
   private placeCoverObjects(
     rooms: Room[],
     config: ObstaclePlacementConfig,
-    map?: number[][],
-    corridors?: Corridor[]
+    map: number[][] | undefined,
+    corridors: Corridor[] | undefined,
+    existingObstacles: PlacedObstacle[]
   ): PlacedObstacle[] {
     const obstacles: PlacedObstacle[] = [];
+    const combinedObstacles = [...existingObstacles];
 
     console.log(`placeCoverObjects: Processing ${rooms.length} rooms`);
 
@@ -183,33 +189,16 @@ export class ObstaclePlacer {
       );
 
       let attempts = 0;
-      const maxAttempts = coverCount * 5; // 試行回数制限を増やす
+      const maxAttempts = coverCount * 5; // 試行回数制限
       let placed = 0;
       let rejected = 0;
 
-      for (let i = 0; i < coverCount && attempts < maxAttempts; attempts++) {
-        // 70%の確率で壁際を優先、30%でランダム配置
-        let x: number, y: number;
-        let isWallPosition = false;
-
-        if (Math.random() < 0.7) {
-          // 壁際を優先的に選択
-          const wallPositions = this.getWallAdjacentPositions(room);
-          if (wallPositions.length > 0) {
-            const pos = wallPositions[Math.floor(Math.random() * wallPositions.length)];
-            x = pos.x;
-            y = pos.y;
-            isWallPosition = true;
-          } else {
-            // 壁際がない場合はランダム
-            x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
-            y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
-          }
-        } else {
-          // ランダムな位置を選択（壁際も含む）
-          x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
-          y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
-        }
+      for (let i = 0; i < coverCount && attempts < maxAttempts; ) {
+        attempts++;
+        const widthRange = Math.max(1, room.width);
+        const heightRange = Math.max(1, room.height);
+        const x = room.x + Math.floor(Math.random() * widthRange);
+        const y = room.y + Math.floor(Math.random() * heightRange);
 
         // mapが提供されていない場合は基本チェックのみ
         if (!map) {
@@ -234,28 +223,38 @@ export class ObstaclePlacer {
         }
 
         // 通路を塞がないかチェック
-        if (this.canPlaceObstacle(map, x, y, obstacles)) {
+        if (!map) {
+          if (combinedObstacles.find((obs) => obs.x === x && obs.y === y)) {
+            continue;
+          }
           const obstacleType = this.selectObstacleType(config.obstacleTypes);
-
-          // 壁際かどうかを判定
-          const isAtWall =
-            x === room.x + 1 ||
-            x === room.x + room.width - 2 ||
-            y === room.y + 1 ||
-            y === room.y + room.height - 2;
-
-          obstacles.push({
+          const obstacle = {
             id: `obstacle_cover_${Date.now()}_${obstacles.length}`,
             type: obstacleType,
             x,
             y,
             destructible: obstacleType !== ObstacleType.WALL,
             health: this.getObstacleHealth(obstacleType),
-          });
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
+          i++;
+          placed++;
+          continue;
+        }
 
-          if (isAtWall) {
-            console.log(`      ✓ Wall-adjacent: (${x}, ${y})`);
-          }
+        if (this.canPlaceObstacle(map, x, y, combinedObstacles)) {
+          const obstacleType = this.selectObstacleType(config.obstacleTypes);
+          const obstacle = {
+            id: `obstacle_cover_${Date.now()}_${obstacles.length}`,
+            type: obstacleType,
+            x,
+            y,
+            destructible: obstacleType !== ObstacleType.WALL,
+            health: this.getObstacleHealth(obstacleType),
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
 
           i++;
           placed++;
@@ -276,10 +275,12 @@ export class ObstaclePlacer {
   private placeDestructibles(
     rooms: Room[],
     config: ObstaclePlacementConfig,
-    map?: number[][],
-    corridors?: Corridor[]
+    map: number[][] | undefined,
+    corridors: Corridor[] | undefined,
+    existingObstacles: PlacedObstacle[]
   ): PlacedObstacle[] {
     const obstacles: PlacedObstacle[] = [];
+    const combinedObstacles = [...existingObstacles];
 
     // 総障害物数を決定
     const totalCount = Math.floor(
@@ -304,22 +305,10 @@ export class ObstaclePlacer {
       for (let i = 0; i < 3 && obstacles.length < targetCount && attempts < maxAttempts; i++) {
         attempts++;
 
-        // 70%の確率で壁際を優先
-        let x: number, y: number;
-        if (Math.random() < 0.7) {
-          const wallPositions = this.getWallAdjacentPositions(room);
-          if (wallPositions.length > 0) {
-            const pos = wallPositions[Math.floor(Math.random() * wallPositions.length)];
-            x = pos.x;
-            y = pos.y;
-          } else {
-            x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
-            y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
-          }
-        } else {
-          x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
-          y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
-        }
+        const widthRange = Math.max(1, room.width);
+        const heightRange = Math.max(1, room.height);
+        const x = room.x + Math.floor(Math.random() * widthRange);
+        const y = room.y + Math.floor(Math.random() * heightRange);
 
         // mapが提供されていない場合は基本チェックのみ
         if (!map) {
@@ -342,23 +331,34 @@ export class ObstaclePlacer {
         }
 
         // 通路を塞がないかチェック
-        if (this.canPlaceObstacle(map, x, y, obstacles)) {
-          // 壁際かどうかをチェック
-          const wallPositions = this.getWallAdjacentPositions(room);
-          const isWallAdjacent = wallPositions.some((pos) => pos.x === x && pos.y === y);
-
-          if (isWallAdjacent) {
-            console.log(`      ✓ Wall-adjacent destructible: (${x}, ${y})`);
+        if (!map) {
+          if (combinedObstacles.find((obs) => obs.x === x && obs.y === y)) {
+            continue;
           }
-
-          obstacles.push({
+          const obstacle = {
             id: `obstacle_dest_${Date.now()}_${obstacles.length}`,
             type: ObstacleType.DEBRIS,
             x,
             y,
             destructible: true,
             health: 30,
-          });
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
+          continue;
+        }
+
+        if (this.canPlaceObstacle(map, x, y, combinedObstacles)) {
+          const obstacle = {
+            id: `obstacle_dest_${Date.now()}_${obstacles.length}`,
+            type: ObstacleType.DEBRIS,
+            x,
+            y,
+            destructible: true,
+            health: 30,
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
         }
       }
 
@@ -379,10 +379,12 @@ export class ObstaclePlacer {
   private placeInteractives(
     rooms: Room[],
     config: ObstaclePlacementConfig,
-    map?: number[][],
-    corridors?: Corridor[]
+    map: number[][] | undefined,
+    corridors: Corridor[] | undefined,
+    existingObstacles: PlacedObstacle[]
   ): PlacedObstacle[] {
     const obstacles: PlacedObstacle[] = [];
+    const combinedObstacles = [...existingObstacles];
 
     // コンソールタイプが利用可能な場合のみ配置
     if (!config.obstacleTypes?.includes(ObstacleType.CONSOLE)) {
@@ -392,19 +394,25 @@ export class ObstaclePlacer {
     // 大きな部屋にコンソールを配置
     for (const room of rooms) {
       if (room.width >= 8 && room.height >= 8 && Math.random() < 0.3) {
-        // 部屋の角にコンソール配置
-        const x = room.x + 1;
-        const y = room.y + 1;
+        const widthRange = Math.max(1, room.width);
+        const heightRange = Math.max(1, room.height);
+        const x = room.x + Math.floor(Math.random() * widthRange);
+        const y = room.y + Math.floor(Math.random() * heightRange);
 
         // mapが提供されていない場合は基本チェックのみ
         if (!map) {
-          obstacles.push({
+          if (combinedObstacles.find((obs) => obs.x === x && obs.y === y)) {
+            continue;
+          }
+          const obstacle = {
             id: `obstacle_console_${Date.now()}_${obstacles.length}`,
             type: ObstacleType.CONSOLE,
             x,
             y,
             destructible: false,
-          });
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
           continue;
         }
 
@@ -414,14 +422,16 @@ export class ObstaclePlacer {
         }
 
         // 通路を塞がないかチェック（コンソールは部屋の角なので通常は問題ないが念のため）
-        if (this.canPlaceObstacle(map, x, y, obstacles)) {
-          obstacles.push({
+        if (this.canPlaceObstacle(map, x, y, combinedObstacles)) {
+          const obstacle = {
             id: `obstacle_console_${Date.now()}_${obstacles.length}`,
             type: ObstacleType.CONSOLE,
             x,
             y,
             destructible: false,
-          });
+          };
+          obstacles.push(obstacle);
+          combinedObstacles.push(obstacle);
         }
       }
     }
@@ -437,28 +447,92 @@ export class ObstaclePlacer {
   private getWallAdjacentPositions(room: Room): Array<{ x: number; y: number }> {
     const positions: Array<{ x: number; y: number }> = [];
 
-    // 部屋の内側で、壁に隣接する位置を取得
-    // 上壁際（壁の1マス下）
-    for (let x = room.x + 1; x < room.x + room.width - 1; x++) {
-      positions.push({ x, y: room.y + 1 });
+    // 部屋の外周セル（壁上）を含める
+    // 上壁
+    for (let x = room.x; x < room.x + room.width; x++) {
+      positions.push({ x, y: room.y });
     }
 
-    // 下壁際（壁の1マス上）
-    for (let x = room.x + 1; x < room.x + room.width - 1; x++) {
-      positions.push({ x, y: room.y + room.height - 2 });
+    // 下壁
+    for (let x = room.x; x < room.x + room.width; x++) {
+      positions.push({ x, y: room.y + room.height - 1 });
     }
 
-    // 左壁際（壁の1マス右）
+    // 左壁（角は重複するので1を足して開始）
     for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
-      positions.push({ x: room.x + 1, y });
+      positions.push({ x: room.x, y });
     }
 
-    // 右壁際（壁の1マス左）
+    // 右壁
     for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
-      positions.push({ x: room.x + room.width - 2, y });
+      positions.push({ x: room.x + room.width - 1, y });
     }
 
     return positions;
+  }
+
+  /**
+   * 部屋内で使用可能な壁際候補を取得
+   */
+  private getRoomWallCandidates(
+    room: Room,
+    rooms: Room[],
+    map?: number[][],
+    corridors?: Corridor[]
+  ): Array<{ x: number; y: number }> {
+    const positions = this.getWallAdjacentPositions(room);
+    return positions.filter(({ x, y }) => {
+      if (map && !this.isWalkable(map, x, y)) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * 通路の壁際に配置するための候補座標を取得
+   * 壁側を優先し、最後に中央をフォールバック候補として追加
+   */
+  private getChokePointCandidates(
+    map: number[][],
+    corridor: Corridor,
+    midX: number,
+    midY: number
+  ): Array<{ x: number; y: number }> {
+    const candidates: Array<{ x: number; y: number }> = [];
+    const deltaX = Math.abs(corridor.endX - corridor.startX);
+    const deltaY = Math.abs(corridor.endY - corridor.startY);
+
+    const addCandidate = (x: number, y: number) => {
+      if (!this.isWalkable(map, x, y)) {
+        return;
+      }
+      const key = `${x},${y}`;
+      if (!candidates.find((pos) => `${pos.x},${pos.y}` === key)) {
+        candidates.push({ x, y });
+      }
+    };
+
+    if (deltaX > deltaY) {
+      // 横方向の通路 → 上下の壁際を優先
+      addCandidate(midX, midY - 1);
+      addCandidate(midX, midY + 1);
+    } else if (deltaY > deltaX) {
+      // 縦方向の通路 → 左右の壁際を優先
+      addCandidate(midX - 1, midY);
+      addCandidate(midX + 1, midY);
+    } else {
+      // 斜めや短い通路 → 周囲4方向を試す
+      addCandidate(midX - 1, midY);
+      addCandidate(midX + 1, midY);
+      addCandidate(midX, midY - 1);
+      addCandidate(midX, midY + 1);
+    }
+
+    // フォールバックとして中央も候補に含める
+    addCandidate(midX, midY);
+
+    return candidates;
   }
 
   /**

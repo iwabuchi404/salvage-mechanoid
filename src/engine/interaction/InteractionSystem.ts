@@ -78,6 +78,11 @@ export class InteractionSystem implements System {
     this.eventSystem.on('screen_clicked', (data) => {
       this.handleScreenClick(data.screenX, data.screenY);
     });
+
+    // スクリーンホバー時にタイルをハイライト
+    this.eventSystem.on('screen_hovered', (data) => {
+      this.handleScreenHover(data.screenX, data.screenY);
+    });
   }
 
   /**
@@ -300,5 +305,44 @@ export class InteractionSystem implements System {
     } else {
       console.log(`No tile found at (${gridX}, ${gridY})`);
     }
+  }
+
+  /**
+   * スクリーンホバーを処理してタイルをハイライト
+   * @param screenX スクリーンX座標
+   * @param screenY スクリーンY座標
+   */
+  private handleScreenHover(screenX: number, screenY: number): void {
+    if (!this.rendererSystem) {
+      return;
+    }
+
+    // 無効な座標の場合はハイライトを非表示
+    if (screenX < 0 || screenY < 0) {
+      this.eventSystem?.emit('tile_hovered', {
+        position: null,
+      });
+      return;
+    }
+
+    // カメラと座標変換システムを取得
+    const camera = this.rendererSystem.getCamera();
+    const coordSystem = this.rendererSystem.getCoordinateSystem();
+
+    // 表示座標からスクリーン座標に変換（カメラオフセットを追加）
+    const worldScreenX = screenX + camera.x;
+    const worldScreenY = screenY + camera.y;
+
+    // スクリーン座標からグリッド座標に変換
+    const gridPos = coordSystem.screenToIsometric(worldScreenX, worldScreenY);
+
+    // グリッド座標を整数に丸める
+    const intX = Math.round(gridPos.x);
+    const intY = Math.round(gridPos.y);
+
+    // タイルホバーイベントを発行（タイルの存在チェックはRendererSystemで行う）
+    this.eventSystem?.emit('tile_hovered', {
+      position: { x: intX, y: intY },
+    });
   }
 }

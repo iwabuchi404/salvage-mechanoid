@@ -57,31 +57,34 @@ export class EnemyPlacer {
 
     // 2. ボス部屋の敵配置
     if (config.allowBoss) {
-      enemies.push(...this.placeBossEnemies(rooms, config));
+      enemies.push(...this.placeBossEnemies(map, rooms, config));
     }
 
     // 3. 障害物の後ろに狙撃手を配置
-    enemies.push(...this.placeCoverEnemies(rooms, obstacles, config));
+    enemies.push(...this.placeCoverEnemies(map, rooms, obstacles, config));
 
     // 4. アイテムを守る敵を配置
-    enemies.push(...this.placeGuardEnemies(items, rooms, config));
+    enemies.push(...this.placeGuardEnemies(map, items, rooms, config));
 
     // 5. 戦術要素に基づく敵配置
-    enemies.push(...this.placeTacticalEnemies(tacticalElements, config));
+    enemies.push(...this.placeTacticalEnemies(map, tacticalElements, config));
 
     // 6. チョークポイントの敵配置
-    enemies.push(...this.placeChokeEnemies(corridors, rooms, config));
+    enemies.push(...this.placeChokeEnemies(map, corridors, rooms, config));
 
     // 7. 巡回敵の配置
     const remainingCount = Math.max(0, enemyCount - enemies.length);
-    enemies.push(...this.placePatrolEnemies(rooms, corridors, obstacles, config, remainingCount));
+    enemies.push(
+      ...this.placePatrolEnemies(map, rooms, corridors, obstacles, config, remainingCount)
+    );
 
     // 8. 一般敵の配置（残り）
     const finalCount = Math.max(0, enemyCount - enemies.length);
-    enemies.push(...this.placeGeneralEnemies(rooms, obstacles, items, config, finalCount));
+    enemies.push(...this.placeGeneralEnemies(map, rooms, obstacles, items, config, finalCount));
 
     // 9. 障害物やアイテムと重複する敵をフィルタリング（占有済み位置も考慮）
     const filteredEnemies = this.filterOverlappingEnemies(
+      map,
       enemies,
       obstacles,
       items,
@@ -102,6 +105,7 @@ export class EnemyPlacer {
    * 障害物やアイテムと重複する敵をフィルタリング
    */
   private filterOverlappingEnemies(
+    map: number[][],
     enemies: PlacedEnemy[],
     obstacles: PlacedObstacle[],
     items: PlacedItem[],
@@ -126,6 +130,9 @@ export class EnemyPlacer {
 
     for (const enemy of enemies) {
       const posKey = `${enemy.x},${enemy.y}`;
+      if (!this.isWalkableTile(map, enemy.x, enemy.y)) {
+        continue;
+      }
       if (!occupiedPositions.has(posKey) && !enemyPositions.has(posKey)) {
         result.push(enemy);
         enemyPositions.add(posKey);
@@ -149,7 +156,11 @@ export class EnemyPlacer {
   /**
    * ボス部屋への敵配置
    */
-  private placeBossEnemies(rooms: Room[], config: EnemyPlacementConfig): PlacedEnemy[] {
+  private placeBossEnemies(
+    map: number[][],
+    rooms: Room[],
+    config: EnemyPlacementConfig
+  ): PlacedEnemy[] {
     const enemies: PlacedEnemy[] = [];
 
     // ボス部屋を検索
@@ -160,28 +171,32 @@ export class EnemyPlacer {
       const centerX = bossRoom.x + Math.floor(bossRoom.width / 2);
       const centerY = bossRoom.y + Math.floor(bossRoom.height / 2);
 
-      enemies.push({
-        id: `enemy_boss_${Date.now()}_${enemies.length}`,
-        type: EnemyType.BOSS,
-        x: centerX,
-        y: centerY,
-        level: config.difficultyLevel * 2,
-        behavior: EnemyBehavior.AGGRESSIVE,
-      });
+      if (this.isWalkableTile(map, centerX, centerY)) {
+        enemies.push({
+          id: `enemy_boss_${Date.now()}_${enemies.length}`,
+          type: EnemyType.BOSS,
+          x: centerX,
+          y: centerY,
+          level: config.difficultyLevel * 2,
+          behavior: EnemyBehavior.AGGRESSIVE,
+        });
+      }
 
       // ボスの護衛を配置（2-3体）
       const guardCount = 2 + Math.floor(Math.random() * 2);
       const guardPositions = this.getCircularPositions(centerX, centerY, 3, guardCount);
 
       for (const pos of guardPositions) {
-        enemies.push({
-          id: `enemy_guard_${Date.now()}_${enemies.length}`,
-          type: EnemyType.HEAVY,
-          x: pos.x,
-          y: pos.y,
-          level: config.difficultyLevel,
-          behavior: EnemyBehavior.GUARD,
-        });
+        if (this.isWalkableTile(map, pos.x, pos.y)) {
+          enemies.push({
+            id: `enemy_guard_${Date.now()}_${enemies.length}`,
+            type: EnemyType.HEAVY,
+            x: pos.x,
+            y: pos.y,
+            level: config.difficultyLevel,
+            behavior: EnemyBehavior.GUARD,
+          });
+        }
       }
     }
 
@@ -192,6 +207,7 @@ export class EnemyPlacer {
    * 障害物の後ろに狙撃手を配置
    */
   private placeCoverEnemies(
+    map: number[][],
     rooms: Room[],
     obstacles: PlacedObstacle[],
     config: EnemyPlacementConfig
@@ -224,7 +240,7 @@ export class EnemyPlacer {
         if (Math.random() < 0.3) {
           // 30%の確率で遮蔽物に敵配置
           const behindPos = this.findPositionBehindObstacle(obstacle, room);
-          if (behindPos) {
+          if (behindPos && this.isWalkableTile(map, behindPos.x, behindPos.y)) {
             enemies.push({
               id: `enemy_sniper_${Date.now()}_${enemies.length}`,
               type: EnemyType.SCOUT,
@@ -245,6 +261,7 @@ export class EnemyPlacer {
    * アイテムを守る敵を配置
    */
   private placeGuardEnemies(
+    map: number[][],
     items: PlacedItem[],
     rooms: Room[],
     config: EnemyPlacementConfig
@@ -257,7 +274,7 @@ export class EnemyPlacer {
       if (item.rarity === 'rare' || item.rarity === 'legendary') {
         // アイテムから2-3タイル離れた位置に敵配置
         const guardPos = this.findNearbyPosition(item.x, item.y, 2, 3);
-        if (guardPos) {
+        if (guardPos && this.isWalkableTile(map, guardPos.x, guardPos.y)) {
           const enemyType = this.selectEnemyType(config.enemyTypes, config.difficultyLevel);
 
           enemies.push({
@@ -279,6 +296,7 @@ export class EnemyPlacer {
    * 戦術要素に基づく敵配置
    */
   private placeTacticalEnemies(
+    map: number[][],
     tacticalElements: TacticalElement[],
     config: EnemyPlacementConfig
   ): PlacedEnemy[] {
@@ -286,7 +304,11 @@ export class EnemyPlacer {
 
     for (const element of tacticalElements) {
       // 高台に敵を配置
-      if (element.type === 'high_ground' && Math.random() < 0.5) {
+      if (
+        element.type === 'high_ground' &&
+        Math.random() < 0.5 &&
+        this.isWalkableTile(map, element.x, element.y)
+      ) {
         enemies.push({
           id: `enemy_highground_${Date.now()}_${enemies.length}`,
           type: EnemyType.SCOUT,
@@ -298,7 +320,11 @@ export class EnemyPlacer {
       }
 
       // 待ち伏せポイントに敵を配置
-      if (element.type === 'ambush_point' && Math.random() < 0.7) {
+      if (
+        element.type === 'ambush_point' &&
+        Math.random() < 0.7 &&
+        this.isWalkableTile(map, element.x, element.y)
+      ) {
         enemies.push({
           id: `enemy_ambush_${Date.now()}_${enemies.length}`,
           type: EnemyType.SOLDIER,
@@ -317,6 +343,7 @@ export class EnemyPlacer {
    * チョークポイントの敵配置
    */
   private placeChokeEnemies(
+    map: number[][],
     corridors: Corridor[],
     rooms: Room[],
     config: EnemyPlacementConfig
@@ -336,14 +363,16 @@ export class EnemyPlacer {
         const endX = corridor.endX;
         const endY = corridor.endY;
 
-        enemies.push({
-          id: `enemy_turret_${Date.now()}_${enemies.length}`,
-          type: EnemyType.TURRET,
-          x: endX,
-          y: endY,
-          level: config.difficultyLevel,
-          behavior: EnemyBehavior.STATIC,
-        });
+        if (this.isWalkableTile(map, endX, endY)) {
+          enemies.push({
+            id: `enemy_turret_${Date.now()}_${enemies.length}`,
+            type: EnemyType.TURRET,
+            x: endX,
+            y: endY,
+            level: config.difficultyLevel,
+            behavior: EnemyBehavior.STATIC,
+          });
+        }
       }
     }
 
@@ -354,6 +383,7 @@ export class EnemyPlacer {
    * 巡回敵の配置
    */
   private placePatrolEnemies(
+    map: number[][],
     rooms: Room[],
     corridors: Corridor[],
     obstacles: PlacedObstacle[],
@@ -375,8 +405,20 @@ export class EnemyPlacer {
       }
 
       // 部屋内の開始位置
-      const startX = room.x + 2 + Math.floor(Math.random() * (room.width - 4));
-      const startY = room.y + 2 + Math.floor(Math.random() * (room.height - 4));
+      let startX = 0;
+      let startY = 0;
+      let attempts = 0;
+      const maxAttempts = 20;
+
+      do {
+        startX = room.x + 2 + Math.floor(Math.random() * Math.max(1, room.width - 4));
+        startY = room.y + 2 + Math.floor(Math.random() * Math.max(1, room.height - 4));
+        attempts++;
+      } while (attempts < maxAttempts && !this.isWalkableTile(map, startX, startY));
+
+      if (attempts >= maxAttempts) {
+        continue;
+      }
 
       // 巡回ルートを生成
       const patrolRoute = this.generatePatrolRoute(startX, startY, room, obstacles);
@@ -401,6 +443,7 @@ export class EnemyPlacer {
    * 一般敵の配置
    */
   private placeGeneralEnemies(
+    map: number[][],
     rooms: Room[],
     obstacles: PlacedObstacle[],
     items: PlacedItem[],
@@ -427,7 +470,11 @@ export class EnemyPlacer {
         x = room.x + 1 + Math.floor(Math.random() * (room.width - 2));
         y = room.y + 1 + Math.floor(Math.random() * (room.height - 2));
         attempts++;
-      } while (attempts < maxAttempts && this.isPositionOccupied(x, y, obstacles, items, enemies));
+      } while (
+        attempts < maxAttempts &&
+        (!this.isWalkableTile(map, x, y) ||
+          this.isPositionOccupied(x, y, obstacles, items, enemies))
+      );
 
       if (attempts >= maxAttempts) {
         continue;
@@ -610,5 +657,14 @@ export class EnemyPlacer {
     if (items.find((item) => item.x === x && item.y === y)) return true;
     if (enemies.find((enemy) => enemy.x === x && enemy.y === y)) return true;
     return false;
+  }
+
+  /**
+   * マップ上で通行可能か確認
+   */
+  private isWalkableTile(map: number[][], x: number, y: number): boolean {
+    if (y < 0 || y >= map.length) return false;
+    if (x < 0 || x >= map[0].length) return false;
+    return map[y][x] > 0;
   }
 }
