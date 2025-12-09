@@ -644,6 +644,7 @@ export interface PlacedObstacle {
   y: number; // Y座標
   destructible: boolean; // 破壊可能か
   health?: number; // 体力（破壊可能な場合）
+  blocksVision: boolean; // 視線を遮るかどうか
 }
 
 /**

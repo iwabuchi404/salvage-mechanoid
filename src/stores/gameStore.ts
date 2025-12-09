@@ -14,6 +14,7 @@ export const useGameStore = defineStore('game', () => {
       maxEnergy: 200,
       strength: 10,
       defense: 5,
+      viewRadius: 12, // 視野半径（マス数）
     },
     position: { x: 0, y: 0, z: 0 },
     items: [''], // 旧形式（互換性のため残す）

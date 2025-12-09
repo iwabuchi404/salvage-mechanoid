@@ -37,6 +37,12 @@ export class RendererSystem implements System {
   // タイルマップデータ（タイルの存在判定用）
   private tileMapData: number[][] | null = null;
 
+  // タイルスプライトのマップ（座標 -> スプライト）
+  private tileSprites: Map<string, PIXI.Sprite> = new Map();
+
+  // 警告済みの欠落タイル（スパム防止用）
+  private missingTileWarnings: Set<string> | null = null;
+
   // レンダラーの設定
   private config = {
     backgroundColor: 0x202020,
@@ -103,7 +109,10 @@ export class RendererSystem implements System {
     if (eventSystem) {
       eventSystem.on('render_entity', this.renderEntity.bind(this));
       eventSystem.on('tile_hovered', this.handleTileHover.bind(this));
-      console.log("Registered for 'render_entity' and 'tile_hovered' events");
+      eventSystem.on('tile_visibility_changed', this.handleTileVisibilityChanged.bind(this));
+      console.log(
+        "Registered for 'render_entity', 'tile_hovered', and 'tile_visibility_changed' events"
+      );
     } else {
       console.warn('EventSystem not found, rendering events will not be processed');
     }
@@ -329,6 +338,7 @@ export class RendererSystem implements System {
 
     // 既存のタイルをクリア
     terrainLayer.removeChildren();
+    this.tileSprites.clear();
 
     // タイルマップを描画
     for (let y = 0; y < tileMap.length; y++) {
@@ -366,6 +376,9 @@ export class RendererSystem implements System {
           // 深度ソート用のzIndexを設定
           sprite.zIndex = y * 1000 + x;
 
+          // タイルスプライトマップに保存
+          this.tileSprites.set(`${x},${y}`, sprite);
+
           terrainLayer.addChild(sprite);
         } catch (error) {
           console.warn(`Failed to load tile texture: ${texturePath}`, error);
@@ -373,7 +386,9 @@ export class RendererSystem implements System {
       }
     }
 
-    console.log(`Rendered ${terrainLayer.children.length} tiles`);
+    console.log(
+      `Rendered ${terrainLayer.children.length} tiles, tileSprites map size: ${this.tileSprites.size}`
+    );
   }
 
   /**
@@ -394,6 +409,59 @@ export class RendererSystem implements System {
         return './image.png';
       default:
         return './image.png';
+    }
+  }
+
+  /**
+   * タイル可視性変更イベントを処理
+   * @param data イベントデータ
+   */
+  private handleTileVisibilityChanged(data: {
+    x: number;
+    y: number;
+    visible: boolean;
+    explored: boolean;
+  }): void {
+    this.updateTileVisibility(data.x, data.y, data.visible, data.explored);
+  }
+
+  /**
+   * タイルの可視性を更新
+   * @param x X座標
+   * @param y Y座標
+   * @param visible 現在視野内かどうか
+   * @param explored 探索済みかどうか
+   */
+  updateTileVisibility(x: number, y: number, visible: boolean, explored: boolean): void {
+    const key = `${x},${y}`;
+    const sprite = this.tileSprites.get(key);
+    if (!sprite) {
+      // 初回のみログ出力（スパム防止）
+      if (!this.missingTileWarnings) {
+        this.missingTileWarnings = new Set();
+      }
+      if (!this.missingTileWarnings.has(key)) {
+        console.warn(`RendererSystem: Tile sprite not found for (${x}, ${y})`);
+        this.missingTileWarnings.add(key);
+      }
+      return;
+    }
+
+    if (!explored) {
+      // 未探索は少し暗く表示（alphaは使わない）
+      sprite.visible = true;
+      sprite.alpha = 1.0;
+      sprite.tint = 0xb0b0b0; // 少し暗く
+    } else if (!visible) {
+      // 探索済み・視野外は少し暗く表示（alphaは使わない）
+      sprite.visible = true;
+      sprite.alpha = 1.0;
+      sprite.tint = 0xc0c0c0; // 少し暗く
+    } else {
+      // 視野内は通常表示
+      sprite.visible = true;
+      sprite.alpha = 1.0;
+      sprite.tint = 0xffffff;
     }
   }
 

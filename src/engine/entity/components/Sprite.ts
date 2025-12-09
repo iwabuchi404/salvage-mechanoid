@@ -3,6 +3,7 @@ import { Component } from '../Component';
 import { Entity } from '../Entity';
 import { Engine } from '../../Engine';
 import { RendererSystem } from '../../graphics/RendererSystem';
+import { EventSystem } from '../../events/EventSystem';
 import { TransformComponent } from './Transform';
 import { LayerName } from '../../types';
 
@@ -42,6 +43,11 @@ export class SpriteComponent implements Component {
    * 表示中かどうか
    */
   private _visible = true;
+
+  /**
+   * 視野内かどうか
+   */
+  private _inPlayerFOV = true;
 
   /**
    * テクスチャの名前または直接のテクスチャ
@@ -118,6 +124,16 @@ export class SpriteComponent implements Component {
     } else {
       console.error('EventSystem not found or sprite is null');
     }
+
+    // エンティティ可視性変更イベントをリッスン
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem && this.entity) {
+      eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+        if (data.entityId === this.entity?.id) {
+          this.setInFOV(data.inFOV);
+        }
+      });
+    }
   }
 
   /**
@@ -154,7 +170,12 @@ export class SpriteComponent implements Component {
     }
 
     // 可視性の更新
-    this.sprite.visible = this._visible && this.entity.active;
+    // プレイヤー以外は視野内フラグも考慮
+    if (this.entity.hasTag('player')) {
+      this.sprite.visible = this._visible && this.entity.active;
+    } else {
+      this.sprite.visible = this._visible && this.entity.active && this._inPlayerFOV;
+    }
   }
 
   /**
@@ -293,6 +314,41 @@ export class SpriteComponent implements Component {
         position: transform ? transform.position : { x: 0, y: 0, z: 0 },
         anchor: this.anchor,
       });
+    }
+  }
+
+  /**
+   * 視野内フラグを設定
+   * @param inFOV 視野内かどうか
+   */
+  setInFOV(inFOV: boolean): void {
+    const wasInFOV = this._inPlayerFOV;
+    this._inPlayerFOV = inFOV;
+
+    // デバッグログ（状態変化時のみ、敵エンティティのみ）
+    if (wasInFOV !== inFOV && this.entity && this.entity.hasTag('enemy')) {
+      const transform = this.entity.getComponent<TransformComponent>('transform');
+      const pos = transform ? transform.position : { x: 0, y: 0, z: 0 };
+      console.log(
+        `SpriteComponent: Enemy ${this.entity.id} at (${Math.round(pos.x)}, ${Math.round(
+          pos.y
+        )}) FOV changed: ${wasInFOV} -> ${inFOV}`
+      );
+    }
+
+    // 可視性を即座に更新
+    if (this.sprite && this.entity) {
+      if (this.entity.hasTag('player')) {
+        this.sprite.visible = this._visible && this.entity.active;
+      } else {
+        const newVisible = this._visible && this.entity.active && this._inPlayerFOV;
+        if (this.sprite.visible !== newVisible && this.entity.hasTag('enemy')) {
+          console.log(
+            `SpriteComponent: Enemy ${this.entity.id} sprite visibility: ${this.sprite.visible} -> ${newVisible}`
+          );
+        }
+        this.sprite.visible = newVisible;
+      }
     }
   }
 

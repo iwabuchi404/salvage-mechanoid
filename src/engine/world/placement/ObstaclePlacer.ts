@@ -142,13 +142,15 @@ export class ObstaclePlacer {
 
         for (const { x, y } of candidates) {
           if (this.canPlaceObstacle(map, x, y, obstacles)) {
+            const obstacleType = Math.random() < 0.5 ? ObstacleType.BARREL : ObstacleType.CRATE;
             obstacles.push({
               id: `obstacle_choke_${Date.now()}_${obstacles.length}`,
-              type: Math.random() < 0.5 ? ObstacleType.BARREL : ObstacleType.CRATE,
+              type: obstacleType,
               x,
               y,
               destructible: true,
               health: 75,
+              blocksVision: this.getBlocksVision(obstacleType),
             });
             break; // 1つ配置したら次の通路へ
           }
@@ -211,6 +213,7 @@ export class ObstaclePlacer {
               y,
               destructible: obstacleType !== ObstacleType.WALL,
               health: this.getObstacleHealth(obstacleType),
+              blocksVision: this.getBlocksVision(obstacleType),
             });
             i++;
           }
@@ -235,6 +238,7 @@ export class ObstaclePlacer {
             y,
             destructible: obstacleType !== ObstacleType.WALL,
             health: this.getObstacleHealth(obstacleType),
+            blocksVision: this.getBlocksVision(obstacleType),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -252,6 +256,7 @@ export class ObstaclePlacer {
             y,
             destructible: obstacleType !== ObstacleType.WALL,
             health: this.getObstacleHealth(obstacleType),
+            blocksVision: this.getBlocksVision(obstacleType),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -320,6 +325,7 @@ export class ObstaclePlacer {
               y,
               destructible: true,
               health: 30,
+              blocksVision: this.getBlocksVision(ObstacleType.DEBRIS),
             });
           }
           continue;
@@ -342,6 +348,7 @@ export class ObstaclePlacer {
             y,
             destructible: true,
             health: 30,
+            blocksVision: this.getBlocksVision(ObstacleType.DEBRIS),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -356,6 +363,7 @@ export class ObstaclePlacer {
             y,
             destructible: true,
             health: 30,
+            blocksVision: this.getBlocksVision(ObstacleType.DEBRIS),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -410,6 +418,7 @@ export class ObstaclePlacer {
             x,
             y,
             destructible: false,
+            blocksVision: this.getBlocksVision(ObstacleType.CONSOLE),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -429,6 +438,7 @@ export class ObstaclePlacer {
             x,
             y,
             destructible: false,
+            blocksVision: this.getBlocksVision(ObstacleType.CONSOLE),
           };
           obstacles.push(obstacle);
           combinedObstacles.push(obstacle);
@@ -713,6 +723,26 @@ export class ObstaclePlacer {
         return undefined; // 破壊不可
       default:
         return 50;
+    }
+  }
+
+  /**
+   * 障害物が視線を遮るかどうかを取得
+   */
+  private getBlocksVision(type: ObstacleType): boolean {
+    switch (type) {
+      case ObstacleType.CRATE:
+        return true; // 木箱は視線を遮る
+      case ObstacleType.BARREL:
+        return false; // バレルは低いので視線を遮らない
+      case ObstacleType.WALL:
+        return true; // 壁は視線を遮る
+      case ObstacleType.DEBRIS:
+        return false; // 瓦礫は低いので視線を遮らない
+      case ObstacleType.CONSOLE:
+        return false; // コンソールは低いので視線を遮らない
+      default:
+        return false;
     }
   }
 }

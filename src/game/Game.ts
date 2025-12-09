@@ -8,6 +8,7 @@ import { EffectSystem } from '../engine/effects/EffectSystem';
 import { CombatSystem } from '../engine/combat/CombatSystem';
 import { InteractionSystem } from '../engine/interaction/InteractionSystem';
 import { InputSystem } from '../engine/input/InputSystem';
+import { FOVSystem } from '../engine/fov/FOVSystem';
 import { TileMap } from '../engine/world/TileMap';
 import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
@@ -111,11 +112,7 @@ export class Game {
     // イベントリスナーを設定
     this.setupEventListeners();
 
-    // BGMを開始
-    const audioSystem = this.engine.getSystem<AudioSystem>('audio');
-    if (audioSystem) {
-      audioSystem.playBGM('bgm01');
-    }
+    // BGMはGameStateManagerで管理されるため、ここでは再生しない
 
     // エンジンを開始
     this.engine.start();
@@ -164,6 +161,10 @@ export class Game {
     // 入力システム（初期化前に登録）
     const inputSystem = new InputSystem();
     this.engine.registerSystem('input', inputSystem);
+
+    // FOVシステム
+    const fovSystem = new FOVSystem();
+    this.engine.registerSystem('fov', fovSystem);
 
     // すべてのシステムを初期化
     await this.engine.initialize();
@@ -332,6 +333,13 @@ export class Game {
 
     // カメラ位置設定後にタイルマップを再描画
     await this.renderTileMap();
+
+    // 初期視野を計算
+    const fovSystem = this.engine.getSystem<FOVSystem>('fov');
+    if (fovSystem) {
+      fovSystem.calculateInitialFOV();
+      console.log('Initial FOV calculated');
+    }
   }
 
   /**

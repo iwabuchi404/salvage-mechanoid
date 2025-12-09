@@ -22,6 +22,9 @@ export class Player extends Entity {
   private currentEnergy: number;
   private maxEnergy: number;
 
+  // 視野半径（何マス先まで見えるか）
+  private _viewRadius = 8;
+
   // ゲームストア
   private gameStore = useGameStore();
 
@@ -47,6 +50,13 @@ export class Player extends Entity {
     // エネルギー設定
     this.maxEnergy = this.gameStore.player.status.maxEnergy;
     this.currentEnergy = this.gameStore.player.status.energy;
+
+    // 視野半径設定
+    const storeViewRadius = this.gameStore.player.status.viewRadius;
+    this._viewRadius = storeViewRadius !== undefined ? storeViewRadius : 8;
+    console.log(
+      `Player: Initialized with viewRadius: ${this._viewRadius} (from store: ${storeViewRadius})`
+    );
 
     // コンポーネントを追加
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
@@ -493,6 +503,27 @@ export class Player extends Entity {
    */
   getMaxEnergy(): number {
     return this.gameStore.player.status.maxEnergy;
+  }
+
+  /**
+   * 視野半径を取得
+   */
+  get viewRadius(): number {
+    return this._viewRadius;
+  }
+
+  /**
+   * 視野半径を設定
+   * @param radius 視野半径（マス数）
+   */
+  setViewRadius(radius: number): void {
+    this._viewRadius = Math.max(1, radius);
+
+    // 視野再計算イベントを発行
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit('fov_update_requested', { entityId: this.id });
+    }
   }
 
   /**

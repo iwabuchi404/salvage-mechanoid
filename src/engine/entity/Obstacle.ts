@@ -11,6 +11,7 @@ import { Vector3, ObstacleType, PlacedObstacle } from '../types';
 export class Obstacle extends Entity {
   private obstacleType: ObstacleType;
   private destructible: boolean;
+  private _blocksVision: boolean;
 
   /**
    * コンストラクタ
@@ -25,6 +26,7 @@ export class Obstacle extends Entity {
 
     this.obstacleType = placedObstacle.type;
     this.destructible = placedObstacle.destructible;
+    this._blocksVision = placedObstacle.blocksVision;
 
     // Transform コンポーネントを追加
     this.addComponent(new TransformComponent(placedObstacle.x, placedObstacle.y, 0));
@@ -77,6 +79,13 @@ export class Obstacle extends Entity {
    */
   isDestructible(): boolean {
     return this.destructible;
+  }
+
+  /**
+   * 視線を遮るかどうかを取得
+   */
+  blocksVision(): boolean {
+    return this._blocksVision;
   }
 
   /**

@@ -6,6 +6,7 @@ import { sound, IMediaInstance } from '@pixi/sound';
 export class SoundManager {
   private static instance: SoundManager;
   private backgroundMusic: IMediaInstance | null = null;
+  private soundsLoaded = false; // サウンドが読み込み済みかどうかのフラグ
 
   private constructor() {
     //コンストラクター
@@ -19,6 +20,12 @@ export class SoundManager {
   }
 
   public loadSounds(): void {
+    // 既に読み込み済みの場合はスキップ
+    if (this.soundsLoaded) {
+      console.log('Sounds already loaded, skipping...');
+      return;
+    }
+
     //bgm読み込み
     sound.add('bgm01', 'sound/bgm01.mp3');
     sound.add('bgm02', 'sound/bgm02.mp3');
@@ -27,6 +34,9 @@ export class SoundManager {
     //se読み込み
     sound.add('attack', 'sound/se_attack.mp3');
     sound.add('explosion', 'sound/explosion.mp3');
+
+    this.soundsLoaded = true;
+    console.log('Sounds loaded successfully');
   }
 
   public async playBGM(key: string): Promise<void> {
