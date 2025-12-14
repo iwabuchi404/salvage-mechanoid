@@ -90,8 +90,9 @@ export class Game {
    * @param canvas 描画先のキャンバス要素
    */
   async initialize(canvas: HTMLCanvasElement): Promise<void> {
+    // リトライ時はリセットしてから初期化
     if (this.initialized) {
-      return;
+      await this.reset();
     }
 
     // システムを初期化
@@ -118,6 +119,49 @@ export class Game {
     this.engine.start();
 
     this.initialized = true;
+  }
+
+  /**
+   * ゲームをリセット（リトライ時など）
+   */
+  private async reset(): Promise<void> {
+    console.log('Game: Resetting game state...');
+
+    // エンジンを停止
+    this.engine.stop();
+
+    // FOVシステムをリセット
+    const fovSystem = this.engine.getSystem<FOVSystem>('fov');
+    if (fovSystem) {
+      fovSystem.reset();
+    }
+
+    // エンティティシステムをクリア
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (entitySystem) {
+      entitySystem.clear();
+    }
+
+    // プレイヤーをクリア
+    this.player = null;
+
+    // リソースをクリア
+    this.placedObstacles = [];
+    this.placedItems = [];
+    this.placedEnemies = [];
+
+    // マップ情報をクリア
+    this.currentRooms = [];
+    this.currentCorridors = [];
+    this.currentTacticalElements = [];
+
+    // タイルマップをクリア
+    this.tileMap = null;
+
+    // 初期化フラグをリセット
+    this.initialized = false;
+
+    console.log('Game: Reset complete');
   }
 
   /**
@@ -786,6 +830,38 @@ export class Game {
     }
 
     this.player.move(direction);
+  }
+
+  /**
+   * プレイヤーの方向を転換（1ターン消費）
+   * @param direction 新しい方向
+   */
+  turnPlayer(direction: 'up' | 'down' | 'left' | 'right'): void {
+    if (!this.player) {
+      return;
+    }
+
+    this.player.turn(direction);
+  }
+
+  /**
+   * プレイヤーの現在の方向を取得
+   * @returns 現在の方向
+   */
+  getPlayerDirection(): 'up' | 'down' | 'left' | 'right' {
+    if (!this.player) {
+      return 'down';
+    }
+
+    return this.player.getDirection();
+  }
+
+  /**
+   * イベントシステムを取得（UI用）
+   * @returns イベントシステム
+   */
+  getEventSystem(): EventSystem | null {
+    return this.engine.getSystem<EventSystem>('event') || null;
   }
 
   /**

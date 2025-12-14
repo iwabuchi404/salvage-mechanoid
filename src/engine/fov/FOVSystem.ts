@@ -447,6 +447,16 @@ export class FOVSystem implements System {
   }
 
   /**
+   * FOVシステムをリセット（リトライ時など）
+   */
+  reset(): void {
+    console.log('FOVSystem: Resetting FOV state...');
+    this.visibleTiles.clear();
+    this.exploredTiles.clear();
+    console.log('FOVSystem: Reset complete');
+  }
+
+  /**
    * 初期視野を計算（ゲーム開始時）
    */
   calculateInitialFOV(): void {

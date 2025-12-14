@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue';
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue';
 import { Game } from '../../game/Game';
 import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
 import ItemPickupDialog from '../uiParts/ItemPickupDialog.vue';
+import type { Direction } from '../../engine/types';
 
 const gameStore = useGameStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
@@ -23,6 +24,7 @@ const showItemList = ref(false);
 const showStatusWindow = ref(false);
 const playerItems = ref<Array<{ id: string; name: string; description: string }>>([]);
 const isPlayerTurn = ref(true);
+const playerDirection = ref<Direction>('down');
 
 const energyPercentage = computed(
   () => (gameStore.player.status.energy / gameStore.player.status.maxEnergy) * 100
@@ -30,6 +32,12 @@ const energyPercentage = computed(
 const hpPercentage = computed(
   () => (gameStore.player.status.hp / gameStore.player.status.maxHp) * 100
 );
+
+// 扇形ボタンの色を取得
+const getSectorColor = (direction: Direction): string => {
+  const isActive = playerDirection.value === direction;
+  return isActive ? 'rgba(74, 158, 255, 0.8)' : 'rgba(74, 158, 255, 0.4)';
+};
 
 const emit = defineEmits<{
   (e: 'game-clear'): void;
@@ -74,13 +82,63 @@ onMounted(async () => {
       isPlayerTurn.value = playerTurn;
     });
 
+    // プレイヤーの方向を定期的に更新
+    const updatePlayerDirection = () => {
+      playerDirection.value = game.getPlayerDirection();
+    };
+
+    // 初期方向を取得
+    updatePlayerDirection();
+
+    // 方向変更イベントをリッスン
+    const eventSystem = game.getEventSystem();
+    if (eventSystem) {
+      eventSystem.on('direction_changed', (data: any) => {
+        if (data.entityId === 'player') {
+          updatePlayerDirection();
+        }
+      });
+    }
+
+    // 定期的に方向を更新（フォールバック）
+    const directionUpdateInterval = setInterval(updatePlayerDirection, 100);
+
     window.addEventListener('resize', resizeGame);
     resizeGame(); // 初期サイズを設定
+
+    // クリーンアップ
+    onUnmounted(() => {
+      clearInterval(directionUpdateInterval);
+      window.removeEventListener('resize', resizeGame);
+    });
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
   if (isPlayerTurn.value) {
     game.movePlayer(direction);
+  }
+};
+
+const turnPlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
+  if (isPlayerTurn.value) {
+    game.turnPlayer(direction);
+    // 方向を即座に更新
+    playerDirection.value = direction;
+  }
+};
+
+const getDirectionIcon = (direction: 'up' | 'down' | 'left' | 'right'): string => {
+  switch (direction) {
+    case 'up':
+      return '↑';
+    case 'down':
+      return '↓';
+    case 'left':
+      return '←';
+    case 'right':
+      return '→';
+    default:
+      return '↓';
   }
 };
 const closeStatusWindow = () => {
@@ -183,11 +241,138 @@ const closePortalDialog = () => {
           <div class="energy-fill" :style="{ width: `${energyPercentage}%` }"></div>
         </div>
       </div>
-      <div class="controls">
-        <button @click="movePlayer('up')">↑</button>
-        <button @click="movePlayer('left')">←</button>
-        <button @click="movePlayer('right')">→</button>
-        <button @click="movePlayer('down')">↓</button>
+      <!-- 統合コントロール（移動 + 方向転換） -->
+      <div class="unified-controls">
+        <!-- 外側：方向転換ボタン（扇形） - SVGで直接描画 -->
+        <svg class="direction-sectors" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+          <!-- 上方向 -->
+          <g
+            class="direction-sector"
+            :class="{ active: playerDirection === 'up' }"
+            @click="!isPlayerTurn ? null : turnPlayer('up')"
+            :style="{
+              cursor: isPlayerTurn ? 'pointer' : 'not-allowed',
+              opacity: isPlayerTurn ? 1 : 0.3,
+            }"
+          >
+            <path
+              d="M 90 90 L 90 0 A 90 90 0 0 1 180 90 Z"
+              :fill="getSectorColor('up')"
+              stroke="#4a9eff"
+              stroke-width="2"
+              class="sector-path"
+            />
+            <text
+              x="135"
+              y="45"
+              class="direction-icon"
+              text-anchor="middle"
+              dominant-baseline="middle"
+            >
+              ↑
+            </text>
+          </g>
+          <!-- 右方向 -->
+          <g
+            class="direction-sector"
+            :class="{ active: playerDirection === 'right' }"
+            @click="!isPlayerTurn ? null : turnPlayer('right')"
+            :style="{
+              cursor: isPlayerTurn ? 'pointer' : 'not-allowed',
+              opacity: isPlayerTurn ? 1 : 0.3,
+            }"
+          >
+            <path
+              d="M 90 90 L 180 90 A 90 90 0 0 1 180 180 L 90 180 Z"
+              :fill="getSectorColor('right')"
+              stroke="#4a9eff"
+              stroke-width="2"
+              class="sector-path"
+            />
+            <text
+              x="135"
+              y="135"
+              class="direction-icon"
+              text-anchor="middle"
+              dominant-baseline="middle"
+            >
+              →
+            </text>
+          </g>
+          <!-- 下方向 -->
+          <g
+            class="direction-sector"
+            :class="{ active: playerDirection === 'down' }"
+            @click="!isPlayerTurn ? null : turnPlayer('down')"
+            :style="{
+              cursor: isPlayerTurn ? 'pointer' : 'not-allowed',
+              opacity: isPlayerTurn ? 1 : 0.3,
+            }"
+          >
+            <path
+              d="M 90 90 L 90 180 A 90 90 0 0 1 0 180 L 0 90 Z"
+              :fill="getSectorColor('down')"
+              stroke="#4a9eff"
+              stroke-width="2"
+              class="sector-path"
+            />
+            <text
+              x="45"
+              y="135"
+              class="direction-icon"
+              text-anchor="middle"
+              dominant-baseline="middle"
+            >
+              ↓
+            </text>
+          </g>
+          <!-- 左方向 -->
+          <g
+            class="direction-sector"
+            :class="{ active: playerDirection === 'left' }"
+            @click="!isPlayerTurn ? null : turnPlayer('left')"
+            :style="{
+              cursor: isPlayerTurn ? 'pointer' : 'not-allowed',
+              opacity: isPlayerTurn ? 1 : 0.3,
+            }"
+          >
+            <path
+              d="M 90 90 L 0 90 A 90 90 0 0 1 0 0 L 90 0 Z"
+              :fill="getSectorColor('left')"
+              stroke="#4a9eff"
+              stroke-width="2"
+              class="sector-path"
+            />
+            <text
+              x="45"
+              y="45"
+              class="direction-icon"
+              text-anchor="middle"
+              dominant-baseline="middle"
+            >
+              ←
+            </text>
+          </g>
+        </svg>
+
+        <!-- 中リング：移動ボタン（円形） -->
+        <button class="move-btn move-up" @click="movePlayer('up')" :disabled="!isPlayerTurn">
+          ↑
+        </button>
+        <button class="move-btn move-right" @click="movePlayer('right')" :disabled="!isPlayerTurn">
+          →
+        </button>
+        <button class="move-btn move-down" @click="movePlayer('down')" :disabled="!isPlayerTurn">
+          ↓
+        </button>
+        <button class="move-btn move-left" @click="movePlayer('left')" :disabled="!isPlayerTurn">
+          ←
+        </button>
+
+        <!-- 中央：現在の向きインジケーター -->
+        <div class="direction-indicator">
+          <span class="indicator-icon">{{ getDirectionIcon(playerDirection) }}</span>
+        </div>
       </div>
       <div v-if="showActionMenu" class="action-menu">
         <BaseButton @click="attack" :type="'small'">攻撃</BaseButton>
@@ -259,6 +444,7 @@ const closePortalDialog = () => {
 
       <!-- アイテム取得確認ダイアログ -->
       <ItemPickupDialog />
+
       <BaseWindow
         height="240px"
         width="480px"
@@ -296,57 +482,188 @@ const closePortalDialog = () => {
   box-shadow: 0 0 10px #ff5e0046, 0 0 20px #ff5e0034;
 }
 
-.controls {
+/* 統合コントロール（移動 + 方向転換） */
+.unified-controls {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  width: 180px;
+  height: 180px;
   pointer-events: auto;
   font-family: 'DotGothic16', sans-serif;
 }
 
-.controls button {
-  display: grid;
-  place-content: center;
-  width: 50px;
-
-  height: 50px;
-  font-size: 24px;
+/* 外側：方向転換ボタン（扇形） */
+.direction-btn {
+  position: absolute;
+  width: 90px;
+  height: 90px;
   border: none;
-  background-color: rgba(255, 255, 255, 0.7);
-  border-radius: 50%;
+  background-color: transparent;
+  color: #b8d9ff;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.15s ease-in-out;
+  font-family: 'DotGothic16', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  overflow: hidden;
+  padding: 0;
+}
 
-  background-color: rgba(184, 80, 11, 0.66);
-  border: 2px solid #f17623;
-  color: #fdb788;
+.sector-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  display: block;
+}
+
+.direction-icon {
+  font-size: 24px;
+  font-weight: bold;
+  fill: #b8d9ff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 方向転換ボタン（SVGで直接描画） */
+.direction-sectors {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.direction-sector {
+  pointer-events: all;
   transition: all 0.15s ease-in-out;
 }
 
-.controls button:hover {
+.direction-sector:hover .sector-path {
+  opacity: 0.8;
+  filter: brightness(1.2);
+}
+
+.direction-sector:active .sector-path {
+  opacity: 0.9;
+  filter: brightness(1.3);
+}
+
+.direction-sector.active .sector-path {
+  filter: brightness(1.3) drop-shadow(0 0 8px rgba(184, 217, 255, 0.6));
+}
+
+.sector-path {
+  transition: all 0.15s ease-in-out;
+}
+
+.direction-btn:hover:not(:disabled) {
+  opacity: 0.8;
+  filter: brightness(1.2);
+}
+
+.direction-btn:active:not(:disabled) {
+  opacity: 0.9;
+  filter: brightness(1.3);
+}
+
+.direction-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.direction-btn.active {
+  filter: brightness(1.3) drop-shadow(0 0 8px rgba(184, 217, 255, 0.6));
+}
+
+/* 中リング：移動ボタン（円形） */
+.move-btn {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  border: 2px solid #f17623;
+  background-color: rgba(184, 80, 11, 0.66);
+  color: #fdb788;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease-in-out;
+  font-family: 'DotGothic16', sans-serif;
+  z-index: 3;
+}
+
+.move-btn:hover:not(:disabled) {
   background-color: rgb(143, 33, 6);
 }
 
-.controls button:nth-child(1) {
-  grid-column: 2;
+.move-btn:active:not(:disabled) {
+  background-color: rgb(100, 20, 4);
 }
 
-.controls button:nth-child(2) {
-  grid-column: 1;
-  grid-row: 2;
+.move-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.controls button:nth-child(3) {
-  grid-column: 3;
-  grid-row: 2;
+.move-up {
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.controls button:nth-child(4) {
-  grid-column: 2;
-  grid-row: 3;
+.move-right {
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.move-down {
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.move-left {
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* 中央：現在の向きインジケーター */
+.direction-indicator {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(241, 118, 35, 0.4);
+  border: 3px solid #f17623;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.indicator-icon {
+  font-size: 28px;
+  color: #fdb788;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 .status-window {

@@ -191,6 +191,46 @@ export class Player extends Entity {
   }
 
   /**
+   * 方向転換（1ターン消費、エネルギー消費なし）
+   * @param direction 新しい方向
+   * @returns 方向転換が成功したかどうか
+   */
+  turn(direction: Direction): boolean {
+    // 移動コンポーネントを取得
+    const movement = this.getComponent<MovementComponent>('movement');
+    if (!movement) {
+      return false;
+    }
+
+    // 現在の方向と同じ場合は何もしない
+    if (movement.direction === direction) {
+      return false;
+    }
+
+    // 方向を変更
+    movement.direction = direction;
+
+    // ターン終了イベントを発行（1ターン消費）
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit('player_turn_ended', {
+        playerId: this.id,
+      });
+    }
+
+    return true;
+  }
+
+  /**
+   * 現在の方向を取得
+   * @returns 現在の方向
+   */
+  getDirection(): Direction {
+    const movement = this.getComponent<MovementComponent>('movement');
+    return movement ? movement.direction : 'down';
+  }
+
+  /**
    * 攻撃
    */
   async attack(): Promise<number> {
