@@ -9,6 +9,7 @@ import { CombatSystem } from '../engine/combat/CombatSystem';
 import { InteractionSystem } from '../engine/interaction/InteractionSystem';
 import { InputSystem } from '../engine/input/InputSystem';
 import { FOVSystem } from '../engine/fov/FOVSystem';
+import { LootSystem } from '../engine/loot/LootSystem';
 import { TileMap } from '../engine/world/TileMap';
 import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
@@ -209,6 +210,10 @@ export class Game {
     // FOVシステム
     const fovSystem = new FOVSystem();
     this.engine.registerSystem('fov', fovSystem);
+
+    // ルートシステム（アイテムドロップ）
+    const lootSystem = new LootSystem();
+    this.engine.registerSystem('loot', lootSystem);
 
     // すべてのシステムを初期化
     await this.engine.initialize();

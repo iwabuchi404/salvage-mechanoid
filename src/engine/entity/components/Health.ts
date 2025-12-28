@@ -38,7 +38,7 @@ export class HealthComponent implements Component {
   private _currentInvincibilityTime = 0;
 
   /**
-   * 防御力（ダメージ軽減の割合、0.0〜1.0）
+   * 防御力（整数値、ダメージから減算される）
    */
   private _defense = 0;
 
@@ -57,7 +57,7 @@ export class HealthComponent implements Component {
    * @param maxHp 最大HP
    * @param currentHp 現在のHP（デフォルトは最大HP）
    * @param invincibilityTime ダメージ時の無敵時間（ミリ秒）
-   * @param defense 防御力（ダメージ軽減の割合、0.0〜1.0）
+   * @param defense 防御力（整数値、ダメージから減算される）
    * @param regenerationRate HP回復速度（1秒あたりの回復量）
    * @param destroyOnDeath HPが0になった時に破壊されるかどうか
    */
@@ -72,7 +72,7 @@ export class HealthComponent implements Component {
     this._maxHp = Math.max(1, maxHp);
     this._currentHp = Math.min(Math.max(0, currentHp), this._maxHp);
     this._invincibilityTime = Math.max(0, invincibilityTime);
-    this._defense = Math.min(Math.max(0, defense), 1);
+    this._defense = Math.max(0, defense);
     this._regenerationRate = Math.max(0, regenerationRate);
     this._destroyOnDeath = destroyOnDeath;
   }
@@ -147,7 +147,7 @@ export class HealthComponent implements Component {
    * 防御力を設定
    */
   set defense(value: number) {
-    this._defense = Math.min(Math.max(0, value), 1);
+    this._defense = Math.max(0, value);
   }
 
   /**
@@ -191,13 +191,13 @@ export class HealthComponent implements Component {
       return 0;
     }
 
-    // ダメージ量を計算（防御力による軽減）
+    // 整数ベースの防御力計算（攻撃力 - 防御力、最低1ダメージ）
     let actualDamage = amount;
     if (!ignoreDefense) {
-      actualDamage = amount * (1 - this._defense);
+      actualDamage = Math.max(1, amount - this._defense);
     }
 
-    // HPを減少
+    // HPを減少（整数値を保証）
     const prevHp = this._currentHp;
     this._currentHp = Math.max(0, this._currentHp - actualDamage);
 

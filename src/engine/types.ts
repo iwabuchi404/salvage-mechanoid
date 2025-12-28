@@ -756,8 +756,6 @@ export enum EnemyType {
   SCOUT = 'scout', // 偵察型（弱い、素早い）
   SOLDIER = 'soldier', // 兵士型（標準）
   HEAVY = 'heavy', // 重装型（強い、遅い）
-  TURRET = 'turret', // タレット（固定、射程長い）
-  BOSS = 'boss', // ボス
 }
 
 /**

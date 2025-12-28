@@ -154,53 +154,15 @@ export class EnemyPlacer {
   }
 
   /**
-   * ボス部屋への敵配置
+   * ボス部屋への敵配置（ボスは削除されたため空実装）
    */
   private placeBossEnemies(
-    map: number[][],
-    rooms: Room[],
-    config: EnemyPlacementConfig
+    _map: number[][],
+    _rooms: Room[],
+    _config: EnemyPlacementConfig
   ): PlacedEnemy[] {
-    const enemies: PlacedEnemy[] = [];
-
-    // ボス部屋を検索
-    const bossRooms = rooms.filter((room) => room.type === RoomType.BOSS);
-
-    for (const bossRoom of bossRooms) {
-      // 中央にボス配置
-      const centerX = bossRoom.x + Math.floor(bossRoom.width / 2);
-      const centerY = bossRoom.y + Math.floor(bossRoom.height / 2);
-
-      if (this.isWalkableTile(map, centerX, centerY)) {
-        enemies.push({
-          id: `enemy_boss_${Date.now()}_${enemies.length}`,
-          type: EnemyType.BOSS,
-          x: centerX,
-          y: centerY,
-          level: config.difficultyLevel * 2,
-          behavior: EnemyBehavior.AGGRESSIVE,
-        });
-      }
-
-      // ボスの護衛を配置（2-3体）
-      const guardCount = 2 + Math.floor(Math.random() * 2);
-      const guardPositions = this.getCircularPositions(centerX, centerY, 3, guardCount);
-
-      for (const pos of guardPositions) {
-        if (this.isWalkableTile(map, pos.x, pos.y)) {
-          enemies.push({
-            id: `enemy_guard_${Date.now()}_${enemies.length}`,
-            type: EnemyType.HEAVY,
-            x: pos.x,
-            y: pos.y,
-            level: config.difficultyLevel,
-            behavior: EnemyBehavior.GUARD,
-          });
-        }
-      }
-    }
-
-    return enemies;
+    // ボスタイプは削除されたため、何も配置しない
+    return [];
   }
 
   /**
@@ -340,7 +302,7 @@ export class EnemyPlacer {
   }
 
   /**
-   * チョークポイントの敵配置
+   * チョークポイントの敵配置（TURRETは削除されたため空実装）
    */
   private placeChokeEnemies(
     map: number[][],
@@ -348,35 +310,8 @@ export class EnemyPlacer {
     rooms: Room[],
     config: EnemyPlacementConfig
   ): PlacedEnemy[] {
-    const enemies: PlacedEnemy[] = [];
-
-    // タレットタイプが利用可能かチェック
-    if (!config.enemyTypes?.includes(EnemyType.TURRET)) {
-      return enemies;
-    }
-
-    // 狭い通路の終点近くにタレット配置
-    for (const corridor of corridors) {
-      if (Math.random() < 0.2) {
-        // 20%の確率でチョークポイント配置
-        // 通路の終点近くに配置
-        const endX = corridor.endX;
-        const endY = corridor.endY;
-
-        if (this.isWalkableTile(map, endX, endY)) {
-          enemies.push({
-            id: `enemy_turret_${Date.now()}_${enemies.length}`,
-            type: EnemyType.TURRET,
-            x: endX,
-            y: endY,
-            level: config.difficultyLevel,
-            behavior: EnemyBehavior.STATIC,
-          });
-        }
-      }
-    }
-
-    return enemies;
+    // TURRETタイプは削除されたため、何も配置しない
+    return [];
   }
 
   /**

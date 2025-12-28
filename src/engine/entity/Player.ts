@@ -83,7 +83,8 @@ export class Player extends Entity {
       this.gameStore.player.status.maxHp,
       this.gameStore.player.status.hp,
       500, // 無敵時間（ミリ秒）
-      0.1 // 防御力
+      this.gameStore.player.status.defense, // 防御力（整数値）
+      0 // HP自動回復なし
     );
     this.addComponent(healthComponent);
 

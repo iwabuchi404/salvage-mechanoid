@@ -84,15 +84,10 @@ export class Enemy extends Entity {
     // 敵タイプに応じたテクスチャパスを設定
     this.setupTexturePathsForType();
 
-    // TURRETタイプの場合は赤い丸で表示
-    if (this.enemyType === EnemyType.TURRET) {
-      this.createTurretGraphics();
-    } else {
-      // スプライトコンポーネントを追加
-      const texturePath = this.getTexturePath();
-      const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
-      this.addComponent(spriteComponent);
-    }
+    // スプライトコンポーネントを追加
+    const texturePath = this.getTexturePath();
+    const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
+    this.addComponent(spriteComponent);
 
     // 親クラスの initialize() を呼び出してコンポーネントを初期化
     await super.initialize();
@@ -152,10 +147,10 @@ export class Enemy extends Entity {
     switch (this.enemyType) {
       case EnemyType.SCOUT:
         this.texturePaths = {
-          up: './robo02_r.png',
-          down: './robo02_l.png',
-          left: './robo02_l.png',
-          right: './robo02_r.png',
+          up: './robo04_r.png',
+          down: './robo04_l.png',
+          left: './robo04_l.png',
+          right: './robo04_r.png',
         };
         break;
       case EnemyType.SOLDIER:
@@ -167,22 +162,6 @@ export class Enemy extends Entity {
         };
         break;
       case EnemyType.HEAVY:
-        this.texturePaths = {
-          up: './robo02_r.png',
-          down: './robo02_l.png',
-          left: './robo02_l.png',
-          right: './robo02_r.png',
-        };
-        break;
-      case EnemyType.TURRET:
-        this.texturePaths = {
-          up: './robo03_r.png',
-          down: './robo03_l.png',
-          left: './robo03_l.png',
-          right: './robo03_r.png',
-        };
-        break;
-      case EnemyType.BOSS:
         this.texturePaths = {
           up: './robo02_r.png',
           down: './robo02_l.png',
@@ -260,7 +239,7 @@ export class Enemy extends Entity {
       case EnemyType.SCOUT:
         return {
           maxHealth: Math.floor(30 * levelMultiplier),
-          defense: 0.05,
+          defense: Math.floor(3 * levelMultiplier),
           moveSpeed: 6,
           attackPower: Math.floor(5 * levelMultiplier),
         };
@@ -268,7 +247,7 @@ export class Enemy extends Entity {
       case EnemyType.SOLDIER:
         return {
           maxHealth: Math.floor(50 * levelMultiplier),
-          defense: 0.1,
+          defense: Math.floor(5 * levelMultiplier),
           moveSpeed: 4,
           attackPower: Math.floor(10 * levelMultiplier),
         };
@@ -276,31 +255,15 @@ export class Enemy extends Entity {
       case EnemyType.HEAVY:
         return {
           maxHealth: Math.floor(100 * levelMultiplier),
-          defense: 0.2,
+          defense: Math.floor(10 * levelMultiplier),
           moveSpeed: 2,
           attackPower: Math.floor(15 * levelMultiplier),
-        };
-
-      case EnemyType.TURRET:
-        return {
-          maxHealth: Math.floor(80 * levelMultiplier),
-          defense: 0.15,
-          moveSpeed: 0, // 固定
-          attackPower: Math.floor(12 * levelMultiplier),
-        };
-
-      case EnemyType.BOSS:
-        return {
-          maxHealth: Math.floor(200 * levelMultiplier),
-          defense: 0.25,
-          moveSpeed: 3,
-          attackPower: Math.floor(20 * levelMultiplier),
         };
 
       default:
         return {
           maxHealth: 50,
-          defense: 0.1,
+          defense: 5,
           moveSpeed: 4,
           attackPower: 10,
         };
@@ -314,14 +277,10 @@ export class Enemy extends Entity {
     // 敵タイプごとのテクスチャマッピング
     switch (this.enemyType) {
       case EnemyType.SCOUT:
-        return './robo02_l.png';
+        return './robo04_l.png';
       case EnemyType.SOLDIER:
         return './robo03_l.png';
       case EnemyType.HEAVY:
-        return './robo02_l.png';
-      case EnemyType.TURRET:
-        return './robo03_l.png';
-      case EnemyType.BOSS:
         return './robo02_l.png';
       default:
         return './robo02_l.png';

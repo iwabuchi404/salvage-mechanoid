@@ -249,14 +249,8 @@ export class ResourceGenerationSystem {
       minEnemies: Math.floor(adjustedCount * 0.8),
       maxEnemies: Math.floor(adjustedCount * 1.2),
       difficultyLevel: Math.ceil(difficulty * 3), // 1-10のスケール
-      allowBoss: roomCount >= 5, // 5部屋以上ならボスを配置
-      enemyTypes: [
-        EnemyType.SCOUT,
-        EnemyType.SOLDIER,
-        EnemyType.HEAVY,
-        EnemyType.TURRET,
-        ...(roomCount >= 5 ? [EnemyType.BOSS] : []),
-      ],
+      allowBoss: false, // ボスは削除
+      enemyTypes: [EnemyType.SCOUT, EnemyType.SOLDIER, EnemyType.HEAVY],
       placementRules: [
         {
           minDistanceFromEntrance: 8, // 入口から8マス以上離す
