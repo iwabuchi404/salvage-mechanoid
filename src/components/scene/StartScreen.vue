@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, compile, computed, watch } from 'vue';
+import { ref } from 'vue';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
 import UiTab from '../uiParts/UiTab.vue';

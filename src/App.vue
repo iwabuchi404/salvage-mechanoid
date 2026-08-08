@@ -6,7 +6,6 @@ import GameScreen from './components/scene/GameScreen.vue';
 import ClearScreen from './components/scene/ClearScreen.vue';
 import GameOverScreen from './components/scene/GameOverScreen.vue';
 import EngineTestView from './views/EngineTestView.vue';
-import { compileInputs } from 'pixi.js';
 
 const gameStateManager = new GameStateManager();
 const gameState = ref(gameStateManager.getState());

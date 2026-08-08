@@ -1,6 +1,5 @@
 // src/SoundManager.ts
 
-import * as PIXI from 'pixi.js';
 import { sound, IMediaInstance } from '@pixi/sound';
 
 export class SoundManager {

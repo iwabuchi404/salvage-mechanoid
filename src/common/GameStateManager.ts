@@ -1,4 +1,3 @@
-import { sound } from '@pixi/sound';
 import { SoundManager } from './SoundManager';
 
 export enum GameState {

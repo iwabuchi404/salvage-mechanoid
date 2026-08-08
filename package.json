@@ -18,8 +18,7 @@
     "pinia": "^2.2.2",
     "pixi.js": "^8.3.4",
     "uuid": "^11.1.0",
-    "vue": "^3.2.13",
-    "vue-router": "^4.0.3"
+    "vue": "^3.2.13"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
@@ -29,7 +28,6 @@
     "@typescript-eslint/parser": "^5.4.0",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
-    "@vue/cli-plugin-router": "~5.0.0",
     "@vue/cli-plugin-typescript": "~5.0.0",
     "@vue/cli-plugin-unit-jest": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
