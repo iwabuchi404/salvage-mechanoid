@@ -181,7 +181,7 @@ const closeItemList = () => {
 
 // アイテムを使用
 const useInventoryItem = (itemId: string) => {
-  const success = gameStore.useItem(itemId);
+  const success = game.useInventoryItem(itemId);
   if (success) {
     message.value = 'アイテムを使用しました';
     setTimeout(() => {

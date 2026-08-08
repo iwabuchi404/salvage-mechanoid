@@ -1,10 +1,10 @@
 import { Entity } from '../../engine/entity/Entity';
-import { Component } from './Component';
 import { TransformComponent } from '../../engine/entity/components/Transform';
 import { SpriteComponent } from '../../engine/entity/components/Sprite';
 import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
-import { Vector3, Direction } from '../../engine/types';
+import { EnergyComponent, EnergySnapshot } from './components/Energy';
+import { Vector3, Direction, TileType } from '../../engine/types';
 import { Camera } from '../../engine/graphics/Camera';
 import { Engine } from '../../engine/Engine';
 import { EventSystem } from '../../engine/events/EventSystem';
@@ -20,10 +20,6 @@ import { WorldSystem } from '../../engine/world/WorldSystem';
 export class Player extends Entity {
   // カメラ参照
   private camera: Camera | null = null;
-
-  // エネルギー
-  private currentEnergy: number;
-  private maxEnergy: number;
 
   // 視野半径（何マス先まで見えるか）
   private _viewRadius = 8;
@@ -50,10 +46,6 @@ export class Player extends Entity {
     // タグを追加
     this.addTag('player');
 
-    // エネルギー設定
-    this.maxEnergy = this.gameStore.player.status.maxEnergy;
-    this.currentEnergy = this.gameStore.player.status.energy;
-
     // 視野半径設定
     const storeViewRadius = this.gameStore.player.status.viewRadius;
     this._viewRadius = storeViewRadius !== undefined ? storeViewRadius : 8;
@@ -63,6 +55,12 @@ export class Player extends Entity {
 
     // コンポーネントを追加
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
+    this.addComponent(
+      new EnergyComponent(
+        this.gameStore.player.status.maxEnergy,
+        this.gameStore.player.status.energy
+      )
+    );
     this.gameStore.player.position = { ...startPosition };
   }
 
@@ -91,15 +89,14 @@ export class Player extends Entity {
     );
     this.addComponent(healthComponent);
 
-    // エネルギーコンポーネントを追加
-    const energyComponent = new EnergyComponent(this.maxEnergy, this.currentEnergy);
-    this.addComponent(energyComponent);
-
     // 親クラスの initialize() を呼び出してコンポーネントを初期化
     await super.initialize();
 
     // イベントリスナーを設定
     this.setupEventListeners();
+
+    // EnergyComponentの状態をUI表示用ストアへ投影
+    this.syncEnergyState();
   }
 
   /**
@@ -146,16 +143,6 @@ export class Player extends Entity {
       }
     });
 
-    // エネルギー変更イベント
-    eventSystem.on('energy_changed', (data) => {
-      if (data.entityId === this.id) {
-        // ゲームストアのエネルギーを更新
-        this.gameStore.player.status.energy = data.currentEnergy;
-
-        // エネルギー状態に応じた効果
-        this.updateEnergyEffects(data.percentage);
-      }
-    });
   }
 
   /**
@@ -179,7 +166,7 @@ export class Player extends Entity {
    */
   move(direction: Direction): boolean {
     // エネルギーチェック
-    if (this.currentEnergy <= 0) {
+    if (this.getEnergy() <= 0) {
       this.handleEmergencyShutdown();
       return false;
     }
@@ -309,11 +296,7 @@ export class Player extends Entity {
     const success = energy.consume(amount);
 
     if (success) {
-      // ゲームストアを更新
-      this.gameStore.player.status.energy = energy.getCurrentEnergy();
-
-      // エネルギー状態に応じた効果
-      this.updateEnergyEffects(energy.getEnergyPercentage());
+      this.syncEnergyState(energy, true);
     }
 
     return success;
@@ -323,37 +306,30 @@ export class Player extends Entity {
    * エネルギーを回復
    * @param amount 回復量
    */
-  restoreEnergy(amount: number): void {
+  restoreEnergy(amount: number): number {
     // エネルギーコンポーネントを取得
     const energy = this.getComponent<EnergyComponent>('energy');
-    if (!energy) return;
+    if (!energy) return 0;
 
     // エネルギーを回復
-    energy.restore(amount);
-
-    // ゲームストアを更新
-    this.gameStore.player.status.energy = energy.getCurrentEnergy();
-
-    // エネルギー状態に応じた効果
-    this.updateEnergyEffects(energy.getEnergyPercentage());
+    const restored = energy.restore(amount);
+    this.syncEnergyState(energy, true);
+    return restored;
   }
 
   /**
    * エネルギー状態に応じた効果を更新（旧システムから流用）
-   * @param _percentage エネルギーのパーセンテージ（0〜100）
+   * @param percentage エネルギーのパーセンテージ（0〜100）
    */
-  private updateEnergyEffects(_percentage: number): void {
-    const energy = this.currentEnergy;
-    const maxEnergy = this.maxEnergy;
-
+  private updateEnergyEffects(percentage: number): void {
     // エネルギーが0の場合は緊急シャットダウン
-    if (energy === 0) {
+    if (percentage <= 0) {
       this.handleEmergencyShutdown();
       return;
     }
 
     // エネルギーが15%以下の場合はクリティカルモード
-    if (energy <= maxEnergy * 0.15) {
+    if (percentage <= 15) {
       // HP減少効果（1ダメージ）
       const health = this.getComponent<HealthComponent>('health');
       if (health) {
@@ -533,8 +509,8 @@ export class Player extends Entity {
     return {
       hp: this.gameStore.player.status.hp,
       maxHp: this.gameStore.player.status.maxHp,
-      energy: this.gameStore.player.status.energy,
-      maxEnergy: this.gameStore.player.status.maxEnergy,
+      energy: this.getEnergy(),
+      maxEnergy: this.getMaxEnergy(),
       strength: this.gameStore.player.status.strength,
       defense: this.gameStore.player.status.defense,
       level: this.gameStore.player.status.level,
@@ -545,14 +521,63 @@ export class Player extends Entity {
    * 現在のエネルギーを取得
    */
   getEnergy(): number {
-    return this.gameStore.player.status.energy;
+    return this.getComponent<EnergyComponent>('energy')?.currentEnergy ?? 0;
   }
 
   /**
    * 最大エネルギーを取得
    */
   getMaxEnergy(): number {
-    return this.gameStore.player.status.maxEnergy;
+    return this.getComponent<EnergyComponent>('energy')?.maxEnergy ?? 0;
+  }
+
+  /**
+   * エネルギー状態のスナップショットを取得
+   */
+  getEnergySnapshot(): EnergySnapshot | null {
+    return this.getComponent<EnergyComponent>('energy')?.createSnapshot() ?? null;
+  }
+
+  /**
+   * 保存済みのエネルギー状態を復元
+   */
+  restoreEnergySnapshot(snapshot: EnergySnapshot): boolean {
+    const energy = this.getComponent<EnergyComponent>('energy');
+    if (!energy) return false;
+
+    energy.restoreSnapshot(snapshot);
+    this.syncEnergyState(energy);
+    return true;
+  }
+
+  /**
+   * 最大エネルギーを増加させる（現在値は維持する）
+   */
+  increaseMaxEnergy(amount: number): boolean {
+    if (amount <= 0) return false;
+
+    const energy = this.getComponent<EnergyComponent>('energy');
+    if (!energy) return false;
+
+    energy.setMaxEnergy(energy.maxEnergy + amount);
+    this.syncEnergyState(energy);
+    return true;
+  }
+
+  /**
+   * EnergyComponentの状態をUI表示用ストアへ投影する。
+   */
+  private syncEnergyState(
+    energy: EnergyComponent | undefined = this.getComponent<EnergyComponent>('energy'),
+    applyEffects = false
+  ): void {
+    if (!energy) return;
+
+    this.gameStore.player.status.energy = energy.currentEnergy;
+    this.gameStore.player.status.maxEnergy = energy.maxEnergy;
+    if (applyEffects) {
+      this.updateEnergyEffects(energy.percentage);
+    }
   }
 
   /**
@@ -585,115 +610,3 @@ export class Player extends Entity {
     super.update(deltaTime);
   }
 }
-
-/**
- * エネルギーコンポーネント - エネルギー管理
- */
-class EnergyComponent implements Component {
-  type = 'energy';
-  entity: Entity | null = null;
-
-  private _currentEnergy: number;
-  private _maxEnergy: number;
-
-  /**
-   * コンストラクタ
-   * @param maxEnergy 最大エネルギー
-   * @param currentEnergy 現在のエネルギー
-   */
-  constructor(maxEnergy: number, currentEnergy: number = maxEnergy) {
-    this._maxEnergy = Math.max(1, maxEnergy);
-    this._currentEnergy = Math.min(Math.max(0, currentEnergy), this._maxEnergy);
-  }
-
-  /**
-   * 初期化
-   */
-  initialize(): void {
-    // 初期化時にエネルギー変更イベントを発行
-    this.emitEnergyChangedEvent();
-  }
-
-  /**
-   * 更新
-   */
-  update(_deltaTime: number): void {
-    // EnergyComponentはComponentインターフェースを実装しているだけなので
-    // 親クラスのupdate()は呼び出さない
-    // 自動回復などの処理を追加可能
-  }
-
-  /**
-   * エネルギーを消費
-   * @param amount 消費量
-   * @returns 消費が成功したかどうか
-   */
-  consume(amount: number): boolean {
-    if (amount <= 0) return true;
-    if (this._currentEnergy < amount) return false;
-
-    this._currentEnergy -= amount;
-    this.emitEnergyChangedEvent();
-    return true;
-  }
-
-  /**
-   * エネルギーを回復
-   * @param amount 回復量
-   * @returns 実際に回復した量
-   */
-  restore(amount: number): number {
-    if (amount <= 0) return 0;
-
-    const oldEnergy = this._currentEnergy;
-    this._currentEnergy = Math.min(this._currentEnergy + amount, this._maxEnergy);
-
-    const restored = this._currentEnergy - oldEnergy;
-    if (restored > 0) {
-      this.emitEnergyChangedEvent();
-    }
-
-    return restored;
-  }
-
-  /**
-   * 現在のエネルギーを取得
-   */
-  getCurrentEnergy(): number {
-    return this._currentEnergy;
-  }
-
-  /**
-   * 最大エネルギーを取得
-   */
-  getMaxEnergy(): number {
-    return this._maxEnergy;
-  }
-
-  /**
-   * エネルギーパーセンテージを取得
-   */
-  getEnergyPercentage(): number {
-    return (this._currentEnergy / this._maxEnergy) * 100;
-  }
-
-  /**
-   * エネルギー変更イベントを発行
-   */
-  private emitEnergyChangedEvent(): void {
-    if (!this.entity) return;
-
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
-      eventSystem.emit('energy_changed', {
-        entityId: this.entity.id,
-        currentEnergy: this._currentEnergy,
-        maxEnergy: this._maxEnergy,
-        percentage: this.getEnergyPercentage(),
-      });
-    }
-  }
-}
-
-// TileTypeを使用するためのインポート
-import { TileType } from '../../engine/types';

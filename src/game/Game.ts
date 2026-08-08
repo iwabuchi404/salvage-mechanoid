@@ -700,17 +700,14 @@ export class Game {
 
           // プレイヤーのエネルギーを回復
           const player = entitySystem.getEntity(playerId);
-          if (player) {
-            const energyComponent = player.getComponent('energy');
-            if (energyComponent && 'recharge' in energyComponent) {
-              (energyComponent as { recharge: (amount: number) => void }).recharge(chargeAmount);
+          if (player instanceof Player) {
+            const restoredAmount = player.restoreEnergy(chargeAmount);
 
-              eventSystem?.emit('energy_recharged', {
-                playerId,
-                amount: chargeAmount,
-                position: chargerPos,
-              });
-            }
+            eventSystem?.emit('energy_recharged', {
+              playerId,
+              amount: restoredAmount,
+              position: chargerPos,
+            });
           }
         }
       );
@@ -1052,6 +1049,21 @@ export class Game {
   }
 
   /**
+   * インベントリアイテムを使用する。
+   * エネルギーに関する効果はPlayerへ委譲し、EnergyComponentを経由させる。
+   */
+  useInventoryItem(itemId: string): boolean {
+    if (!this.player) {
+      return false;
+    }
+
+    return this.gameStore.useItem(itemId, {
+      restoreEnergy: (amount) => this.player?.restoreEnergy(amount) ?? 0,
+      increaseMaxEnergy: (amount) => this.player?.increaseMaxEnergy(amount) ?? false,
+    });
+  }
+
+  /**
    * スキルを使用
    * @param skillId スキルID
    * @returns 使用成功したかどうか
@@ -1066,8 +1078,8 @@ export class Game {
       return false;
     }
 
-    // 現在のエネルギーを取得
-    const currentEnergy = this.gameStore.player.status.energy;
+    // 実行時の正本であるEnergyComponentから現在値を取得
+    const currentEnergy = this.player.getEnergy();
 
     // スキルを使用
     const success = skillSystem.useSkill(skillId, this.player.id, currentEnergy);
@@ -1076,7 +1088,7 @@ export class Game {
       // エネルギーを消費
       const skill = skillSystem.getSkill(skillId);
       if (skill) {
-        this.gameStore.usePlayerEnergy(skill.energyCost);
+        this.player.consumeEnergy(skill.energyCost);
       }
     }
 

@@ -238,15 +238,15 @@ export class FloorManager {
 
     const player = players[0] as Player;
     const health = player.getComponent('health');
-    const energy = player.getComponent('energy');
+    const energy = player.getEnergySnapshot();
 
     if (!health || !energy) return null;
 
     return {
       hp: (health as unknown as { currentHp: number }).currentHp,
       maxHp: (health as unknown as { maxHp: number }).maxHp,
-      energy: (energy as unknown as { getCurrentEnergy: () => number }).getCurrentEnergy(),
-      maxEnergy: (energy as unknown as { getMaxEnergy: () => number }).getMaxEnergy(),
+      energy: energy.currentEnergy,
+      maxEnergy: energy.maxEnergy,
     };
   }
 
@@ -263,19 +263,16 @@ export class FloorManager {
 
     const player = players[0] as Player;
     const health = player.getComponent('health');
-    const energy = player.getComponent('energy');
 
     if (health && 'currentHp' in health) {
       (health as unknown as { currentHp: number }).currentHp = state.hp;
       (health as unknown as { maxHp: number }).maxHp = state.maxHp;
     }
 
-    if (energy && 'setEnergy' in energy) {
-      (energy as unknown as { setEnergy: (current: number, max: number) => void }).setEnergy(
-        state.energy,
-        state.maxEnergy
-      );
-    }
+    player.restoreEnergySnapshot({
+      currentEnergy: state.energy,
+      maxEnergy: state.maxEnergy,
+    });
 
     console.log('Player state restored:', state);
   }

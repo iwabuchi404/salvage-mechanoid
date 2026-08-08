@@ -3,6 +3,11 @@ import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 import type { InventoryItem, RobotPart, Weapon } from '../engine/types';
 
+export interface ItemEffectHandlers {
+  restoreEnergy?: (amount: number) => number;
+  increaseMaxEnergy?: (amount: number) => boolean;
+}
+
 export const useGameStore = defineStore('game', () => {
   // プレイヤーの状態を管理するref
   const player = ref({
@@ -49,11 +54,6 @@ export const useGameStore = defineStore('game', () => {
   // プレイヤーにダメージを与える関数
   function damagePlayer(amount: number) {
     player.value.status.hp = Math.max(0, player.value.status.hp - amount);
-  }
-
-  // プレイヤーのエネルギーを消費する関数
-  function usePlayerEnergy(amount: number) {
-    player.value.status.energy = Math.max(0, player.value.status.energy - amount);
   }
 
   // スコアを追加する関数
@@ -119,7 +119,7 @@ export const useGameStore = defineStore('game', () => {
    * @param itemId アイテムID
    * @returns 使用に成功したかどうか
    */
-  function useItem(itemId: string): boolean {
+  function useItem(itemId: string, handlers: ItemEffectHandlers = {}): boolean {
     const item = inventory.value.find((i) => i.id === itemId);
     if (!item) {
       console.warn(`Item not found: ${itemId}`);
@@ -127,7 +127,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     // アイテム効果を適用
-    const success = applyItemEffect(item);
+    const success = applyItemEffect(item, handlers);
 
     if (success) {
       // スタック可能なアイテムは数量を減らす
@@ -148,7 +148,7 @@ export const useGameStore = defineStore('game', () => {
    * @param item アイテム
    * @returns 適用に成功したかどうか
    */
-  function applyItemEffect(item: InventoryItem): boolean {
+  function applyItemEffect(item: InventoryItem, handlers: ItemEffectHandlers): boolean {
     const effect = item.effect;
 
     switch (effect.type) {
@@ -162,15 +162,9 @@ export const useGameStore = defineStore('game', () => {
         return true;
 
       case 'energy':
-        // エネルギー回復
-        if (effect.value) {
-          const newEnergy = Math.min(
-            player.value.status.energy + effect.value,
-            player.value.status.maxEnergy
-          );
-          player.value.status.energy = newEnergy;
-          console.log(`Restored ${effect.value} energy (current: ${newEnergy})`);
-        }
+        if (!effect.value || !handlers.restoreEnergy) return false;
+        handlers.restoreEnergy(effect.value);
+        console.log(`Restored ${effect.value} energy`);
         return true;
 
       case 'stat_boost':
@@ -196,11 +190,8 @@ export const useGameStore = defineStore('game', () => {
               );
               break;
             case 'maxEnergy':
-              player.value.status.maxEnergy += effect.value;
-              console.log(
-                `Max Energy increased by ${effect.value} (current: ${player.value.status.maxEnergy})`
-              );
-              break;
+              if (!handlers.increaseMaxEnergy) return false;
+              return handlers.increaseMaxEnergy(effect.value);
           }
         }
         return true;
@@ -344,7 +335,6 @@ export const useGameStore = defineStore('game', () => {
     playerEnergyPercentage,
     updatePlayerPosition,
     damagePlayer,
-    usePlayerEnergy,
     addScore,
     setPortalActive,
     isPortalActive,
