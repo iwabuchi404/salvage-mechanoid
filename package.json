@@ -4,10 +4,13 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
+    "dev": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "test:unit": "vue-cli-service test:unit",
     "lint": "vue-cli-service lint .gitignore . --fix",
-    "evaluate-maps": "ts-node src/tools/map-evaluation/evaluate-maps.ts"
+    "evaluate-maps": "ts-node src/tools/map-evaluation/evaluate-maps.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@pixi/sound": "^6.0.1",
@@ -19,6 +22,7 @@
     "vue-router": "^4.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/jest": "^27.0.1",
     "@types/node": "^18.19.0",
     "@typescript-eslint/eslint-plugin": "^5.4.0",

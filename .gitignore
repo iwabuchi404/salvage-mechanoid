@@ -16,8 +16,14 @@ pnpm-debug.log*
 # Editor directories and files
 .idea
 .vscode
+.claude
+.cursor
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Test artifacts
+/playwright-report/
+/test-results/
