@@ -6,6 +6,7 @@ import { useGameStore } from '../../stores/gameStore';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
 import ItemPickupDialog from '../uiParts/ItemPickupDialog.vue';
+import SkillSelectDialog from '../uiParts/SkillSelectDialog.vue';
 import type { Direction } from '../../engine/types';
 
 const gameStore = useGameStore();
@@ -22,7 +23,20 @@ const message = ref<string | null>(null);
 const showActionMenu = ref(true);
 const showItemList = ref(false);
 const showStatusWindow = ref(false);
+const showSkillMenu = ref(false);
 const playerItems = ref<Array<{ id: string; name: string; description: string }>>([]);
+const playerSkills = ref<
+  Array<{
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    energyCost: number;
+    cooldown: number;
+    currentCooldown: number;
+    canUse: boolean;
+  }>
+>([]);
 const isPlayerTurn = ref(true);
 const playerDirection = ref<Direction>('down');
 
@@ -187,6 +201,54 @@ const attack = async () => {
 const showStatus = () => {
   showStatusWindow.value = true;
   selectedTile.value = null;
+};
+
+// スキルメニューを表示
+const showSkills = () => {
+  const skillSystem = game.getSkillSystem();
+  if (!skillSystem) {
+    console.warn('SkillSystem not found');
+    return;
+  }
+
+  // 習得済みスキル一覧を取得
+  const learnedSkills = skillSystem.getLearnedSkills();
+  const currentEnergy = gameStore.player.status.energy;
+
+  // スキル情報を整形
+  playerSkills.value = learnedSkills.map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    icon: skill.icon,
+    energyCost: skill.energyCost,
+    cooldown: skill.cooldown,
+    currentCooldown: skillSystem.getCooldownRemaining(skill.id),
+    canUse: skillSystem.canUseSkill(skill.id, currentEnergy),
+  }));
+
+  showSkillMenu.value = true;
+};
+
+// スキルメニューを閉じる
+const closeSkillMenu = () => {
+  showSkillMenu.value = false;
+};
+
+// スキルを使用
+const useSkill = (skillId: string) => {
+  const success = game.useSkill(skillId);
+  if (success) {
+    message.value = 'スキルを使用しました';
+    setTimeout(() => {
+      message.value = '';
+    }, 2000);
+  } else {
+    message.value = 'スキルを使用できません';
+    setTimeout(() => {
+      message.value = '';
+    }, 2000);
+  }
 };
 
 // ゲームクリア時の処理を追加
@@ -378,6 +440,7 @@ const closePortalDialog = () => {
         <BaseButton @click="attack" :type="'small'">攻撃</BaseButton>
         <BaseButton @click="showStatus" :type="'small'">ステータス</BaseButton>
         <BaseButton @click="showItems" :type="'small'">アイテム</BaseButton>
+        <BaseButton @click="showSkills" :type="'small'">スキル</BaseButton>
       </div>
 
       <BaseWindow
@@ -444,6 +507,22 @@ const closePortalDialog = () => {
 
       <!-- アイテム取得確認ダイアログ -->
       <ItemPickupDialog />
+
+      <!-- スキル選択ダイアログ -->
+      <BaseWindow
+        height="360px"
+        width="300px"
+        :pos="{ x: 'calc(100% - 340px)', y: 'calc(10px)' }"
+        :state="showSkillMenu"
+        :title="'スキル選択'"
+        @close="closeSkillMenu"
+      >
+        <SkillSelectDialog
+          :skills="playerSkills"
+          :current-energy="gameStore.player.status.energy"
+          @use-skill="useSkill"
+        />
+      </BaseWindow>
 
       <BaseWindow
         height="240px"

@@ -10,6 +10,10 @@ import { InteractionSystem } from '../engine/interaction/InteractionSystem';
 import { InputSystem } from '../engine/input/InputSystem';
 import { FOVSystem } from '../engine/fov/FOVSystem';
 import { LootSystem } from '../engine/loot/LootSystem';
+import { SkillSystem } from '../engine/skill/SkillSystem';
+import { PartsSystem } from '../engine/parts/PartsSystem';
+import { initialPartSet } from '../data/parts/initialParts';
+import { initialWeaponSet } from '../data/weapons/initialWeapons';
 import { TileMap } from '../engine/world/TileMap';
 import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
@@ -215,8 +219,19 @@ export class Game {
     const lootSystem = new LootSystem();
     this.engine.registerSystem('loot', lootSystem);
 
+    // スキルシステム
+    const skillSystem = new SkillSystem();
+    this.engine.registerSystem('skill', skillSystem);
+
+    // パーツシステム
+    const partsSystem = new PartsSystem();
+    this.engine.registerSystem('parts', partsSystem);
+
     // すべてのシステムを初期化
     await this.engine.initialize();
+
+    // パーツシステムに初期装備を設定
+    this.setupInitialLoadout(partsSystem);
 
     // RendererSystem初期化後にPIXIのcanvasをInputSystemに設定
     const app = rendererSystem.getApp();
@@ -226,6 +241,56 @@ export class Game {
     } else {
       console.warn('Failed to get PIXI canvas for InputSystem');
     }
+  }
+
+  /**
+   * 初期装備をセットアップ
+   */
+  private setupInitialLoadout(partsSystem: PartsSystem): void {
+    // 初期パーツを装備
+    partsSystem.setLoadout({
+      head: initialPartSet.head,
+      torso: initialPartSet.torso,
+      armR: initialPartSet.armR,
+      armL: initialPartSet.armL,
+      legs: initialPartSet.legs,
+      backpack: initialPartSet.backpack,
+      core: initialPartSet.core,
+      weaponR: initialWeaponSet.starter,
+      weaponL: null,
+    });
+
+    // パーツステータスをgameStoreに反映
+    this.updatePlayerStatsFromParts(partsSystem);
+
+    console.log('Initial loadout set up successfully');
+  }
+
+  /**
+   * パーツシステムのステータスをgameStoreに反映
+   */
+  private updatePlayerStatsFromParts(partsSystem: PartsSystem): void {
+    const stats = partsSystem.getStats();
+    const gameStore = useGameStore();
+
+    // HPと最大HPを更新
+    gameStore.player.status.maxHp = stats.maxHp;
+    gameStore.player.status.hp = stats.maxHp; // 初期化時はHPを最大値に
+
+    // エネルギーと最大エネルギーを更新
+    gameStore.player.status.maxEnergy = stats.maxEnergy;
+    gameStore.player.status.energy = stats.maxEnergy; // 初期化時はエネルギーを最大値に
+
+    // 防御力を更新
+    gameStore.player.status.defense = stats.defense;
+
+    console.log('Player stats updated from parts:', {
+      maxHp: stats.maxHp,
+      maxEnergy: stats.maxEnergy,
+      defense: stats.defense,
+      totalWeight: stats.totalWeight,
+      carryCapacity: stats.carryCapacity,
+    });
   }
 
   /**
@@ -972,5 +1037,45 @@ export class Game {
    */
   getMaxFloors(): number {
     return this.floorManager?.getMaxFloors() || 10;
+  }
+
+  /**
+   * スキルシステムを取得
+   * @returns SkillSystem
+   */
+  getSkillSystem(): SkillSystem | null {
+    return this.engine.getSystem<SkillSystem>('skill') || null;
+  }
+
+  /**
+   * スキルを使用
+   * @param skillId スキルID
+   * @returns 使用成功したかどうか
+   */
+  useSkill(skillId: string): boolean {
+    if (!this.player) {
+      return false;
+    }
+
+    const skillSystem = this.getSkillSystem();
+    if (!skillSystem) {
+      return false;
+    }
+
+    // 現在のエネルギーを取得
+    const currentEnergy = this.gameStore.player.status.energy;
+
+    // スキルを使用
+    const success = skillSystem.useSkill(skillId, this.player.id, currentEnergy);
+
+    if (success) {
+      // エネルギーを消費
+      const skill = skillSystem.getSkill(skillId);
+      if (skill) {
+        this.gameStore.usePlayerEnergy(skill.energyCost);
+      }
+    }
+
+    return success;
   }
 }

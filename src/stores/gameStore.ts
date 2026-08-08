@@ -1,7 +1,7 @@
 // src/stores/game.ts
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
-import type { InventoryItem } from '../engine/types';
+import type { InventoryItem, RobotPart, Weapon } from '../engine/types';
 
 export const useGameStore = defineStore('game', () => {
   // プレイヤーの状態を管理するref
@@ -241,6 +241,98 @@ export const useGameStore = defineStore('game', () => {
     return inventory.value.length >= maxInventorySize.value;
   });
 
+  // ============================================================
+  // パーツ倉庫管理
+  // ============================================================
+
+  const partsStorage = ref<RobotPart[]>([]);
+  const weaponsStorage = ref<Weapon[]>([]);
+  const maxStorageCapacity = ref(20); // 初期容量20個
+
+  /**
+   * パーツを倉庫に追加
+   */
+  function addPartToStorage(part: RobotPart): boolean {
+    const totalItems = partsStorage.value.length + weaponsStorage.value.length;
+    if (totalItems >= maxStorageCapacity.value) {
+      console.warn('Storage is full');
+      return false;
+    }
+
+    partsStorage.value.push(part);
+    console.log(`Added part to storage: ${part.name}`);
+    return true;
+  }
+
+  /**
+   * 武器を倉庫に追加
+   */
+  function addWeaponToStorage(weapon: Weapon): boolean {
+    const totalItems = partsStorage.value.length + weaponsStorage.value.length;
+    if (totalItems >= maxStorageCapacity.value) {
+      console.warn('Storage is full');
+      return false;
+    }
+
+    weaponsStorage.value.push(weapon);
+    console.log(`Added weapon to storage: ${weapon.name}`);
+    return true;
+  }
+
+  /**
+   * パーツを倉庫から削除
+   */
+  function removePartFromStorage(partId: string): boolean {
+    const index = partsStorage.value.findIndex((p) => p.id === partId);
+    if (index === -1) {
+      console.warn(`Part not found: ${partId}`);
+      return false;
+    }
+
+    partsStorage.value.splice(index, 1);
+    console.log(`Removed part from storage: ${partId}`);
+    return true;
+  }
+
+  /**
+   * 武器を倉庫から削除
+   */
+  function removeWeaponFromStorage(weaponId: string): boolean {
+    const index = weaponsStorage.value.findIndex((w) => w.id === weaponId);
+    if (index === -1) {
+      console.warn(`Weapon not found: ${weaponId}`);
+      return false;
+    }
+
+    weaponsStorage.value.splice(index, 1);
+    console.log(`Removed weapon from storage: ${weaponId}`);
+    return true;
+  }
+
+  /**
+   * 倉庫容量を拡張
+   */
+  function expandStorage(additionalSlots: number): void {
+    maxStorageCapacity.value += additionalSlots;
+    console.log(`Storage expanded by ${additionalSlots} (new max: ${maxStorageCapacity.value})`);
+  }
+
+  /**
+   * 倉庫の空きスロット数を取得
+   */
+  const availableStorageSlots = computed(() => {
+    const totalItems = partsStorage.value.length + weaponsStorage.value.length;
+    return maxStorageCapacity.value - totalItems;
+  });
+
+  /**
+   * 倉庫が満杯かどうか
+   */
+  const isStorageFull = computed(() => {
+    const totalItems = partsStorage.value.length + weaponsStorage.value.length;
+    return totalItems >= maxStorageCapacity.value;
+  });
+
   // 外部から使用可能な状態とメソッドを返す
   return {
     player,
@@ -265,5 +357,16 @@ export const useGameStore = defineStore('game', () => {
     removeItemFromInventory,
     useItem,
     expandInventory,
+    // パーツ倉庫関連
+    partsStorage,
+    weaponsStorage,
+    maxStorageCapacity,
+    availableStorageSlots,
+    isStorageFull,
+    addPartToStorage,
+    addWeaponToStorage,
+    removePartFromStorage,
+    removeWeaponFromStorage,
+    expandStorage,
   };
 });

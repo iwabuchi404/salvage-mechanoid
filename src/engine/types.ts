@@ -863,3 +863,208 @@ export interface InventoryItem {
   stackable: boolean; // スタック可能か
   quantity: number; // 所持数
 }
+
+// ============================================================
+// スキルシステム
+// ============================================================
+
+/**
+ * スキルのタイプ
+ */
+export enum SkillType {
+  MOBILITY = 'mobility', // 移動系スキル
+  ATTACK = 'attack', // 攻撃系スキル
+  DEFENSE = 'defense', // 防御系スキル
+  SUPPORT = 'support', // サポート系スキル
+  UTILITY = 'utility', // ユーティリティ系スキル
+}
+
+/**
+ * スキル効果のターゲット
+ */
+export enum SkillTarget {
+  SELF = 'self', // 自分自身
+  ENEMY = 'enemy', // 敵単体
+  ALLIES = 'allies', // 味方全体
+  AREA = 'area', // 範囲
+}
+
+/**
+ * スキル定義
+ */
+export interface Skill {
+  id: string; // スキルID
+  name: string; // スキル名
+  description: string; // 説明文
+  icon: string; // アイコン（絵文字 or 画像パス）
+  type: SkillType; // スキルタイプ
+  target: SkillTarget; // ターゲット
+
+  // コスト
+  energyCost: number; // エネルギーコスト
+  cooldown: number; // クールダウン（ターン数）
+
+  // 効果
+  range: number; // 射程（マス数）
+  areaOfEffect?: number; // 効果範囲（半径、マス数）
+  damage?: number; // ダメージ量
+  heal?: number; // 回復量
+  statusEffect?: string; // ステータス効果
+
+  // 使用条件
+  minLevel?: number; // 最低レベル
+  requiredEnergy?: number; // 最低エネルギー
+}
+
+// ============================================================
+// ロボットパーツシステム
+// ============================================================
+
+/**
+ * パーツスロット
+ */
+export enum PartSlot {
+  HEAD = 'head', // 頭部
+  TORSO = 'torso', // 胴体
+  ARM_R = 'arm_r', // 右腕
+  ARM_L = 'arm_l', // 左腕
+  LEGS = 'legs', // 脚部
+  BACKPACK = 'backpack', // バックパック
+  CORE = 'core', // コア
+}
+
+/**
+ * 腕パーツのタイプ
+ */
+export enum ArmType {
+  MANIPULATOR = 'manipulator', // マニピュレーター型（手付き腕）
+  WEAPON_ARM = 'weapon_arm', // 武器腕型（固定武装）
+}
+
+/**
+ * レアリティ
+ */
+export enum Rarity {
+  COMMON = 'common', // コモン
+  RARE = 'rare', // レア
+  EPIC = 'epic', // エピック
+}
+
+/**
+ * パッシブ効果
+ */
+export interface PassiveEffect {
+  type: string; // 効果タイプ（energy_efficiency, cooldown_reduction, armor_boost, etc.）
+  value: number; // 効果値
+  description: string; // 効果説明
+}
+
+/**
+ * ロボットパーツ
+ */
+export interface RobotPart {
+  id: string; // パーツID
+  name: string; // パーツ名
+  description: string; // 説明文
+  slot: PartSlot; // 装備スロット
+  rarity: Rarity; // レアリティ
+
+  // ステータス
+  hp: number; // HP増加量
+  defense: number; // 防御力増加量
+  weight: number; // 重量（kg）
+  energyCapacity: number; // エネルギー容量増加量
+
+  // スキル（nullの場合スキルなし）
+  skill: Skill | null;
+
+  // パッシブ効果（コア専用、nullの場合効果なし）
+  passiveEffect: PassiveEffect | null;
+
+  // 腕パーツ専用
+  armType?: ArmType; // 腕のタイプ
+  canEquipWeapon?: boolean; // 武器装備可能か
+
+  // 脚部専用
+  carryCapacity?: number; // 積載量（kg）
+
+  // 売却価格
+  sellPrice: number;
+}
+
+/**
+ * 武器タイプ
+ */
+export enum WeaponType {
+  MELEE_ENERGY = 'melee_energy', // 近接 × エネルギー
+  MELEE_AMMO = 'melee_ammo', // 近接 × 弾薬
+  RANGED_ENERGY = 'ranged_energy', // 射撃 × エネルギー
+  RANGED_AMMO = 'ranged_ammo', // 射撃 × 弾薬
+}
+
+/**
+ * 武器
+ */
+export interface Weapon {
+  id: string; // 武器ID
+  name: string; // 武器名
+  description: string; // 説明文
+  type: WeaponType; // 武器タイプ
+  rarity: Rarity; // レアリティ
+
+  // ステータス
+  damage: number; // ダメージ
+  range: number; // 射程（マス数、近接は1）
+  accuracy: number; // 命中率（%）
+  weight: number; // 重量（kg）
+
+  // コスト
+  energyCost?: number; // エネルギーコスト（エネルギー系武器のみ）
+  ammoCapacity?: number; // 弾薬容量（弾薬系武器のみ）
+  currentAmmo?: number; // 現在の弾薬数
+
+  // 耐久度（将来的に実装）
+  durability?: number; // 最大耐久度
+  currentDurability?: number; // 現在の耐久度
+
+  // 売却価格
+  sellPrice: number;
+}
+
+/**
+ * プレイヤーのパーツ構成
+ */
+export interface RobotLoadout {
+  head: RobotPart | null;
+  torso: RobotPart | null;
+  armR: RobotPart | null;
+  armL: RobotPart | null;
+  legs: RobotPart | null;
+  backpack: RobotPart | null;
+  core: RobotPart | null;
+
+  // マニピュレーター装備武器
+  weaponR: Weapon | null; // 右手武器
+  weaponL: Weapon | null; // 左手武器
+}
+
+/**
+ * パーツ倉庫
+ */
+export interface PartsStorage {
+  parts: RobotPart[]; // 保管中のパーツ
+  weapons: Weapon[]; // 保管中の武器
+  maxCapacity: number; // 最大容量
+}
+
+/**
+ * ロボットの総合ステータス（装備パーツから計算）
+ */
+export interface RobotStats {
+  maxHp: number; // 最大HP
+  defense: number; // 防御力
+  totalWeight: number; // 総重量
+  maxEnergy: number; // 最大エネルギー
+  carryCapacity: number; // 積載量
+  passiveEffects: PassiveEffect[]; // パッシブ効果一覧
+}
