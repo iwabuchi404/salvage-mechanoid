@@ -7,6 +7,7 @@
     "dev": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "test:unit": "vue-cli-service test:unit",
+    "test:coverage": "vue-cli-service test:unit --runInBand --coverage",
     "lint": "vue-cli-service lint .gitignore . --fix",
     "evaluate-maps": "ts-node src/tools/map-evaluation/evaluate-maps.ts",
     "test:e2e": "playwright test",

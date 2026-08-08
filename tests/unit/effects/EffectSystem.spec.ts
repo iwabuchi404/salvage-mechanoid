@@ -1,172 +1,115 @@
-import { AnimationManager, Easing } from '@/engine/graphics/AnimationManager';
+import { Engine } from '@/engine/Engine';
+import { Component } from '@/engine/entity/Component';
+import { Entity } from '@/engine/entity/Entity';
+import { EntitySystem } from '@/engine/entity/EntitySystem';
+import { EventSystem } from '@/engine/events/EventSystem';
+import { EffectSystem } from '@/engine/effects/EffectSystem';
+import { AnimationManager } from '@/engine/graphics/AnimationManager';
+import { RendererSystem } from '@/engine/graphics/RendererSystem';
+import * as PIXI from 'pixi.js';
 
-describe('EffectSystem units', () => {
-  describe('blendTint (via AnimationManager integration)', () => {
-    it('should blend tints correctly at t=0', () => {
-      const from = 0xff0000;
-      const to = 0x00ff00;
-      const t = 0;
-      const r1 = (from >> 16) & 0xff;
-      const g1 = (from >> 8) & 0xff;
-      const b1 = from & 0xff;
-      const r2 = (to >> 16) & 0xff;
-      const g2 = (to >> 8) & 0xff;
-      const b2 = to & 0xff;
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      const result = (r << 16) | (g << 8) | b;
-      expect(result).toBe(0xff0000);
-    });
+describe('EffectSystem', () => {
+  let events: EventSystem;
+  let entities: EntitySystem;
+  let animations: AnimationManager;
+  let effects: EffectSystem;
+  let sprite: PIXI.Sprite;
 
-    it('should blend tints correctly at t=1', () => {
-      const from = 0xff0000;
-      const to = 0x00ff00;
-      const t = 1;
-      const r1 = (from >> 16) & 0xff;
-      const g1 = (from >> 8) & 0xff;
-      const b1 = from & 0xff;
-      const r2 = (to >> 16) & 0xff;
-      const g2 = (to >> 8) & 0xff;
-      const b2 = to & 0xff;
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      const result = (r << 16) | (g << 8) | b;
-      expect(result).toBe(0x00ff00);
-    });
+  beforeEach(async () => {
+    events = new EventSystem();
+    entities = new EntitySystem();
+    animations = new AnimationManager();
+    sprite = { tint: 0xffffff, x: 10, y: 20 } as PIXI.Sprite;
 
-    it('should blend tints correctly at t=0.5', () => {
-      const from = 0x000000;
-      const to = 0xffffff;
-      const t = 0.5;
-      const r1 = (from >> 16) & 0xff;
-      const g1 = (from >> 8) & 0xff;
-      const b1 = from & 0xff;
-      const r2 = (to >> 16) & 0xff;
-      const g2 = (to >> 8) & 0xff;
-      const b2 = to & 0xff;
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      const result = (r << 16) | (g << 8) | b;
-      expect(((result >> 16) & 0xff)).toBe(128);
-      expect(((result >> 8) & 0xff)).toBe(128);
-      expect((result & 0xff)).toBe(128);
-    });
+    const entity = new Entity('target', 'actor');
+    const spriteComponent = {
+      type: 'sprite',
+      entity: null,
+      initialize: jest.fn(),
+      update: jest.fn(),
+      getSprite: () => sprite,
+    } as Component & { getSprite: () => PIXI.Sprite };
+    entity.addComponent(spriteComponent);
+
+    const renderer = {
+      getAnimationManager: () => animations,
+    } as unknown as RendererSystem;
+    const engine = {
+      getSystem: (name: string) => {
+        if (name === 'event') return events;
+        if (name === 'entity') return entities;
+        if (name === 'renderer') return renderer;
+        return undefined;
+      },
+    } as unknown as Engine;
+    await entities.initialize(engine);
+    entities.registerEntity(entity);
+    effects = new EffectSystem();
+    await effects.initialize(engine);
   });
 
-  describe('effect animation via AnimationManager', () => {
-    let anim: AnimationManager;
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-    beforeEach(() => {
-      anim = new AnimationManager();
-    });
+  it('damage_takenで赤く点滅し、完了時に元の色へ戻す', () => {
+    events.emit('damage_taken', { entityId: 'target' });
 
-    it('should animate damage tint effect', () => {
-      const tintValues: number[] = [];
-      const originalTint = 0xffffff;
+    animations.update(50);
+    expect(sprite.tint).toBe(0xff4444);
 
-      anim.animate({
-        id: 'damage_test',
-        duration: 300,
-        easing: Easing.linear,
-        onUpdate: (p: number) => {
-          if (p < 0.5) {
-            tintValues.push(0xff4444);
-          } else {
-            tintValues.push(0xffffff);
-          }
-        },
-        onComplete: () => {
-          tintValues.push(originalTint);
-        },
-      });
+    animations.update(250);
+    expect(sprite.tint).toBe(0xffffff);
+  });
 
-      anim.update(100);
-      anim.update(200);
+  it('entity_healedで緑に点滅し、完了時に元の色へ戻す', () => {
+    events.emit('entity_healed', { entityId: 'target' });
 
-      expect(tintValues[0]).toBe(0xff4444);
-      expect(tintValues[tintValues.length - 1]).toBe(originalTint);
-    });
+    animations.update(50);
+    expect(sprite.tint).toBe(0x44ff44);
 
-    it('should animate shake effect with decreasing intensity', () => {
-      const offsets: number[] = [];
+    animations.update(350);
+    expect(sprite.tint).toBe(0xffffff);
+  });
 
-      anim.animate({
-        id: 'shake_test',
-        duration: 300,
-        easing: Easing.linear,
-        onUpdate: (p: number) => {
-          const intensity = (1 - p) * 5;
-          offsets.push(intensity);
-        },
-      });
+  it('attack_performedでスプライトを動かし、完了時に元の位置へ戻す', () => {
+    events.emit('attack_performed', { entityId: 'target' });
 
-      anim.update(50);
-      anim.update(50);
-      anim.update(50);
-      anim.update(150);
+    animations.update(100);
+    expect(sprite.x).toBeGreaterThan(10);
+    expect(sprite.y).toBeLessThan(20);
 
-      expect(offsets[0]).toBeGreaterThan(offsets[1]);
-      expect(offsets[1]).toBeGreaterThan(offsets[2]);
-      expect(offsets[offsets.length - 1]).toBeCloseTo(0, 5);
-    });
+    animations.update(100);
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 10, y: 20 });
+  });
 
-    it('should animate attack effect with sin wave', () => {
-      const offsets: number[] = [];
+  it('shake_requestedで減衰する揺れを開始し、完了時に元の位置へ戻す', () => {
+    jest.spyOn(Math, 'random').mockReturnValue(1);
 
-      anim.animate({
-        id: 'attack_test',
-        duration: 200,
-        easing: Easing.linear,
-        onUpdate: (p: number) => {
-          offsets.push(Math.sin(p * Math.PI) * 10);
-        },
-      });
+    events.emit('shake_requested', { entityId: 'target' });
 
-      anim.update(50);
-      anim.update(150);
+    animations.update(100);
+    expect(sprite.x).toBeGreaterThan(10);
+    expect(sprite.y).toBeGreaterThan(20);
 
-      expect(offsets[0]).toBeGreaterThan(0);
-      expect(offsets[0]).toBeLessThanOrEqual(10);
-    });
+    animations.update(200);
+    expect({ x: sprite.x, y: sprite.y }).toEqual({ x: 10, y: 20 });
+  });
 
-    it('should animate explosion particles outward', () => {
-      const distances: number[] = [];
-      const particleCount = 12;
+  it('enemy_destroyedの位置を爆発エフェクトへ渡す', () => {
+    const explosion = jest.spyOn(effects, 'playExplosionEffect').mockImplementation();
+    const position = { x: 3, y: 4, z: 0 };
 
-      anim.animate({
-        id: 'explosion_test',
-        duration: 600,
-        easing: Easing.easeOut,
-        onUpdate: (p: number) => {
-          for (let i = 0; i < particleCount; i++) {
-            const angle = (i / particleCount) * Math.PI * 2;
-            const distance = p * 60;
-            distances.push(Math.cos(angle) * distance);
-          }
-        },
-      });
+    events.emit('enemy_destroyed', { position });
 
-      anim.update(300);
-      expect(distances.length).toBe(particleCount);
-      expect(Math.abs(distances[0])).toBeGreaterThan(0);
-    });
+    expect(explosion).toHaveBeenCalledWith(position);
+  });
 
-    it('should complete and clean up after effect duration', () => {
-      let completed = false;
-      anim.animate({
-        id: 'test_effect',
-        duration: 200,
-        easing: Easing.linear,
-        onUpdate: () => {},
-        onComplete: () => { completed = true; },
-      });
+  it('対象エンティティがない場合はアニメーションを登録しない', () => {
+    const animate = jest.spyOn(animations, 'animate');
 
-      anim.update(200);
-      expect(completed).toBe(true);
-      expect(anim.isAnimating('test_effect')).toBe(false);
-    });
+    events.emit('damage_taken', { entityId: 'missing' });
+
+    expect(animate).not.toHaveBeenCalled();
   });
 });
