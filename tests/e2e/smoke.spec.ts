@@ -16,15 +16,11 @@ test.describe('Game application smoke tests', () => {
     expect(errors).toEqual([]);
   });
 
-  test('start screen has game title or start button', async ({ page }) => {
+  test('start screen has the game title and start button', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(1000);
 
-    const appContainer = page.locator('#app-container');
-    await expect(appContainer).toBeVisible();
-
-    const pageText = await appContainer.textContent();
-    expect(pageText).toBeTruthy();
+    await expect(page.getByRole('heading', { name: 'サルベージ・メカノイド' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ダンジョン潜入' })).toBeVisible();
   });
 });
 
@@ -47,6 +43,11 @@ test.describe('Engine test view (?test)', () => {
     expect(canvasBox).not.toBeNull();
     expect(canvasBox!.width).toBeGreaterThan(0);
     expect(canvasBox!.height).toBeGreaterThan(0);
+
+    const criticalErrors = errors.filter(
+      (e) => !e.includes('Failed to load resource') && !e.includes('404')
+    );
+    expect(criticalErrors).toEqual([]);
   });
 
   test('engine test view renders without fatal errors', async ({ page }) => {
@@ -83,21 +84,13 @@ test.describe('Game screen initialization', () => {
     });
 
     await page.goto('/');
-    await page.waitForTimeout(1000);
+    await page.getByRole('button', { name: 'ダンジョン潜入' }).click();
 
-    const startButton = page.locator('button, [role="button"], a').filter({ hasText: /start|開始|ゲーム|スタート/i });
-    if (await startButton.count() > 0) {
-      await startButton.first().click();
-      await page.waitForTimeout(3000);
-
-      const canvas = page.locator('canvas');
-      if (await canvas.count() > 0) {
-        await expect(canvas.first()).toBeVisible();
-        const box = await canvas.first().boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.width).toBeGreaterThan(0);
-      }
-    }
+    const canvas = page.locator('canvas').first();
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(0);
 
     const criticalErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('404')
