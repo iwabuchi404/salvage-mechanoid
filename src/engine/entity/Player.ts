@@ -10,6 +10,9 @@ import { Engine } from '../../engine/Engine';
 import { EventSystem } from '../../engine/events/EventSystem';
 import { EntitySystem } from '../../engine/entity/EntitySystem';
 import { useGameStore } from '../../stores/gameStore';
+import { RENDER_CONFIG } from '../../engine/graphics/RenderConfig';
+import { RendererSystem } from '../../engine/graphics/RendererSystem';
+import { WorldSystem } from '../../engine/world/WorldSystem';
 
 /**
  * プレイヤークラス - プレイヤーのエンティティ
@@ -404,7 +407,7 @@ export class Player extends Entity {
       eventSystem.on('move_completed', (data) => {
         if (data.entityId === this.id && this.camera) {
           // 座標変換システムを使用してスクリーン座標を取得
-          const rendererSystem = Engine.instance.getSystem<any>('renderer');
+          const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
           if (rendererSystem) {
             const coordSystem = rendererSystem.getCoordinateSystem();
             const screenPos = coordSystem.isometricToScreen(
@@ -415,7 +418,10 @@ export class Player extends Entity {
 
             // カメラをスムーズに移動（setTargetPositionを使用）
             // これにより、カメラがプレイヤーに滑らかに追従する
-            this.camera.setTargetPosition(screenPos.x - 400, screenPos.y - 300);
+            this.camera.setTargetPosition(
+              screenPos.x - RENDER_CONFIG.SCREEN_WIDTH / 2,
+              screenPos.y - RENDER_CONFIG.SCREEN_HEIGHT / 2
+            );
           }
         }
       });
@@ -423,13 +429,16 @@ export class Player extends Entity {
       // 移動中もカメラを追従させる（アニメーション中のスムーズな追従）
       eventSystem.on('move_started', (data) => {
         if (data.entityId === this.id && this.camera) {
-          const rendererSystem = Engine.instance.getSystem<any>('renderer');
+          const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
           if (rendererSystem) {
             const coordSystem = rendererSystem.getCoordinateSystem();
             const screenPos = coordSystem.isometricToScreen(data.to.x, data.to.y, data.to.z);
 
             // 移動先に向かってカメラをスムーズに移動開始
-            this.camera.setTargetPosition(screenPos.x - 400, screenPos.y - 300);
+            this.camera.setTargetPosition(
+              screenPos.x - RENDER_CONFIG.SCREEN_WIDTH / 2,
+              screenPos.y - RENDER_CONFIG.SCREEN_HEIGHT / 2
+            );
           }
         }
       });
@@ -441,7 +450,7 @@ export class Player extends Entity {
    * @param position 位置
    */
   private checkTileEvent(position: Vector3): void {
-    const worldSystem = Engine.instance.getSystem<any>('world');
+    const worldSystem = Engine.instance.getSystem<WorldSystem>('world');
     if (!worldSystem) return;
 
     const tileMap = worldSystem.getTileMap();

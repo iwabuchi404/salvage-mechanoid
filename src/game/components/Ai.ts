@@ -3,6 +3,7 @@ import { Entity } from '../../engine/entity/Entity';
 import { TransformComponent } from '../../engine/entity/components/Transform';
 import { Engine } from '../../engine/Engine';
 import { TileMap } from '../../engine/world/TileMap';
+import { WorldSystem } from '../../engine/world/WorldSystem';
 
 export class AIComponent implements Component {
   type = 'ai';
@@ -60,7 +61,7 @@ export class AIComponent implements Component {
     };
 
     // タイルマップから移動可能か確認
-    const tileMap = Engine.instance.getSystem<any>('world')?.getTileMap();
+    const tileMap = Engine.instance.getSystem<WorldSystem>('world')?.getTileMap();
     if (tileMap && tileMap.isWalkable(newPos.x, newPos.y, newPos.z)) {
       transform.setPosition(newPos.x, newPos.y, newPos.z);
     }

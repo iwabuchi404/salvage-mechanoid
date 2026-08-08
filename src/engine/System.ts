@@ -16,4 +16,9 @@ export interface System {
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
   update(deltaTime: number): void;
+
+  /**
+   * システムを破棄し、リソースを解放する
+   */
+  destroy?(): void;
 }

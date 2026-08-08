@@ -3,63 +3,61 @@ import { System } from '../System';
 import { Engine } from '../Engine';
 import { CoordinateSystem } from './CoordinateSystem';
 import { Camera } from './Camera';
+import { TileRenderer } from './TileRenderer';
+import { AnimationManager } from './AnimationManager';
 import { EventSystem } from '../events/EventSystem';
 import { LayerName, Vector3 } from '../types';
+import { RENDER_CONFIG as CONFIG } from './RenderConfig';
 
 /**
  * レンダリングシステム - PIXIJSを使用して画面描画を管理
+ * ワールドコンテナ方式によりカメラ移動をO(1)で実現
  */
 export class RendererSystem implements System {
-  // PIXIJSアプリケーション
   private app: PIXI.Application | null = null;
-
-  // 描画先のキャンバス要素
   private canvas: HTMLCanvasElement | null = null;
 
-  // レイヤー（コンテナ）のマップ
+  // ワールドコンテナ（カメラ移動・ズーム・回転を適用）
+  private worldContainer: PIXI.Container | null = null;
+
+  // レイヤー（ワールドコンテナ内）
+  private terrainLayer: PIXI.Container | null = null;
+  private highlightLayer: PIXI.Container | null = null;
+  private objectLayer: PIXI.Container | null = null;
+  private characterLayer: PIXI.Container | null = null;
+  private effectLayer: PIXI.Container | null = null;
+
+  // UIレイヤー（画面固定、カメラ追従なし）
+  private uiLayer: PIXI.Container | null = null;
+
+  // レガシーレイヤーマップ（後方互換用）
   private layers: Map<string, PIXI.Container> = new Map();
 
-  // 座標変換システム
   private coordinateSystem: CoordinateSystem;
-
-  // カメラシステム
   private camera: Camera;
+  private tileRenderer: TileRenderer;
+  private animationManager: AnimationManager;
 
-  // ハイライトレイヤー（タイルホバー用）
-  private highlightLayer: PIXI.Container | null = null;
-
-  // 現在ホバー中のタイル座標
-  private hoveredTile: { x: number; y: number } | null = null;
-
-  // ハイライトグラフィックス
+  // ハイライト
   private highlightGraphics: PIXI.Graphics | null = null;
-
-  // タイルマップデータ（タイルの存在判定用）
+  private hoveredTile: { x: number; y: number } | null = null;
   private tileMapData: number[][] | null = null;
 
-  // タイルスプライトのマップ（座標 -> スプライト）
-  private tileSprites: Map<string, PIXI.Sprite> = new Map();
-
-  // 警告済みの欠落タイル（スパム防止用）
-  private missingTileWarnings: Set<string> | null = null;
-
-  // レンダラーの設定
-  private config = {
-    backgroundColor: 0x202020,
-    resolution: window.devicePixelRatio || 1,
-    autoDensity: true,
-    antialias: true,
-  };
+  // カメラ位置キャッシュ
+  private lastCameraX = Infinity;
+  private lastCameraY = Infinity;
+  private lastCameraZoom = -1;
 
   /**
    * コンストラクタ
    * @param tileWidth タイルの幅（ピクセル）
    * @param tileHeight タイルの高さ（ピクセル）
    */
-  constructor(tileWidth = 160, tileHeight = 120) {
+  constructor(tileWidth: number = CONFIG.TILE_WIDTH, tileHeight: number = CONFIG.TILE_HEIGHT) {
     this.coordinateSystem = new CoordinateSystem(tileWidth, tileHeight);
     this.camera = new Camera();
-    console.log(`RendererSystem created with tile dimensions: ${tileWidth}x${tileHeight}`);
+    this.tileRenderer = new TileRenderer(this.coordinateSystem);
+    this.animationManager = new AnimationManager();
   }
 
   /**
@@ -79,75 +77,69 @@ export class RendererSystem implements System {
       throw new Error('Canvas must be set before initialization');
     }
 
-    console.log('Initializing RendererSystem...');
-
-    // PIXIJSアプリケーションを作成
     this.app = new PIXI.Application();
     await this.app.init({
-      background: this.config.backgroundColor,
-      resolution: this.config.resolution,
-      autoDensity: this.config.autoDensity,
-      antialias: this.config.antialias,
+      background: CONFIG.BACKGROUND_COLOR,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+      antialias: CONFIG.ANTIALIAS,
+      width: CONFIG.SCREEN_WIDTH,
+      height: CONFIG.SCREEN_HEIGHT,
     });
-    console.log(
-      'PIXI Application initialized with size:',
-      this.app.screen.width,
-      'x',
-      this.app.screen.height
-    );
-    // キャンバスにPIXIJSのキャンバスを追加
     this.canvas.appendChild(this.app.canvas);
 
-    // レイヤーをセットアップ
     this.setupLayers();
-
-    // ハイライトレイヤーをセットアップ
     this.setupHighlightLayer();
 
-    // イベントシステムとの連携
+    // テクスチャ一括ロード
+    await this.tileRenderer.loadTextures();
+
     const eventSystem = engine.getSystem<EventSystem>('event');
     if (eventSystem) {
       eventSystem.on('render_entity', this.renderEntity.bind(this));
       eventSystem.on('tile_hovered', this.handleTileHover.bind(this));
       eventSystem.on('tile_visibility_changed', this.handleTileVisibilityChanged.bind(this));
-      console.log(
-        "Registered for 'render_entity', 'tile_hovered', and 'tile_visibility_changed' events"
-      );
-    } else {
-      console.warn('EventSystem not found, rendering events will not be processed');
     }
-
-    console.log('RendererSystem initialized');
   }
 
   /**
    * レイヤーをセットアップ
    */
   private setupLayers(): void {
-    // レイヤー名の配列
-    const layerNames = [
-      LayerName.BACKGROUND,
-      LayerName.TERRAIN,
-      LayerName.OBJECTS,
-      LayerName.CHARACTERS,
-      LayerName.EFFECTS,
-      LayerName.UI,
-    ];
+    // ワールドコンテナ（カメラ移動を適用）
+    this.worldContainer = new PIXI.Container();
+    this.app!.stage.addChild(this.worldContainer);
 
-    // 各レイヤーを作成して登録
-    layerNames.forEach((name, index) => {
-      const layer = new PIXI.Container();
-      layer.sortableChildren = true; // 自動深度ソート
-      layer.zIndex = index * 100; // レイヤーの重ね順を設定
+    // ワールド内レイヤー
+    this.terrainLayer = new PIXI.Container();
+    this.terrainLayer.sortableChildren = true;
+    this.worldContainer.addChild(this.terrainLayer);
+    this.layers.set(LayerName.TERRAIN, this.terrainLayer);
 
-      this.app!.stage.addChild(layer);
-      this.layers.set(name, layer);
+    this.highlightLayer = new PIXI.Container();
+    this.highlightLayer.sortableChildren = false;
+    this.worldContainer.addChild(this.highlightLayer);
+    this.layers.set(LayerName.BACKGROUND, this.highlightLayer);
 
-      console.log(`Created layer: ${name} with zIndex: ${layer.zIndex}`);
-    });
+    this.objectLayer = new PIXI.Container();
+    this.objectLayer.sortableChildren = true;
+    this.worldContainer.addChild(this.objectLayer);
+    this.layers.set(LayerName.OBJECTS, this.objectLayer);
 
-    // ルートステージにzIndexを設定
-    this.app!.stage.sortableChildren = true;
+    this.characterLayer = new PIXI.Container();
+    this.characterLayer.sortableChildren = true;
+    this.worldContainer.addChild(this.characterLayer);
+    this.layers.set(LayerName.CHARACTERS, this.characterLayer);
+
+    this.effectLayer = new PIXI.Container();
+    this.effectLayer.sortableChildren = true;
+    this.worldContainer.addChild(this.effectLayer);
+    this.layers.set(LayerName.EFFECTS, this.effectLayer);
+
+    // UIレイヤー（カメラ追従なし）
+    this.uiLayer = new PIXI.Container();
+    this.app!.stage.addChild(this.uiLayer);
+    this.layers.set(LayerName.UI, this.uiLayer);
   }
 
   /**
@@ -194,15 +186,12 @@ export class RendererSystem implements System {
 
     // 深度ソートのためのzIndexを設定
     // Y座標が小さいほど手前に表示され、Z座標（高さ）も考慮
-    sprite.zIndex = (position.y + position.z * 100) * 1000 + position.x;
+    sprite.zIndex = (position.y + position.x) * 1000 + position.z * 100;
 
     // スプライトをレイヤーに追加（まだ追加されていない場合）
     // 位置の設定はSpriteComponent.update()で行われるため、ここでは設定しない
     if (!sprite.parent) {
       this.layers.get(layer)!.addChild(sprite);
-      console.log(
-        `Added sprite to layer '${layer}' at position (${position.x}, ${position.y}, ${position.z})`
-      );
     }
   }
 
@@ -219,56 +208,37 @@ export class RendererSystem implements System {
 
   /**
    * 各フレームでの更新処理
+   * ワールドコンテナ方式によりO(1)でカメラを適用
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
   update(deltaTime: number): void {
     // カメラの更新
     this.camera.update(deltaTime);
 
-    // カメラが移動した場合のみテレイン更新（パフォーマンス最適化）
-    if (this.camera.x !== this.lastCameraX || this.camera.y !== this.lastCameraY) {
-      this.updateTerrainLayerPositions();
-      this.updateHighlight(); // カメラ移動時にハイライトも更新
+    // ワールドコンテナにカメラを適用（O(1)）
+    if (this.worldContainer) {
+      this.worldContainer.position.set(-this.camera.x, -this.camera.y);
+      this.worldContainer.scale.set(this.camera.zoom);
+      this.worldContainer.rotation = this.camera.rotation;
+    }
+
+    // ビューポートカリング（カメラが動いた時のみ）
+    if (
+      this.camera.x !== this.lastCameraX ||
+      this.camera.y !== this.lastCameraY ||
+      this.camera.zoom !== this.lastCameraZoom
+    ) {
+      if (this.terrainLayer) {
+        this.tileRenderer.updateViewport(this.terrainLayer, this.camera, this.coordinateSystem);
+      }
+      this.updateHighlight();
       this.lastCameraX = this.camera.x;
       this.lastCameraY = this.camera.y;
+      this.lastCameraZoom = this.camera.zoom;
     }
 
-    // 必要に応じて他の更新処理を追加
-    // 例: アニメーションの更新、パーティクルシステムの更新など
-  }
-
-  // カメラ位置のキャッシュ（最適化用）
-  private lastCameraX = 0;
-  private lastCameraY = 0;
-
-  /**
-   * すべてのレイヤーのスプライト位置をカメラオフセットに合わせて更新
-   */
-  private updateTerrainLayerPositions(): void {
-    // カメラ追従が必要なレイヤーを更新
-    const cameraFollowLayers = [
-      LayerName.TERRAIN,
-      LayerName.OBJECTS,
-      LayerName.CHARACTERS,
-      LayerName.EFFECTS,
-    ];
-
-    for (const layerName of cameraFollowLayers) {
-      const layer = this.layers.get(layerName);
-      if (!layer) continue;
-
-      for (const child of layer.children) {
-        const sprite = child as PIXI.Sprite & {
-          __baseScreenX?: number;
-          __baseScreenY?: number;
-        };
-
-        if (sprite.__baseScreenX === undefined || sprite.__baseScreenY === undefined) continue;
-
-        sprite.x = sprite.__baseScreenX - this.camera.x;
-        sprite.y = sprite.__baseScreenY - this.camera.y;
-      }
-    }
+    // アニメーション更新
+    this.animationManager.update(deltaTime);
   }
 
   /**
@@ -278,7 +248,6 @@ export class RendererSystem implements System {
    */
   resize(width: number, height: number): void {
     if (this.app) {
-      console.log(`Resizing renderer to ${width}x${height}`);
       this.app.renderer.resize(width, height);
 
       // リサイズ後にカメラの位置を中央に調整するなどの処理を追加可能
@@ -320,96 +289,17 @@ export class RendererSystem implements System {
 
   /**
    * タイルマップを描画
+   * TileRendererに委譲（ビューポートカリング・スプライトプーリング）
    * @param tileMap タイルマップデータ（2D配列）
-   * @param tileWidth タイルの幅
-   * @param tileHeight タイルの高さ
    */
   async renderTileMap(tileMap: number[][]): Promise<void> {
-    console.log(`Rendering tilemap: ${tileMap[0]?.length}x${tileMap.length}`);
-
-    // タイルマップデータを保存（ハイライト判定用）
     this.tileMapData = tileMap;
 
     const terrainLayer = this.layers.get(LayerName.TERRAIN);
-    if (!terrainLayer) {
-      console.warn('Terrain layer not found');
-      return;
-    }
+    if (!terrainLayer) return;
 
-    // 既存のタイルをクリア
-    terrainLayer.removeChildren();
-    this.tileSprites.clear();
-
-    // タイルマップを描画
-    for (let y = 0; y < tileMap.length; y++) {
-      for (let x = 0; x < tileMap[y].length; x++) {
-        const tileType = tileMap[y][x];
-
-        // 空タイル（0）はスキップ
-        if (tileType === 0) continue;
-
-        // タイルのテクスチャを決定
-        const texturePath = this.getTileTexture(tileType);
-
-        try {
-          // テクスチャを読み込み
-          const texture = await PIXI.Assets.load(texturePath);
-
-          // スプライトを作成
-          const sprite = new PIXI.Sprite(texture) as PIXI.Sprite & {
-            __baseScreenX?: number;
-            __baseScreenY?: number;
-          };
-          sprite.anchor.set(0.5, 0.5); // 旧システムに合わせてタイル中心をアンカーに
-
-          // アイソメトリック座標をスクリーン座標に変換
-          const screenPos = this.coordinateSystem.isometricToScreen(x, y, 0);
-          sprite.__baseScreenX = screenPos.x;
-          sprite.__baseScreenY = screenPos.y;
-
-          // カメラオフセットを適用（カメラが移動すると、スプライトは逆方向に移動）
-          sprite.x = screenPos.x - this.camera.x;
-          sprite.y = screenPos.y - this.camera.y;
-
-          // 各タイルタイプで異なる画像を使用するため、色調変更は不要
-
-          // 深度ソート用のzIndexを設定
-          sprite.zIndex = y * 1000 + x;
-
-          // タイルスプライトマップに保存
-          this.tileSprites.set(`${x},${y}`, sprite);
-
-          terrainLayer.addChild(sprite);
-        } catch (error) {
-          console.warn(`Failed to load tile texture: ${texturePath}`, error);
-        }
-      }
-    }
-
-    console.log(
-      `Rendered ${terrainLayer.children.length} tiles, tileSprites map size: ${this.tileSprites.size}`
-    );
-  }
-
-  /**
-   * タイルタイプに応じたテクスチャパスを取得
-   * @param tileType タイルタイプ
-   * @returns テクスチャパス
-   */
-  private getTileTexture(tileType: number): string {
-    // publicフォルダ内の画像を使用
-    switch (tileType) {
-      case 1: // GRASS (床)
-        return './image.png';
-      case 2: // WATER
-        return './image02.png';
-      case 3: // MOUNTAIN (壁)
-        return './image03.png';
-      case 4: // TILE
-        return './image.png';
-      default:
-        return './image.png';
-    }
+    this.tileRenderer.clear();
+    this.tileRenderer.renderTiles(terrainLayer, tileMap, this.camera, this.coordinateSystem);
   }
 
   /**
@@ -427,60 +317,25 @@ export class RendererSystem implements System {
 
   /**
    * タイルの可視性を更新
+   * TileRendererに委譲
    * @param x X座標
    * @param y Y座標
    * @param visible 現在視野内かどうか
    * @param explored 探索済みかどうか
    */
   updateTileVisibility(x: number, y: number, visible: boolean, explored: boolean): void {
-    const key = `${x},${y}`;
-    const sprite = this.tileSprites.get(key);
-    if (!sprite) {
-      // 初回のみログ出力（スパム防止）
-      if (!this.missingTileWarnings) {
-        this.missingTileWarnings = new Set();
-      }
-      if (!this.missingTileWarnings.has(key)) {
-        console.warn(`RendererSystem: Tile sprite not found for (${x}, ${y})`);
-        this.missingTileWarnings.add(key);
-      }
-      return;
-    }
-
-    if (!explored) {
-      // 未探索は少し暗く表示（alphaは使わない）
-      sprite.visible = true;
-      sprite.alpha = 1.0;
-      sprite.tint = 0xb0b0b0; // 少し暗く
-    } else if (!visible) {
-      // 探索済み・視野外は少し暗く表示（alphaは使わない）
-      sprite.visible = true;
-      sprite.alpha = 1.0;
-      sprite.tint = 0xc0c0c0; // 少し暗く
-    } else {
-      // 視野内は通常表示
-      sprite.visible = true;
-      sprite.alpha = 1.0;
-      sprite.tint = 0xffffff;
-    }
+    this.tileRenderer.updateTileVisibility(x, y, visible, explored);
   }
 
   /**
    * ハイライトレイヤーをセットアップ
+   * ワールドコンテナ内のhighlightLayerに配置
    */
   private setupHighlightLayer(): void {
-    // タイル(TERRAIN: 100)とオブジェクト(OBJECTS: 200)の間にハイライトレイヤーを配置
-    this.highlightLayer = new PIXI.Container();
-    this.highlightLayer.sortableChildren = true;
-    this.highlightLayer.zIndex = 150; // TERRAINとOBJECTSの間
+    if (!this.highlightLayer) return;
 
-    this.app!.stage.addChild(this.highlightLayer);
-
-    // ハイライトグラフィックスを作成
     this.highlightGraphics = new PIXI.Graphics();
     this.highlightLayer.addChild(this.highlightGraphics);
-
-    console.log('Highlight layer created with zIndex: 150 (between TERRAIN and OBJECTS)');
   }
 
   /**
@@ -535,56 +390,87 @@ export class RendererSystem implements System {
 
   /**
    * ハイライトを更新
+   * ワールド座標で描画（カメラオフセットはworldContainerが適用）
    */
   private updateHighlight(): void {
     if (!this.highlightGraphics || !this.hoveredTile) {
       return;
     }
 
-    // グラフィックスをクリア
     this.highlightGraphics.clear();
 
-    // アイソメトリック座標をスクリーン座標に変換
+    // ワールド座標（カメラオフセットなし）
     const screenPos = this.coordinateSystem.isometricToScreen(
       this.hoveredTile.x,
       this.hoveredTile.y,
       0
     );
 
-    // カメラオフセットを適用
-    const displayX = screenPos.x - this.camera.x;
-    const displayY = screenPos.y - this.camera.y;
-
-    // タイルサイズを取得
     const tileWidth = this.coordinateSystem.getTileWidth();
     const tileHeight = this.coordinateSystem.getTileHeight();
 
-    // アイソメトリックダイヤモンド形状を描画
-    // CoordinateSystemでは tileHeight / 3 を使用しているため、
-    // 実際のダイヤモンドの高さは tileHeight / 3 * 2 = tileHeight * 2 / 3
     const halfWidth = tileWidth / 2;
-    const halfHeight = tileHeight / 3; // tileHeight / 3 を使用
+    const halfHeight = tileHeight / 3;
+    const offsetY = -tileHeight / 6;
 
-    // ハイライトを少し上に調整
-    const offsetY = -tileHeight / 6; // 上方向に少しオフセット (120/6 = 20px上)
-
-    // 半透明のオレンジでハイライト
     this.highlightGraphics.poly([
-      { x: displayX, y: displayY + offsetY - halfHeight }, // 上
-      { x: displayX + halfWidth, y: displayY + offsetY }, // 右
-      { x: displayX, y: displayY + offsetY + halfHeight }, // 下
-      { x: displayX - halfWidth, y: displayY + offsetY }, // 左
+      { x: screenPos.x, y: screenPos.y + offsetY - halfHeight },
+      { x: screenPos.x + halfWidth, y: screenPos.y + offsetY },
+      { x: screenPos.x, y: screenPos.y + offsetY + halfHeight },
+      { x: screenPos.x - halfWidth, y: screenPos.y + offsetY },
     ]);
-    this.highlightGraphics.fill({ color: 0xffa500, alpha: 0.3 }); // オレンジ色
+    this.highlightGraphics.fill({ color: 0xffa500, alpha: 0.3 });
 
-    // 枠線を描画
     this.highlightGraphics.poly([
-      { x: displayX, y: displayY + offsetY - halfHeight }, // 上
-      { x: displayX + halfWidth, y: displayY + offsetY }, // 右
-      { x: displayX, y: displayY + offsetY + halfHeight }, // 下
-      { x: displayX - halfWidth, y: displayY + offsetY }, // 左
-      { x: displayX, y: displayY + offsetY - halfHeight }, // 上（閉じる）
+      { x: screenPos.x, y: screenPos.y + offsetY - halfHeight },
+      { x: screenPos.x + halfWidth, y: screenPos.y + offsetY },
+      { x: screenPos.x, y: screenPos.y + offsetY + halfHeight },
+      { x: screenPos.x - halfWidth, y: screenPos.y + offsetY },
+      { x: screenPos.x, y: screenPos.y + offsetY - halfHeight },
     ]);
-    this.highlightGraphics.stroke({ width: 2, color: 0xffa500, alpha: 0.8 }); // オレンジ色
+    this.highlightGraphics.stroke({ width: 2, color: 0xffa500, alpha: 0.8 });
+  }
+
+  /**
+   * AnimationManagerを取得
+   * @returns AnimationManagerのインスタンス
+   */
+  getAnimationManager(): AnimationManager {
+    return this.animationManager;
+  }
+
+  /**
+   * TileRendererを取得
+   * @returns TileRendererのインスタンス
+   */
+  getTileRenderer(): TileRenderer {
+    return this.tileRenderer;
+  }
+
+  /**
+   * スクリーン座標 → タイル座標（ピッキング）
+   * @param screenX スクリーンX座標
+   * @param screenY スクリーンY座標
+   * @returns タイル座標（整数）
+   */
+  screenToTile(screenX: number, screenY: number): { x: number; y: number } {
+    const worldX = screenX / this.camera.zoom + this.camera.x;
+    const worldY = screenY / this.camera.zoom + this.camera.y;
+    return this.coordinateSystem.screenToTile(worldX, worldY);
+  }
+
+  destroy(): void {
+    this.tileRenderer.destroy();
+    this.animationManager.destroy();
+
+    for (const [, layer] of this.layers) {
+      layer.destroy({ children: true });
+    }
+    this.layers.clear();
+
+    if (this.app) {
+      this.app.destroy(true);
+      this.app = null;
+    }
   }
 }

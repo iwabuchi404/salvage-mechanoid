@@ -201,24 +201,11 @@ export class InteractionSystem implements System {
       return;
     }
 
-    // カメラと座標変換システムを取得
-    const camera = this.rendererSystem.getCamera();
-    const coordSystem = this.rendererSystem.getCoordinateSystem();
+    // RendererSystemのscreenToTileを使用（カメラオフセット・ズーム考慮済み）
+    const gridPos = this.rendererSystem.screenToTile(screenX, screenY);
 
-    // 表示座標からスクリーン座標に変換（カメラオフセットを追加）
-    const worldScreenX = screenX + camera.x;
-    const worldScreenY = screenY + camera.y;
-
-    // スクリーン座標からグリッド座標に変換
-    const gridPos = coordSystem.screenToIsometric(worldScreenX, worldScreenY);
-
-    console.log(
-      `Click: screen(${screenX}, ${screenY}) -> world(${worldScreenX}, ${worldScreenY}) -> grid(${gridPos.x}, ${gridPos.y})`
-    );
-
-    // グリッド座標を整数に丸める
-    const intX = Math.round(gridPos.x);
-    const intY = Math.round(gridPos.y);
+    const intX = gridPos.x;
+    const intY = gridPos.y;
 
     // まずエンティティを検索
     const clickedEntity = this.findEntityAtPosition(intX, intY);
@@ -325,20 +312,11 @@ export class InteractionSystem implements System {
       return;
     }
 
-    // カメラと座標変換システムを取得
-    const camera = this.rendererSystem.getCamera();
-    const coordSystem = this.rendererSystem.getCoordinateSystem();
+    // RendererSystemのscreenToTileを使用（カメラオフセット・ズーム考慮済み）
+    const gridPos = this.rendererSystem.screenToTile(screenX, screenY);
 
-    // 表示座標からスクリーン座標に変換（カメラオフセットを追加）
-    const worldScreenX = screenX + camera.x;
-    const worldScreenY = screenY + camera.y;
-
-    // スクリーン座標からグリッド座標に変換
-    const gridPos = coordSystem.screenToIsometric(worldScreenX, worldScreenY);
-
-    // グリッド座標を整数に丸める
-    const intX = Math.round(gridPos.x);
-    const intY = Math.round(gridPos.y);
+    const intX = gridPos.x;
+    const intY = gridPos.y;
 
     // タイルホバーイベントを発行（タイルの存在チェックはRendererSystemで行う）
     this.eventSystem?.emit('tile_hovered', {

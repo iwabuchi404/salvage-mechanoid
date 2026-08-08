@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { Engine } from '../Engine';
 import { RendererSystem } from '../graphics/RendererSystem';
+import { EventSystem } from '../events/EventSystem';
 import * as PIXI from 'pixi.js';
 
 /**
@@ -24,6 +25,7 @@ export class Item extends Entity {
   private graphics: PIXI.Graphics | null = null;
   private inventoryItemType: InventoryItemType | null = null;
   private itemData: Omit<InventoryItem, 'id'> | null = null;
+  private inPlayerFOV = false;
 
   /**
    * コンストラクタ
@@ -54,6 +56,17 @@ export class Item extends Entity {
 
     // アイテムは画像がないため、PIXI.Graphics で円を描画
     this.createItemGraphics();
+
+    // FOV変更イベントをリッスン
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+        if (data.entityId === this.id) {
+          this.inPlayerFOV = data.inFOV;
+          this.updateGraphicsVisibility();
+        }
+      });
+    }
   }
 
   /**
@@ -75,19 +88,14 @@ export class Item extends Entity {
     graphics.fill(color);
     graphics.stroke({ width: 2, color: 0x000000 });
 
-    // 座標変換
+    // 座標変換（ワールド座標で配置、カメラオフセットはworldContainerが適用）
     const coordSystem = rendererSystem.getCoordinateSystem();
-    const camera = rendererSystem.getCamera();
     const pos = transform.position;
     const screenPos = coordSystem.isometricToScreen(pos.x, pos.y, pos.z);
 
-    // ベーススクリーン座標を保存（Y座標は少し上にオフセット）
-    (graphics as any).__baseScreenX = screenPos.x;
-    (graphics as any).__baseScreenY = screenPos.y - 16;
-
-    // カメラオフセットを適用
-    graphics.x = screenPos.x - camera.x;
-    graphics.y = screenPos.y - camera.y - 16;
+    // ワールド座標で配置（Y座標は少し上にオフセット）
+    graphics.x = screenPos.x;
+    graphics.y = screenPos.y - 16;
 
     // 深度ソート用のzIndex（SpriteComponentと同じ計算式）
     const baseZIndex = (pos.y + pos.x) * 1000;
@@ -96,8 +104,8 @@ export class Item extends Entity {
     // グラフィックスを保存
     this.graphics = graphics;
 
-    // 深度ソートを正しく行うため、キャラクターと同じレイヤー（characters）に追加
-    const layer = rendererSystem.getLayer('characters');
+    // オブジェクトレイヤーに追加（アイテムはキャラクターより奥に描画されるべき）
+    const layer = rendererSystem.getLayer('objects');
     if (layer) {
       layer.addChild(graphics);
     }
@@ -344,53 +352,6 @@ export class Item extends Entity {
   }
 
   /**
-   * アイテムグラフィックを作成（PIXI.Graphics版）
-   * @param stage ステージオブジェクト（座標変換用）
-   * @returns PIXI.Graphics
-   */
-  createGraphics(stage: {
-    isometricToScreen: (x: number, y: number) => { x: number; y: number };
-  }): PIXI.Graphics {
-    const graphics = new PIXI.Graphics();
-
-    // インベントリアイテムタイプがある場合はそちらを優先
-    if (this.inventoryItemType) {
-      const colorMap: { [key: string]: number } = {
-        [InventoryItemType.HEALTH_PACK]: 0x00ff00, // 緑
-        [InventoryItemType.ENERGY_CELL]: 0x00ffff, // シアン
-        [InventoryItemType.WEAPON_UPGRADE]: 0xff9900, // オレンジ
-        [InventoryItemType.ARMOR_UPGRADE]: 0x0099ff, // 青
-        [InventoryItemType.KEY_ITEM]: 0xffff00, // 黄色
-      };
-
-      const color = colorMap[this.inventoryItemType] || 0xffffff;
-
-      // 円形で描画
-      graphics.circle(0, 0, 10);
-      graphics.fill(color);
-      graphics.stroke({ width: 2, color: 0x000000 });
-    }
-
-    // 位置設定
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (transform && stage) {
-      const screenPos = stage.isometricToScreen(transform.position.x, transform.position.y);
-      graphics.x = screenPos.x;
-      graphics.y = screenPos.y - 20;
-    }
-
-    this.graphics = graphics;
-    return graphics;
-  }
-
-  /**
-   * グラフィックを取得
-   */
-  getGraphics(): PIXI.Graphics | null {
-    return this.graphics;
-  }
-
-  /**
    * アイテムをインベントリアイテムに変換
    */
   toInventoryItem(): InventoryItem | null {
@@ -439,10 +400,37 @@ export class Item extends Entity {
     // 親クラスのupdate()を呼び出してコンポーネントを更新
     super.update(deltaTime);
 
-    // アイテムが収集済みまたは非アクティブなら非表示
-    // 位置更新は RendererSystem.updateTerrainLayerPositions() で行われる
+    this.updateGraphicsPosition();
+    this.updateGraphicsVisibility();
+  }
+
+  /**
+   * グラフィックスの位置をTransformComponentに同期
+   */
+  private updateGraphicsPosition(): void {
+    if (!this.graphics) return;
+
+    const transform = this.getComponent<TransformComponent>('transform');
+    if (!transform) return;
+
+    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
+    if (!rendererSystem) return;
+
+    const pos = transform.position;
+    const screenPos = rendererSystem.getCoordinateSystem().isometricToScreen(pos.x, pos.y, pos.z);
+    this.graphics.x = screenPos.x;
+    this.graphics.y = screenPos.y - 16;
+
+    const baseZIndex = (pos.y + pos.x) * 1000;
+    this.graphics.zIndex = baseZIndex + pos.z * 100;
+  }
+
+  /**
+   * グラフィックスの可視性を更新（FOV + アクティブ状態）
+   */
+  private updateGraphicsVisibility(): void {
     if (this.graphics) {
-      this.graphics.visible = this.active && !this.collected;
+      this.graphics.visible = this.active && !this.collected && this.inPlayerFOV;
     }
   }
 }

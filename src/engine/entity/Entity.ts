@@ -126,8 +126,15 @@ export class Entity {
   update(deltaTime: number): void {
     if (!this.active) return;
 
-    // すべてのコンポーネントを更新
-    for (const component of this.components.values()) {
+    // Movementコンポーネントを先に更新（Spriteが補間位置を使用するため）
+    const movement = this.components.get('movement');
+    if (movement) {
+      movement.update(deltaTime);
+    }
+
+    // 残りのコンポーネントを更新（movement以外）
+    for (const [type, component] of this.components.entries()) {
+      if (type === 'movement') continue;
       component.update(deltaTime);
     }
 

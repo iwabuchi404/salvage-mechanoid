@@ -5,59 +5,24 @@ import { Engine } from '../../Engine';
 import { RendererSystem } from '../../graphics/RendererSystem';
 import { EventSystem } from '../../events/EventSystem';
 import { TransformComponent } from './Transform';
+import { MovementComponent } from './Movement';
 import { LayerName } from '../../types';
 
 /**
- * 拡張スプライト型 - baseScreenX/Y を持つスプライト
- */
-type ExtendedSprite = PIXI.Sprite & {
-  __baseScreenX?: number;
-  __baseScreenY?: number;
-};
-
-/**
  * スプライトコンポーネント - エンティティの視覚的表現を管理
+ * ワールド座標で配置（カメラオフセットはworldContainerが適用）
  */
 export class SpriteComponent implements Component {
-  /**
-   * コンポーネントのタイプ
-   */
   type = 'sprite';
-
-  /**
-   * このコンポーネントを所有するエンティティ
-   */
   entity: Entity | null = null;
 
-  /**
-   * PIXIスプライト（拡張型）
-   */
-  private sprite: ExtendedSprite | null = null;
-
-  /**
-   * レイヤー名
-   */
+  private sprite: PIXI.Sprite | null = null;
   private layer: string;
-
-  /**
-   * 表示中かどうか
-   */
   private _visible = true;
-
-  /**
-   * 視野内かどうか
-   */
   private _inPlayerFOV = true;
-
-  /**
-   * テクスチャの名前または直接のテクスチャ
-   */
   private textureSrc: string | PIXI.Texture;
-
-  /**
-   * アンカーポイント
-   */
   private anchor: { x: number; y: number };
+  private lastPosition: { x: number; y: number; z: number } = { x: -1, y: -1, z: -1 };
 
   /**
    * コンストラクタ
@@ -87,7 +52,6 @@ export class SpriteComponent implements Component {
     if (typeof this.textureSrc === 'string') {
       try {
         texture = await PIXI.Assets.load(this.textureSrc);
-        console.log('Texture loaded successfully:', this.textureSrc);
       } catch (error) {
         console.error(`Failed to load texture: ${this.textureSrc}`, error);
         // フォールバックとして空のテクスチャを使用
@@ -114,7 +78,6 @@ export class SpriteComponent implements Component {
     // レンダラーにスプライトを登録
     const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
     if (rendererSystem) {
-      console.log('Emitting render_entity event for:', this.entity.id);
       rendererSystem.renderEntity({
         sprite: this.sprite,
         layer: this.layer,
@@ -148,11 +111,13 @@ export class SpriteComponent implements Component {
     if (transform) {
       const pos = transform.position;
 
-      // 位置が変わった場合のみ更新（最適化）
-      // __baseScreenX/Y が未設定の場合も更新する
+      // 移動中かチェック
+      const movement = this.entity.getComponent<MovementComponent>('movement');
+      const isMoving = movement?.isMoving ?? false;
+
+      // 位置が変わった場合または移動中（補間位置が毎フレーム変化）は更新
       if (
-        this.sprite.__baseScreenX === undefined ||
-        this.sprite.__baseScreenY === undefined ||
+        isMoving ||
         this.lastPosition.x !== pos.x ||
         this.lastPosition.y !== pos.y ||
         this.lastPosition.z !== pos.z
@@ -179,13 +144,9 @@ export class SpriteComponent implements Component {
   }
 
   /**
-   * 前回の位置（最適化用）
-   */
-  private lastPosition: { x: number; y: number; z: number } = { x: -1, y: -1, z: -1 };
-
-  /**
    * スプライトの位置を更新
-   * タイルと同じ方式（__baseScreenX/Y保持）でカメラオフセットを処理
+   * ワールド座標で配置（カメラオフセットはworldContainerが適用）
+   * 移動中は補間位置を使用、そうでなければ論理位置を使用
    * @param x X座標
    * @param y Y座標
    * @param z Z座標
@@ -193,33 +154,34 @@ export class SpriteComponent implements Component {
   private updateSpritePosition(x: number, y: number, z: number): void {
     if (!this.sprite) return;
 
-    // レンダラーから座標変換システムを取得
     const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-    if (rendererSystem) {
-      const coordSystem = rendererSystem.getCoordinateSystem();
-      const camera = rendererSystem.getCamera();
+    if (!rendererSystem) return;
 
-      // アイソメトリック座標をスクリーン座標に変換
-      const screenPos = coordSystem.isometricToScreen(x, y, z);
+    const coordSystem = rendererSystem.getCoordinateSystem();
 
-      // ベーススクリーン座標を保存（RendererSystemがカメラ移動時に更新する）
-      this.sprite.__baseScreenX = screenPos.x;
-      this.sprite.__baseScreenY = screenPos.y;
+    // MovementComponentの補間位置を確認
+    let renderX = x;
+    let renderY = y;
+    let renderZ = z;
 
-      // スプライトの位置を設定（カメラオフセットを適用）
-      this.sprite.x = screenPos.x - camera.x;
-      this.sprite.y = screenPos.y - camera.y;
-
-      // 深度ソートのためのzIndexを設定
-      // アイソメトリックビューでは、Y座標が大きいほど手前（下）に表示される
-      // X座標も考慮して、右下にあるものほど手前に表示
-      // 基本式: (y + x) * 1000 でソート（y+xが大きいほど手前）
-      const baseZIndex = (y + x) * 1000;
-      // レイヤーに応じたオフセットを追加
-      // objects（障害物）とcharacters（キャラクター）は同じ深度計算を使用
-      // 同じタイル位置にいる場合、Y座標で自然にソートされる
-      this.sprite.zIndex = baseZIndex + z * 100;
+    if (this.entity) {
+      const movement = this.entity.getComponent<MovementComponent>('movement');
+      if (movement && movement.isMoving) {
+        const interp = movement.getInterpolatedPosition();
+        renderX = interp.x;
+        renderY = interp.y;
+        renderZ = interp.z;
+      }
     }
+
+    // ワールド座標で配置（カメラオフセットなし）
+    const screenPos = coordSystem.isometricToScreen(renderX, renderY, renderZ);
+    this.sprite.x = screenPos.x;
+    this.sprite.y = screenPos.y;
+
+    // 深度ソートのためのzIndex
+    const baseZIndex = (renderY + renderX) * 1000;
+    this.sprite.zIndex = baseZIndex + renderZ * 100;
   }
 
   /**
@@ -287,7 +249,7 @@ export class SpriteComponent implements Component {
   /**
    * スプライトインスタンスを取得
    */
-  getSprite(): ExtendedSprite | null {
+  getSprite(): PIXI.Sprite | null {
     return this.sprite;
   }
 
@@ -322,19 +284,7 @@ export class SpriteComponent implements Component {
    * @param inFOV 視野内かどうか
    */
   setInFOV(inFOV: boolean): void {
-    const wasInFOV = this._inPlayerFOV;
     this._inPlayerFOV = inFOV;
-
-    // デバッグログ（状態変化時のみ、敵エンティティのみ）
-    if (wasInFOV !== inFOV && this.entity && this.entity.hasTag('enemy')) {
-      const transform = this.entity.getComponent<TransformComponent>('transform');
-      const pos = transform ? transform.position : { x: 0, y: 0, z: 0 };
-      console.log(
-        `SpriteComponent: Enemy ${this.entity.id} at (${Math.round(pos.x)}, ${Math.round(
-          pos.y
-        )}) FOV changed: ${wasInFOV} -> ${inFOV}`
-      );
-    }
 
     // 可視性を即座に更新
     if (this.sprite && this.entity) {
@@ -342,11 +292,6 @@ export class SpriteComponent implements Component {
         this.sprite.visible = this._visible && this.entity.active;
       } else {
         const newVisible = this._visible && this.entity.active && this._inPlayerFOV;
-        if (this.sprite.visible !== newVisible && this.entity.hasTag('enemy')) {
-          console.log(
-            `SpriteComponent: Enemy ${this.entity.id} sprite visibility: ${this.sprite.visible} -> ${newVisible}`
-          );
-        }
         this.sprite.visible = newVisible;
       }
     }

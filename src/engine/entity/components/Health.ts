@@ -2,6 +2,7 @@ import { Component } from '../Component';
 import { Entity } from '../Entity';
 import { Engine } from '../../Engine';
 import { EventSystem } from '../../events/EventSystem';
+import { EntitySystem } from '../EntitySystem';
 
 /**
  * ヘルスコンポーネント - エンティティのHP管理
@@ -214,7 +215,7 @@ export class HealthComponent implements Component {
 
       // エンティティを破壊
       if (this._destroyOnDeath && this.entity) {
-        const entitySystem = Engine.instance.getSystem<any>('entity');
+        const entitySystem = Engine.instance.getSystem<EntitySystem>('entity');
         if (entitySystem) {
           entitySystem.removeEntity(this.entity.id);
         }

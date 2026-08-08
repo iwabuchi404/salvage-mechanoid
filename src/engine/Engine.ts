@@ -30,9 +30,8 @@ export class Engine {
   /**
    * private コンストラクタ - シングルトンパターンの一部
    */
-  private constructor() {
-    console.log('Engine created');
-  }
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  private constructor() {}
 
   /**
    * システムをエンジンに登録する
@@ -44,7 +43,6 @@ export class Engine {
       console.warn(`System with name "${name}" already registered, overwriting`);
     }
     this.systems.set(name, system);
-    console.log(`System "${name}" registered`);
   }
 
   /**
@@ -60,15 +58,9 @@ export class Engine {
    * エンジンのすべてのシステムを初期化する
    */
   async initialize(): Promise<void> {
-    console.log('Initializing engine...');
-
-    // すべてのシステムを非同期的に初期化
-    for (const [name, system] of this.systems.entries()) {
-      console.log(`Initializing system "${name}"...`);
+    for (const [, system] of this.systems.entries()) {
       await system.initialize(this);
     }
-
-    console.log('Engine initialization complete');
   }
 
   /**
@@ -80,7 +72,6 @@ export class Engine {
       return;
     }
 
-    console.log('Starting engine...');
     this.isRunning = true;
     this.lastTime = performance.now();
     requestAnimationFrame(this.gameLoop.bind(this));
@@ -95,7 +86,6 @@ export class Engine {
       return;
     }
 
-    console.log('Stopping engine...');
     this.isRunning = false;
   }
 
@@ -137,12 +127,28 @@ export class Engine {
   }
 
   /**
+   * システムをエンジンから削除する
+   * @param name 削除するシステムの名前
+   */
+  removeSystem(name: string): void {
+    const system = this.systems.get(name);
+    if (!system) {
+      console.warn(`System "${name}" not found, cannot remove`);
+      return;
+    }
+    system.destroy?.();
+    this.systems.delete(name);
+  }
+
+  /**
    * エンジンの状態をリセットする
-   * 主にテスト用または状態のリセットが必要な場合に使用
+   * 全システムのdestroy()を呼び出してからクリアする
    */
   reset(): void {
-    console.log('Resetting engine...');
     this.stop();
+    for (const [, system] of this.systems) {
+      system.destroy?.();
+    }
     this.systems.clear();
   }
 }

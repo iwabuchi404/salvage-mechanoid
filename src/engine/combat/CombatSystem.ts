@@ -271,6 +271,11 @@ export class CombatSystem implements System {
       attackerId: attackerId,
     });
 
+    // シェイクエフェクトを再生
+    this.eventSystem?.emit('shake_requested', {
+      entityId: targetId,
+    });
+
     // 撃破判定（HealthComponentで削除されるので、保存した位置を使用）
     if (wasAlive && healthComponent.currentHp <= 0) {
       console.log(`Entity ${targetId} was defeated!`);

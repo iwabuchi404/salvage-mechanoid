@@ -39,6 +39,7 @@ import {
 import { useGameStore } from '../stores/gameStore';
 import { useUIStore } from '../stores/uiStore';
 import { WorldSystem } from '../engine/world/WorldSystem';
+import { RENDER_CONFIG } from '../engine/graphics/RenderConfig';
 
 /**
  * ゲームクラス - ゲームの主要な機能を統合
@@ -175,7 +176,7 @@ export class Game {
    */
   private async initializeSystems(canvas: HTMLCanvasElement): Promise<void> {
     // レンダリングシステム
-    const rendererSystem = new RendererSystem(160, 120);
+    const rendererSystem = new RendererSystem(RENDER_CONFIG.TILE_WIDTH, RENDER_CONFIG.TILE_HEIGHT);
     rendererSystem.setCanvas(canvas);
     this.engine.registerSystem('renderer', rendererSystem);
 
@@ -442,7 +443,10 @@ export class Game {
         startPosition.z
       );
       // カメラの位置 = プレイヤーのスクリーン座標 - 画面中央オフセット
-      camera.setPosition(screenPos.x - 400, screenPos.y - 300); // 画面中央に配置（800x600の中心）
+      camera.setPosition(
+        screenPos.x - RENDER_CONFIG.SCREEN_WIDTH / 2,
+        screenPos.y - RENDER_CONFIG.SCREEN_HEIGHT / 2
+      );
     }
 
     // カメラ位置設定後にタイルマップを再描画
@@ -956,9 +960,9 @@ export class Game {
    */
   endPlayerTurn(): void {
     // ターン管理システムがあれば、次のターンに進む
-    const turnManager = this.engine.getSystem<any>('turn');
+    const turnManager = this.engine.getSystem<TurnSystem>('turn');
     if (turnManager) {
-      turnManager.nextTurn();
+      turnManager.startNewTurn();
     }
   }
 

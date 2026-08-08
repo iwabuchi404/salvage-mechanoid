@@ -9,9 +9,7 @@ export class CoordinateSystem {
    * @param tileWidth タイルの幅（ピクセル）
    * @param tileHeight タイルの高さ（ピクセル）
    */
-  constructor(private tileWidth: number, private tileHeight: number) {
-    console.log(`CoordinateSystem initialized with tile dimensions: ${tileWidth}x${tileHeight}`);
-  }
+  constructor(private tileWidth: number, private tileHeight: number) {}
 
   /**
    * アイソメトリック（マップ）座標をスクリーン座標に変換
@@ -33,19 +31,37 @@ export class CoordinateSystem {
   }
 
   /**
-   * スクリーン座標をアイソメトリック（マップ）座標に変換
+   * スクリーン座標をアイソメトリック（マップ）座標に変換（浮動小数点）
    * @param screenX スクリーンのX座標
    * @param screenY スクリーンのY座標
    * @returns マップ座標（Z座標は含まない）
    */
   screenToIsometric(screenX: number, screenY: number): Vector2 {
-    // 旧システムと同じ計算式を使用（tileHeight / 3 を使用）
     const halfTileWidth = this.tileWidth / 2;
     const tileHeightThird = this.tileHeight / 3;
 
-    const x = (screenX / halfTileWidth + screenY / tileHeightThird) / 2;
-    const y = (screenY / tileHeightThird - screenX / halfTileWidth) / 2;
+    // テクスチャの上面ダイヤモンド中心がスプライト中心より
+    // tileHeight/6 上にあるため、その分を補正して逆変換する
+    const offsetY = -this.tileHeight / 6;
+    const adjustedY = screenY - offsetY;
+
+    const x = (screenX / halfTileWidth + adjustedY / tileHeightThird) / 2;
+    const y = (adjustedY / tileHeightThird - screenX / halfTileWidth) / 2;
     return { x, y };
+  }
+
+  /**
+   * スクリーン座標をタイル座標（整数）に変換
+   * @param screenX スクリーンのX座標
+   * @param screenY スクリーンのY座標
+   * @returns タイル座標（整数）
+   */
+  screenToTile(screenX: number, screenY: number): Vector2 {
+    const iso = this.screenToIsometric(screenX, screenY);
+    return {
+      x: Math.floor(iso.x),
+      y: Math.floor(iso.y),
+    };
   }
 
   /**
@@ -110,6 +126,5 @@ export class CoordinateSystem {
   setTileSize(width: number, height: number): void {
     this.tileWidth = Math.max(1, width);
     this.tileHeight = Math.max(1, height);
-    console.log(`Tile dimensions updated to: ${this.tileWidth}x${this.tileHeight}`);
   }
 }

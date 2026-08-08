@@ -27,6 +27,7 @@ export class Enemy extends Entity {
 
   // TURRETタイプ用のグラフィックス
   private turretGraphics: PIXI.Graphics | null = null;
+  private turretInFOV = false;
 
   // 方向別テクスチャパス（敵タイプごとに異なる）
   private texturePaths: Record<Direction, string> = {
@@ -112,19 +113,14 @@ export class Enemy extends Entity {
     graphics.fill(0xff0000); // 赤色
     graphics.stroke({ width: 3, color: 0x880000 }); // 暗い赤の枠線
 
-    // 座標変換
+    // 座標変換（ワールド座標で配置、カメラオフセットはworldContainerが適用）
     const coordSystem = rendererSystem.getCoordinateSystem();
-    const camera = rendererSystem.getCamera();
     const pos = transform.position;
     const screenPos = coordSystem.isometricToScreen(pos.x, pos.y, pos.z);
 
-    // ベーススクリーン座標を保存
-    (graphics as any).__baseScreenX = screenPos.x;
-    (graphics as any).__baseScreenY = screenPos.y - 16; // 少し上にオフセット
-
-    // カメラオフセットを適用
-    graphics.x = screenPos.x - camera.x;
-    graphics.y = screenPos.y - camera.y - 16;
+    // ワールド座標で配置（Y座標は少し上にオフセット）
+    graphics.x = screenPos.x;
+    graphics.y = screenPos.y - 16;
 
     // 深度ソート用のzIndex（SpriteComponentと同じ計算式）
     const baseZIndex = (pos.y + pos.x) * 1000;
@@ -186,6 +182,14 @@ export class Enemy extends Entity {
     eventSystem.on('direction_changed', (data) => {
       if (data.entityId === this.id) {
         this.updateDirectionTexture(data.direction as Direction);
+      }
+    });
+
+    // FOV変更イベント - TURRETグラフィックスの可視性を制御
+    eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+      if (data.entityId === this.id) {
+        this.turretInFOV = data.inFOV;
+        this.updateTurretGraphicsVisibility();
       }
     });
   }
@@ -419,9 +423,38 @@ export class Enemy extends Entity {
       this.active = false;
     }
 
-    // TURRETグラフィックスの可視性を更新
+    // TURRETグラフィックスの位置・可視性を更新
+    this.updateTurretGraphicsPosition();
+    this.updateTurretGraphicsVisibility();
+  }
+
+  /**
+   * TURRETグラフィックスの位置をTransformComponentに同期
+   */
+  private updateTurretGraphicsPosition(): void {
+    if (!this.turretGraphics) return;
+
+    const transform = this.getComponent<TransformComponent>('transform');
+    if (!transform) return;
+
+    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
+    if (!rendererSystem) return;
+
+    const pos = transform.position;
+    const screenPos = rendererSystem.getCoordinateSystem().isometricToScreen(pos.x, pos.y, pos.z);
+    this.turretGraphics.x = screenPos.x;
+    this.turretGraphics.y = screenPos.y - 16;
+
+    const baseZIndex = (pos.y + pos.x) * 1000;
+    this.turretGraphics.zIndex = baseZIndex + pos.z * 100;
+  }
+
+  /**
+   * TURRETグラフィックスの可視性を更新（FOV + アクティブ状態）
+   */
+  private updateTurretGraphicsVisibility(): void {
     if (this.turretGraphics) {
-      this.turretGraphics.visible = this.active;
+      this.turretGraphics.visible = this.active && this.turretInFOV;
     }
   }
 

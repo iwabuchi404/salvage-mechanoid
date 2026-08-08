@@ -4,64 +4,35 @@ import { Engine } from '../../Engine';
 import { EventSystem } from '../../events/EventSystem';
 import { TransformComponent } from './Transform';
 import { Vector3, Direction } from '../../types';
+import { Easing, EasingFn } from '../../graphics/AnimationManager';
 
 /**
  * 移動コンポーネント - エンティティの移動を管理
+ * 論理位置は移動開始時に即座に確定、描画位置はdeltaTimeで補間
  */
 export class MovementComponent implements Component {
-  /**
-   * コンポーネントのタイプ
-   */
   type = 'movement';
-
-  /**
-   * このコンポーネントを所有するエンティティ
-   */
   entity: Entity | null = null;
 
-  /**
-   * 現在の方向
-   */
   private _direction: Direction = 'down';
-
-  /**
-   * 移動速度（タイル/秒）
-   */
   private _speed: number;
-
-  /**
-   * 移動中かどうか
-   */
   private _isMoving = false;
-
-  /**
-   * 移動のアニメーション時間（ミリ秒）
-   */
   private _moveDuration: number;
-
-  /**
-   * 移動の開始時間
-   */
-  private _moveStartTime = 0;
-
-  /**
-   * 移動の開始位置
-   */
+  private _elapsedTime = 0;
   private _moveStartPosition: Vector3 = { x: 0, y: 0, z: 0 };
-
-  /**
-   * 移動の目標位置
-   */
   private _moveTargetPosition: Vector3 = { x: 0, y: 0, z: 0 };
+  private _interpolatedPosition: Vector3 = { x: 0, y: 0, z: 0 };
+  private _easing: EasingFn;
 
   /**
    * コンストラクタ
    * @param speed 移動速度（タイル/秒）
    * @param moveDuration 移動のアニメーション時間（ミリ秒）
    */
-  constructor(speed = 4, moveDuration = 250) {
+  constructor(speed = 4, moveDuration = 250, easing: EasingFn = Easing.easeInOut) {
     this._speed = Math.max(0.1, speed);
     this._moveDuration = Math.max(1, moveDuration);
+    this._easing = easing;
   }
 
   /**
@@ -73,46 +44,41 @@ export class MovementComponent implements Component {
 
   /**
    * 毎フレームの更新処理
-   * @param _deltaTime 前回のフレームからの経過時間（ミリ秒）
+   * deltaTimeベースで補間位置を更新
+   * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
-  update(_deltaTime?: number): void {
-    // 移動中でない場合は早期リターン
+  update(deltaTime: number): void {
     if (!this.entity || !this._isMoving) return;
 
-    const transform = this.entity.getComponent<TransformComponent>('transform');
-    if (!transform) return;
+    this._elapsedTime += deltaTime;
+    const rawProgress = Math.min(this._elapsedTime / this._moveDuration, 1);
+    const progress = this._easing(rawProgress);
 
-    // 経過時間を計算
-    const currentTime = performance.now();
-    const elapsedTime = currentTime - this._moveStartTime;
-    const progress = Math.min(elapsedTime / this._moveDuration, 1);
-
-    if (progress < 1) {
-      // 移動のアニメーション中
-      const newX =
+    this._interpolatedPosition = {
+      x:
         this._moveStartPosition.x +
-        (this._moveTargetPosition.x - this._moveStartPosition.x) * progress;
-      const newY =
+        (this._moveTargetPosition.x - this._moveStartPosition.x) * progress,
+      y:
         this._moveStartPosition.y +
-        (this._moveTargetPosition.y - this._moveStartPosition.y) * progress;
-      const newZ =
+        (this._moveTargetPosition.y - this._moveStartPosition.y) * progress,
+      z:
         this._moveStartPosition.z +
-        (this._moveTargetPosition.z - this._moveStartPosition.z) * progress;
+        (this._moveTargetPosition.z - this._moveStartPosition.z) * progress,
+    };
 
-      transform.setPosition(newX, newY, newZ);
-    } else {
-      // 移動が完了
-      transform.setPosition(
-        this._moveTargetPosition.x,
-        this._moveTargetPosition.y,
-        this._moveTargetPosition.z
-      );
-
+    if (rawProgress >= 1) {
+      this._interpolatedPosition = { ...this._moveTargetPosition };
       this._isMoving = false;
-
-      // 移動完了イベントを発行
       this.emitMoveCompletedEvent();
     }
+  }
+
+  /**
+   * 補間位置を取得（描画用）
+   * @returns 補間された位置
+   */
+  getInterpolatedPosition(): Vector3 {
+    return { ...this._interpolatedPosition };
   }
 
   /**
@@ -183,14 +149,17 @@ export class MovementComponent implements Component {
     const transform = this.entity.getComponent<TransformComponent>('transform');
     if (!transform) return false;
 
-    // 現在の位置を取得
     const currentPos = transform.position;
 
-    // 移動開始と目標の設定
+    // 論理位置を即座に確定（整数タイル座標）
+    transform.setPosition(targetPos.x, targetPos.y, targetPos.z);
+
+    // 補間用情報を設定
     this._isMoving = true;
-    this._moveStartTime = performance.now();
+    this._elapsedTime = 0;
     this._moveStartPosition = { ...currentPos };
     this._moveTargetPosition = { ...targetPos };
+    this._interpolatedPosition = { ...currentPos };
 
     // 方向を更新
     if (targetPos.x > currentPos.x) {
@@ -203,7 +172,6 @@ export class MovementComponent implements Component {
       this._direction = 'up';
     }
 
-    // 移動開始イベントを発行
     this.emitMoveStartedEvent();
     this.emitDirectionChangedEvent();
 
