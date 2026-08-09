@@ -256,6 +256,18 @@ export class HealthComponent implements Component {
   }
 
   /**
+   * 保存済みのHP状態を復元する（階層移動などの状態保持用）
+   * @param snapshot 復元するHP状態
+   */
+  restoreSnapshot(snapshot: { currentHp: number; maxHp: number }): void {
+    const nextMaxHp = Math.max(1, snapshot.maxHp);
+    const nextCurrentHp = Math.min(Math.max(0, snapshot.currentHp), nextMaxHp);
+
+    this._maxHp = nextMaxHp;
+    this._currentHp = nextCurrentHp;
+  }
+
+  /**
    * HP変更イベントを発行
    */
   private emitHealthChangedEvent(): void {

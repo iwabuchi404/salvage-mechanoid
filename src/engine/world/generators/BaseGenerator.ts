@@ -17,8 +17,11 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
   // マップの高さ
   protected height: number;
 
-  // ランダムシード
+  // ランダムシード（生成中に更新される）
   protected seed: number;
+
+  // 元のシード値（生成開始時の値、customData に記録するために使用）
+  protected originalSeed: number;
 
   /**
    * コンストラクタ
@@ -30,6 +33,7 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
     this.width = width;
     this.height = height;
     this.seed = seed || Date.now();
+    this.originalSeed = this.seed;
 
     console.log(`BaseRoomGenerator initialized: ${width}x${height}, seed: ${this.seed}`);
   }
@@ -196,7 +200,7 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
       features: [],
       customData: {
         generationMethod: this.getGeneratorType(),
-        seed: this.seed,
+        seed: this.originalSeed,
       },
     };
   }
@@ -215,6 +219,7 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
    */
   setSeed(seed: number): void {
     this.seed = seed;
+    this.originalSeed = seed;
   }
 
   /**

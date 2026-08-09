@@ -6,6 +6,7 @@ import { MapGeneratorFacade } from './MapGeneratorFacade';
 import { ResourceGenerationSystem } from './ResourceGenerationSystem';
 import { TileMap } from './TileMap';
 import { Player } from '../entity/Player';
+import { HealthComponent } from '../entity/components/Health';
 import { StageType } from '../types';
 
 /**
@@ -262,11 +263,10 @@ export class FloorManager {
     if (players.length === 0) return;
 
     const player = players[0] as Player;
-    const health = player.getComponent('health');
+    const health = player.getComponent<HealthComponent>('health');
 
-    if (health && 'currentHp' in health) {
-      (health as unknown as { currentHp: number }).currentHp = state.hp;
-      (health as unknown as { maxHp: number }).maxHp = state.maxHp;
+    if (health) {
+      health.restoreSnapshot({ currentHp: state.hp, maxHp: state.maxHp });
     }
 
     player.restoreEnergySnapshot({

@@ -38,6 +38,9 @@ export class BSPGenerator extends BaseRoomGenerator {
 
     console.log('BSPGenerator: Starting room generation...', config);
 
+    // 元のシードを保存（生成中に random() でシードが更新されるため）
+    const originalSeed = this.seed;
+
     // パラメータの設定
     this.minRoomDistance = Math.max(1, Math.floor(config.minSize / 2));
 
@@ -57,7 +60,7 @@ export class BSPGenerator extends BaseRoomGenerator {
         algorithm: 'bsp',
         parameters: config,
         generationTime: endTime - startTime,
-        seed: this.seed,
+        seed: originalSeed,
       },
     };
   }
