@@ -252,15 +252,30 @@ describe('FloorManager', () => {
     expect(restoredHealth.maxHp).toBe(expectedMaxHp);
   });
 
-  it('階層移動後も現在エネルギーを保持する', async () => {
+  it('階層移動後にエネルギーが +20 回復する（最大値未満）', async () => {
     const energy = player.getComponent<EnergyComponent>('energy')!;
     energy.consume(50); // 200 - 50 = 150
-    const expectedEnergy = energy.currentEnergy;
+    const energyBefore = energy.currentEnergy;
+    const expectedEnergy = Math.min(energyBefore + 20, energy.maxEnergy); // 150 + 20 = 170
 
     await floorManager.moveToNextFloor();
 
     const restoredEnergy = player.getComponent<EnergyComponent>('energy')!;
     expect(restoredEnergy.currentEnergy).toBe(expectedEnergy);
+  });
+
+  it('階層移動時にエネルギーが最大値を超えない', async () => {
+    const energy = player.getComponent<EnergyComponent>('energy')!;
+    // 最大値に近い状態から移動（+20 すると最大値を超える）
+    energy.consume(10); // 200 - 10 = 190
+    const energyBefore = energy.currentEnergy;
+    const expectedEnergy = Math.min(energyBefore + 20, energy.maxEnergy); // min(210, 200) = 200
+
+    await floorManager.moveToNextFloor();
+
+    const restoredEnergy = player.getComponent<EnergyComponent>('energy')!;
+    expect(restoredEnergy.currentEnergy).toBe(expectedEnergy);
+    expect(restoredEnergy.currentEnergy).toBeLessThanOrEqual(restoredEnergy.maxEnergy);
   });
 
   it('階層移動後も最大エネルギーを保持する', async () => {

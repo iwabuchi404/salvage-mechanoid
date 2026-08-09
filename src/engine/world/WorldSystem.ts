@@ -2,7 +2,7 @@ import { System } from '../System';
 import { Engine } from '../Engine';
 import { TileMap } from './TileMap';
 import { Tile } from './Tile';
-import { Vector3, TileType, EventName } from '../types';
+import { Vector3, TileType, EventName, Room, Corridor } from '../types';
 import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Entity } from '../entity/Entity';
@@ -34,6 +34,12 @@ export class WorldSystem implements System {
 
   // フロアごとのマップを保存（複数フロア対応）
   private floorMaps: Map<number, TileMap> = new Map();
+
+  // フロアごとの部屋情報を保存
+  private floorRooms: Map<number, Room[]> = new Map();
+
+  // フロアごとの通路情報を保存
+  private floorCorridors: Map<number, Corridor[]> = new Map();
 
   /**
    * コンストラクタ
@@ -427,6 +433,10 @@ export class WorldSystem implements System {
     // フロアマップに保存
     this.floorMaps.set(floorNumber, newMap);
 
+    // 部屋・通路情報もフロアごとに保存
+    this.floorRooms.set(floorNumber, tacticalData.rooms);
+    this.floorCorridors.set(floorNumber, tacticalData.corridors);
+
     console.log(`Generated new floor ${floorNumber} with stage type: ${stageType}`);
     console.log(`  Rooms: ${tacticalData.rooms.length}`);
     console.log(`  Energy points: ${tacticalData.energyPoints.length}`);
@@ -490,6 +500,58 @@ export class WorldSystem implements System {
    */
   getTileMap(): TileMap {
     return this.tileMap;
+  }
+
+  /**
+   * 現在のフロアの部屋情報を取得
+   * @returns 部屋の配列（未設定の場合は空配列）
+   */
+  getRooms(): Room[] {
+    return this.floorRooms.get(this.currentFloor) || [];
+  }
+
+  /**
+   * 現在のフロアの通路情報を取得
+   * @returns 通路の配列（未設定の場合は空配列）
+   */
+  getCorridors(): Corridor[] {
+    return this.floorCorridors.get(this.currentFloor) || [];
+  }
+
+  /**
+   * 指定フロアの部屋情報を設定
+   * @param floorNumber フロア番号
+   * @param rooms 部屋の配列
+   */
+  setRooms(floorNumber: number, rooms: Room[]): void {
+    this.floorRooms.set(floorNumber, rooms);
+  }
+
+  /**
+   * 指定フロアの通路情報を設定
+   * @param floorNumber フロア番号
+   * @param corridors 通路の配列
+   */
+  setCorridors(floorNumber: number, corridors: Corridor[]): void {
+    this.floorCorridors.set(floorNumber, corridors);
+  }
+
+  /**
+   * 指定フロアの部屋情報を取得
+   * @param floorNumber フロア番号
+   * @returns 部屋の配列（未設定の場合は空配列）
+   */
+  getRoomsByFloor(floorNumber: number): Room[] {
+    return this.floorRooms.get(floorNumber) || [];
+  }
+
+  /**
+   * 指定フロアの通路情報を取得
+   * @param floorNumber フロア番号
+   * @returns 通路の配列（未設定の場合は空配列）
+   */
+  getCorridorsByFloor(floorNumber: number): Corridor[] {
+    return this.floorCorridors.get(floorNumber) || [];
   }
 
   /**

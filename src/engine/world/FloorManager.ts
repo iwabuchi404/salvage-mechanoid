@@ -253,6 +253,7 @@ export class FloorManager {
 
   /**
    * プレイヤーの状態を復元
+   * 階層移動時のボーナスとしてエネルギーを +20 回復する（最大値まで）
    * @param state プレイヤーの状態
    */
   private restorePlayerState(state: PlayerState): void {
@@ -269,12 +270,16 @@ export class FloorManager {
       health.restoreSnapshot({ currentHp: state.hp, maxHp: state.maxHp });
     }
 
+    // 階層移動ボーナス: エネルギー +20 回復（最大値を超えない）
+    const ENERGY_RECOVERY_BONUS = 20;
+    const restoredEnergy = Math.min(state.energy + ENERGY_RECOVERY_BONUS, state.maxEnergy);
+
     player.restoreEnergySnapshot({
-      currentEnergy: state.energy,
+      currentEnergy: restoredEnergy,
       maxEnergy: state.maxEnergy,
     });
 
-    console.log('Player state restored:', state);
+    console.log('Player state restored:', { ...state, energy: restoredEnergy });
   }
 
   /**

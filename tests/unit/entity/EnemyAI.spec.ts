@@ -164,6 +164,33 @@ describe('Enemy AI', () => {
     expect(enemy.getDirection()).toBe('right');
   });
 
+  it('PATROL は巡回ルートの端で折り返す', async () => {
+    // 巡回ルート: (5,5) → (7,5) の2点
+    const patrolRoute: Vector3[] = [
+      { x: 5, y: 5, z: 0 },
+      { x: 7, y: 5, z: 0 },
+    ];
+    // 開始位置を巡回ルートの最後の点（端）に設定
+    const enemy = await createAndInitEnemy({
+      id: 'patrol-bounce-enemy',
+      x: 7,
+      y: 5,
+      behavior: EnemyBehavior.PATROL,
+      patrolRoute,
+    });
+    const transform = enemy.getComponent<TransformComponent>('transform')!;
+
+    // プレイヤーを遠くに配置
+    playerTransform.setPosition(0, 0, 0);
+
+    // 1回目の act: 端にいるので折り返して最初の点 (5,5) に向かう
+    await runAct(enemy);
+
+    // 折り返して左方向に移動する（x が減少）
+    expect(transform.position.x).toBe(6);
+    expect(enemy.getDirection()).toBe('left');
+  });
+
   it('PATROL は巡回ルートがない場合にランダム移動へフォールバックする', async () => {
     const enemy = await createAndInitEnemy({
       id: 'patrol-no-route',
@@ -336,6 +363,9 @@ describe('Enemy AI', () => {
     map.setTileAt(9, 9, 0, TileType.TILE, true);
     // プレイヤーの位置も通行可能（プレイヤーはいる）
     map.setTileAt(0, 0, 0, TileType.TILE, true);
+    // 敵の隣も通行可能にして、フォールバック移動が成功するようにする
+    map.setTileAt(9, 8, 0, TileType.TILE, true); // 上
+    map.setTileAt(8, 9, 0, TileType.TILE, true); // 左
 
     const enemy = await createAndInitEnemy({
       id: 'no-path-enemy',
@@ -343,18 +373,21 @@ describe('Enemy AI', () => {
       y: 9,
       behavior: EnemyBehavior.AGGRESSIVE,
     });
+    const movement = enemy.getComponent<MovementComponent>('movement')!;
     const transform = enemy.getComponent<TransformComponent>('transform')!;
-    const initialPos = transform.position;
 
-    // ランダム移動を制御
-    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0); // 'up'
+    // moveInDirection の呼び出しを監視
+    const moveInDirectionSpy = jest.spyOn(movement, 'moveInDirection');
+
+    // ランダム移動を制御（'up' 方向を選択）
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
 
     await runAct(enemy);
 
-    // 経路が見つからないためフォールバックで移動を試みる
-    // 周囲が壁なので移動できないが、フォールバック自体は実行される
-    // 移動できなかった場合は位置が変わらない
-    expect(transform.position).toEqual(initialPos);
+    // フォールバック処理として moveInDirection が呼ばれていることを確認
+    // 経路が見つからない場合、getDirectionToTarget → moveInDirection が呼ばれる
+    expect(moveInDirectionSpy).toHaveBeenCalled();
+
     randomSpy.mockRestore();
   });
 

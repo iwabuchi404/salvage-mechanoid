@@ -29,6 +29,10 @@ export class Enemy extends Entity {
   private turretGraphics: PIXI.Graphics | null = null;
   private turretInFOV = false;
 
+  // イベントリスナーの参照（破棄時に解除するため保持）
+  private directionChangedListener: ((data: any) => void) | null = null;
+  private visibilityChangedListener: ((data: any) => void) | null = null;
+
   // 方向別テクスチャパス（敵タイプごとに異なる）
   private texturePaths: Record<Direction, string> = {
     up: './robo02_r.png',
@@ -179,19 +183,21 @@ export class Enemy extends Entity {
     if (!eventSystem) return;
 
     // 方向変更イベント - テクスチャを変更
-    eventSystem.on('direction_changed', (data) => {
+    this.directionChangedListener = (data) => {
       if (data.entityId === this.id) {
         this.updateDirectionTexture(data.direction as Direction);
       }
-    });
+    };
+    eventSystem.on('direction_changed', this.directionChangedListener);
 
     // FOV変更イベント - TURRETグラフィックスの可視性を制御
-    eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+    this.visibilityChangedListener = (data: { entityId: string; inFOV: boolean }) => {
       if (data.entityId === this.id) {
         this.turretInFOV = data.inFOV;
         this.updateTurretGraphicsVisibility();
       }
-    });
+    };
+    eventSystem.on('entity_visibility_changed', this.visibilityChangedListener);
   }
 
   /**
@@ -462,6 +468,19 @@ export class Enemy extends Entity {
    * 破棄処理
    */
   override destroy(): void {
+    // イベントリスナーを解除（破棄済みEnemyへの参照漏れを防ぐ）
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      if (this.directionChangedListener) {
+        eventSystem.off('direction_changed', this.directionChangedListener);
+        this.directionChangedListener = null;
+      }
+      if (this.visibilityChangedListener) {
+        eventSystem.off('entity_visibility_changed', this.visibilityChangedListener);
+        this.visibilityChangedListener = null;
+      }
+    }
+
     // TURRETグラフィックスを削除
     if (this.turretGraphics && this.turretGraphics.parent) {
       this.turretGraphics.parent.removeChild(this.turretGraphics);

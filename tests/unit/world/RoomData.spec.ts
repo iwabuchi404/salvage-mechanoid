@@ -104,6 +104,119 @@ describe('Room data and connections', () => {
       expect(entranceRooms[0]).not.toBe(exitRooms[0]);
     });
 
+    it('入口・出口の部屋がマップ境界内に配置される', () => {
+      const generator = new BSPGenerator(50, 50, 12345);
+      const result = generator.generate(createRoomConfig());
+
+      const entrance = result.rooms.find((r) => r.type === RoomType.ENTRANCE)!;
+      const exit = result.rooms.find((r) => r.type === RoomType.EXIT)!;
+
+      // 入口・出口ともにマップ内に完全に含まれる
+      expect(entrance.x).toBeGreaterThanOrEqual(0);
+      expect(entrance.y).toBeGreaterThanOrEqual(0);
+      expect(entrance.x + entrance.width).toBeLessThanOrEqual(50);
+      expect(entrance.y + entrance.height).toBeLessThanOrEqual(50);
+
+      expect(exit.x).toBeGreaterThanOrEqual(0);
+      expect(exit.y).toBeGreaterThanOrEqual(0);
+      expect(exit.x + exit.width).toBeLessThanOrEqual(50);
+      expect(exit.y + exit.height).toBeLessThanOrEqual(50);
+    });
+
+    it('入口・出口の部屋が通行可能タイルとしてマップに描画される', async () => {
+      const mapGen = new FlexibleMapGenerator(50, 50);
+      const result = await mapGen.generateMap(4, 8, StageType.CLASSIC);
+
+      const entrance = result.rooms.find((r) => r.type === RoomType.ENTRANCE);
+      const exit = result.rooms.find((r) => r.type === RoomType.EXIT);
+
+      expect(entrance).toBeDefined();
+      expect(exit).toBeDefined();
+
+      // 入口の部屋の中心タイルが通行可能（GRASS）である
+      if (entrance) {
+        const cx = entrance.x + Math.floor(entrance.width / 2);
+        const cy = entrance.y + Math.floor(entrance.height / 2);
+        expect(result.map[cy][cx]).not.toBe(0); // EMPTY(0) でない = 通行可能
+      }
+
+      // 出口の部屋の中心タイルが通行可能（GRASS）である
+      if (exit) {
+        const cx = exit.x + Math.floor(exit.width / 2);
+        const cy = exit.y + Math.floor(exit.height / 2);
+        expect(result.map[cy][cx]).not.toBe(0); // EMPTY(0) でない = 通行可能
+      }
+    });
+
+    it('入口・出口の部屋が通路で接続されている', async () => {
+      const mapGen = new FlexibleMapGenerator(50, 50);
+      const result = await mapGen.generate({
+        width: 50,
+        height: 50,
+        stageType: StageType.CLASSIC,
+        algorithm: MapGenerationAlgorithm.BSP,
+        roomConfig: createRoomConfig(),
+        corridorConfig: {
+          method: 'astar' as any,
+          width: 1,
+          minWidth: 1,
+          maxWidth: 3,
+          redundancy: 0.4,
+          allowDiagonal: false,
+        },
+        featureConfig: {
+          method: 'basic',
+          density: 0.05,
+          rules: [],
+          themeFeatures: [],
+          globalRules: [],
+        },
+        postProcessing: {
+          ensureConnectivity: true,
+          balanceFeatures: true,
+          optimizePerformance: false,
+        },
+      });
+
+      const entrance = result.rooms.find((r) => r.type === RoomType.ENTRANCE)!;
+      const exit = result.rooms.find((r) => r.type === RoomType.EXIT)!;
+
+      // 入口と出口の部屋ID（x,y 形式）
+      const entranceId = `${entrance.x},${entrance.y}`;
+      const exitId = `${exit.x},${exit.y}`;
+
+      // 通路の connectedRooms に入口または出口のIDが含まれているか、
+      // または通路の始点/終点が入口・出口の部屋境界内にあるか
+      const entranceConnected = result.corridors.some((c) => {
+        const inEntrance = (px: number, py: number) =>
+          px >= entrance.x &&
+          px < entrance.x + entrance.width &&
+          py >= entrance.y &&
+          py < entrance.y + entrance.height;
+        return (
+          c.connectedRooms.includes(entranceId) ||
+          inEntrance(c.startX, c.startY) ||
+          inEntrance(c.endX, c.endY)
+        );
+      });
+
+      const exitConnected = result.corridors.some((c) => {
+        const inExit = (px: number, py: number) =>
+          px >= exit.x &&
+          px < exit.x + exit.width &&
+          py >= exit.y &&
+          py < exit.y + exit.height;
+        return (
+          c.connectedRooms.includes(exitId) ||
+          inExit(c.startX, c.startY) ||
+          inExit(c.endX, c.endY)
+        );
+      });
+
+      expect(entranceConnected).toBe(true);
+      expect(exitConnected).toBe(true);
+    });
+
     it('部屋同士が不正に重複しない', () => {
       const generator = new BSPGenerator(50, 50, 12345);
       const result = generator.generate(createRoomConfig());
@@ -416,9 +529,112 @@ describe('Room data and connections', () => {
       await world.changeFloor(3);
       expect(world.getTileMap()!.getWidth()).toBe(50);
 
-      // フロア2に戻っても同じマップが保持されている
+      // フロア2に戻ってから floor2 のマップ参照を記録
       await world.changeFloor(2);
-      expect(world.getTileMap()!.getWidth()).toBe(50);
+      const floor2MapBefore = world.getTileMap();
+
+      // フロア3に移動してから再度フロア2に戻る
+      await world.changeFloor(3);
+      await world.changeFloor(2);
+
+      // 同一参照が保持されている（再生成されていない）
+      expect(world.getTileMap()).toBe(floor2MapBefore);
+    });
+
+    it('フロア切替後に各階の Room 情報を独立して保持する', async () => {
+      const map = new TileMap(10, 10);
+      for (let y = 0; y < 10; y++) {
+        for (let x = 0; x < 10; x++) {
+          map.setTileAt(x, y, 0, TileType.TILE, true);
+        }
+      }
+      world = new WorldSystem(map);
+      Engine.instance.registerSystem('world', world);
+      await world.initialize(Engine.instance);
+
+      // フロア2を生成
+      await world.changeFloor(2);
+      const floor2Rooms = world.getRooms();
+      expect(floor2Rooms.length).toBeGreaterThan(0);
+
+      // 各 Room の ID（x,y 形式）を記録
+      const floor2RoomIds = floor2Rooms.map((r) => `${r.x},${r.y}`);
+
+      // フロア3を生成
+      await world.changeFloor(3);
+      const floor3Rooms = world.getRooms();
+      expect(floor3Rooms.length).toBeGreaterThan(0);
+
+      // フロア2とフロア3で Room 構造が異なる（別インスタンス）
+      const floor3RoomIds = floor3Rooms.map((r) => `${r.x},${r.y}`);
+      expect(floor3RoomIds).not.toBe(floor2RoomIds);
+
+      // フロア2に戻っても同じ Room 配列が保持されている（同一参照）
+      const floor2RoomsBefore = world.getRoomsByFloor(2);
+      await world.changeFloor(3);
+      await world.changeFloor(2);
+      expect(world.getRooms()).toBe(floor2RoomsBefore);
+
+      // Room ID も一致する
+      const floor2RoomIdsAfter = world.getRooms().map((r) => `${r.x},${r.y}`);
+      expect(floor2RoomIdsAfter).toEqual(floor2RoomIds);
+    });
+
+    it('フロア切替後に各階の Corridor 情報を独立して保持する', async () => {
+      const map = new TileMap(10, 10);
+      for (let y = 0; y < 10; y++) {
+        for (let x = 0; x < 10; x++) {
+          map.setTileAt(x, y, 0, TileType.TILE, true);
+        }
+      }
+      world = new WorldSystem(map);
+      Engine.instance.registerSystem('world', world);
+      await world.initialize(Engine.instance);
+
+      // フロア2を生成
+      await world.changeFloor(2);
+      const floor2Corridors = world.getCorridors();
+      expect(floor2Corridors.length).toBeGreaterThan(0);
+
+      // フロア3を生成
+      await world.changeFloor(3);
+      const floor3Corridors = world.getCorridors();
+      expect(floor3Corridors.length).toBeGreaterThan(0);
+
+      // フロア2に戻っても同じ Corridor 配列が保持されている（同一参照）
+      const floor2CorridorsBefore = world.getCorridorsByFloor(2);
+      await world.changeFloor(3);
+      await world.changeFloor(2);
+      expect(world.getCorridors()).toBe(floor2CorridorsBefore);
+    });
+
+    it('setRooms/setCorridors で明示的に Room 情報を設定できる', () => {
+      const map = new TileMap(10, 10);
+      world = new WorldSystem(map);
+
+      const testRooms: Room[] = [
+        { x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
+        { x: 10, y: 10, width: 6, height: 6, type: RoomType.EXIT },
+      ];
+      const testCorridors: Corridor[] = [
+        {
+          startX: 5,
+          startY: 3,
+          endX: 10,
+          endY: 13,
+          width: 1,
+          method: 'astar' as any,
+          connectedRooms: ['1,1', '10,10'],
+        },
+      ];
+
+      world.setRooms(1, testRooms);
+      world.setCorridors(1, testCorridors);
+
+      expect(world.getRooms()).toBe(testRooms);
+      expect(world.getCorridors()).toBe(testCorridors);
+      expect(world.getRoomsByFloor(1)).toBe(testRooms);
+      expect(world.getCorridorsByFloor(1)).toBe(testCorridors);
     });
   });
 });

@@ -218,6 +218,60 @@ describe('Enemy rendering boundary', () => {
     expect(sprite.visible).toBe(true); // 破棄前の最終状態（destroy は visible を変更しない）
   });
 
+  it('破棄時に direction_changed リスナーを EventSystem から解除する', async () => {
+    const listenerCountBefore = events.getListenerCount('direction_changed');
+
+    const enemy = await createAndInitEnemy({ type: EnemyType.SOLDIER });
+
+    // Enemy が direction_changed リスナーを1つ追加している
+    expect(events.getListenerCount('direction_changed')).toBe(listenerCountBefore + 1);
+
+    enemy.destroy();
+
+    // 破棄後にリスナー数が元に戻っている（解除されている）
+    expect(events.getListenerCount('direction_changed')).toBe(listenerCountBefore);
+  });
+
+  it('破棄時に entity_visibility_changed リスナーを EventSystem から解除する', async () => {
+    const listenerCountBefore = events.getListenerCount('entity_visibility_changed');
+
+    const enemy = await createAndInitEnemy({ type: EnemyType.SOLDIER });
+
+    // Enemy 自身 + SpriteComponent がそれぞれ entity_visibility_changed リスナーを追加する
+    // 注: SpriteComponent も entity_visibility_changed をリッスンするため、+2 になる
+    const listenerCountAfterInit = events.getListenerCount('entity_visibility_changed');
+    expect(listenerCountAfterInit).toBe(listenerCountBefore + 2);
+
+    enemy.destroy();
+
+    // 破棄後に Enemy 自身のリスナーが解除されている（-1）
+    // 注: SpriteComponent のリスナーは別途解除される必要があるが、
+    // ここでは Enemy 自身のリスナー解除を検証する
+    const listenerCountAfterDestroy = events.getListenerCount('entity_visibility_changed');
+    expect(listenerCountAfterDestroy).toBe(listenerCountAfterInit - 1);
+  });
+
+  it('複数Enemy破棄時にリスナーが累積しない', async () => {
+    const initialListenerCount = events.getListenerCount('direction_changed');
+
+    // 3体のEnemyを作成
+    const enemies: Enemy[] = [];
+    for (let i = 0; i < 3; i++) {
+      enemies.push(await createAndInitEnemy({ id: `enemy-${i}`, type: EnemyType.SOLDIER }));
+    }
+
+    // リスナーが3つ追加されている（各Enemyが1つずつ追加）
+    expect(events.getListenerCount('direction_changed')).toBe(initialListenerCount + 3);
+
+    // 全て破棄
+    for (const enemy of enemies) {
+      enemy.destroy();
+    }
+
+    // リスナー数が初期値に戻っている（累積していない）
+    expect(events.getListenerCount('direction_changed')).toBe(initialListenerCount);
+  });
+
   it('破棄後にスプライト参照を残さない', async () => {
     const enemy = await createAndInitEnemy({ type: EnemyType.SOLDIER });
 

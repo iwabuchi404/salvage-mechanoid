@@ -173,20 +173,31 @@ describe('Engine initialization and shutdown', () => {
       update: () => updateOrder.push('renderer'),
     };
 
-    engine.registerSystem('A', systemA);
+    // renderer を最初に登録しても最後に更新されることを確認
     engine.registerSystem('renderer', renderer);
+    engine.registerSystem('A', systemA);
     engine.registerSystem('B', systemB);
 
-    // gameLoop は private なので、start() → stop() で1フレーム分の更新を確認
-    // ただし requestAnimationFrame は jsdom では動作しない可能性があるため、
-    // 代わりに update() の順序を直接確認するためのモックを使用
-    // Engine の gameLoop は requestAnimationFrame で呼ばれるため、
-    // ここではシステムの登録順と renderer が最後になることを確認
+    // requestAnimationFrame をモックしてコールバックを捕捉
+    let rafCallback: ((timestamp: number) => void) | null = null;
+    const rafSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((cb: (timestamp: number) => void) => {
+        rafCallback = cb;
+        return 1;
+      });
 
-    // update() メソッドを直接呼ぶことはできない（gameLoop は private）
-    // しかし、gameLoop のロジックから renderer が最後に更新されることは保証されている
-    // ここでは登録順に関わらず renderer が最後になることをコードから確認
-    expect(engine.getSystem('renderer')).toBe(renderer);
+    engine.start();
+    expect(rafCallback).not.toBeNull();
+
+    // gameLoop を直接呼び出す（実際の gameLoop ロジックを実行）
+    rafCallback!(performance.now());
+
+    // renderer が最後に更新されている
+    expect(updateOrder).toEqual(['A', 'B', 'renderer']);
+
+    engine.stop();
+    rafSpy.mockRestore();
   });
 
   it('1 つの System 例外が他 System の更新を止めない', () => {
@@ -207,21 +218,27 @@ describe('Engine initialization and shutdown', () => {
     engine.registerSystem('A', systemA);
     engine.registerSystem('B', systemB);
 
-    // gameLoop は private ため、Engine の gameLoop ロジックを模倣して確認
-    // gameLoop は try-catch で各システムの update() を呼ぶため、
-    // 1つの例外が他のシステムの更新を止めない
-    const systems = (engine as any).systems as Map<string, System>;
-    for (const [name, system] of systems.entries()) {
-      if (name === 'renderer') continue;
-      try {
-        system.update(16);
-      } catch (error) {
-        // 例外が発生しても続行
-      }
-    }
+    // requestAnimationFrame をモックしてコールバックを捕捉
+    let rafCallback: ((timestamp: number) => void) | null = null;
+    const rafSpy = jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation((cb: (timestamp: number) => void) => {
+        rafCallback = cb;
+        return 1;
+      });
+
+    engine.start();
+    expect(rafCallback).not.toBeNull();
+
+    // gameLoop を直接呼び出す（実際の gameLoop ロジックを実行）
+    // systemA が例外を投げても systemB は更新される
+    rafCallback!(performance.now());
 
     expect(updateOrder).toContain('A');
     expect(updateOrder).toContain('B');
+
+    engine.stop();
+    rafSpy.mockRestore();
   });
 
   it('removeSystem() でシステムの destroy() を呼んでから削除する', () => {

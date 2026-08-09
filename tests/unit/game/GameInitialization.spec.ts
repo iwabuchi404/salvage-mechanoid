@@ -126,49 +126,73 @@ describe('Game initialization and shutdown', () => {
   it('再初期化でエンティティが累積しない', async () => {
     await game.initialize(mockCanvas);
 
-    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity')!;
-    const entityCountAfterFirstInit = entitySystem.getEntityCount();
+    // 初期化後の EntitySystem を取得
+    const entitySystemAfterFirst = Engine.instance.getSystem<EntitySystem>('entity')!;
+    const entityCountAfterFirstInit = entitySystemAfterFirst.getEntityCount();
+    expect(entityCountAfterFirstInit).toBeGreaterThan(0);
 
-    // 再初期化
+    // 再初期化（reset → initialize で新しい EntitySystem が登録される）
     await game.initialize(mockCanvas);
 
-    const entityCountAfterSecondInit = entitySystem.getEntityCount();
-    // エンティティ数が増加していない（プレイヤー+リソースのみ）
-    expect(entityCountAfterSecondInit).toBeLessThanOrEqual(entityCountAfterFirstInit + 1);
+    // 再初期化後は新しい EntitySystem インスタンスが登録されるため、再取得する
+    const entitySystemAfterSecond = Engine.instance.getSystem<EntitySystem>('entity')!;
+    expect(entitySystemAfterSecond).not.toBe(entitySystemAfterFirst);
+
+    const entityCountAfterSecondInit = entitySystemAfterSecond.getEntityCount();
+    // エンティティ数が初回と同等（プレイヤー+リソースのみで累積しない）
+    // 注: マップ生成のランダム性によりリソース数は変動するため、
+    // 古い EntitySystem のエンティティが新しいシステムに漏れ出していないことを確認
+    expect(entitySystemAfterFirst.getEntityCount()).toBe(0); // 古いシステムは空
+    expect(entityCountAfterSecondInit).toBeGreaterThan(0);
   });
 
   it('再初期化でイベントリスナーが二重登録されない（イベントが重複発火しない）', async () => {
     await game.initialize(mockCanvas);
 
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event')!;
+    // 初期化後の EventSystem を取得
+    const eventSystemAfterFirst = Engine.instance.getSystem<EventSystem>('event')!;
+    // getListenerCount は Set の size を返すため、正確なリスナー数が取得できる
+    const listenerCountAfterFirstInit = eventSystemAfterFirst.getListenerCount('floor_changed');
 
-    // floor_changed イベントのリスナー数を確認
-    const listenerCountAfterFirstInit = (eventSystem as any).listeners?.get('floor_changed')?.length || 0;
-
-    // 再初期化
+    // 再初期化（reset → initialize で新しい EventSystem が登録される）
     await game.initialize(mockCanvas);
 
-    const listenerCountAfterSecondInit = (eventSystem as any).listeners?.get('floor_changed')?.length || 0;
+    // 再初期化後は新しい EventSystem インスタンスが登録されるため、再取得する
+    const eventSystemAfterSecond = Engine.instance.getSystem<EventSystem>('event')!;
+    expect(eventSystemAfterSecond).not.toBe(eventSystemAfterFirst);
 
-    // リスナー数が増加していない（二重登録されていない）
-    // 注: EventSystem がリスナーをクリアせずに残す場合、
-    // 再初期化で EventSystem 自体が新しく作られるためリスナーはリセットされる
-    expect(listenerCountAfterSecondInit).toBeLessThanOrEqual(listenerCountAfterFirstInit + 1);
+    // 新しい EventSystem のリスナー数は前回と同等（二重登録されていない）
+    const listenerCountAfterSecondInit = eventSystemAfterSecond.getListenerCount('floor_changed');
+    expect(listenerCountAfterSecondInit).toBeLessThanOrEqual(listenerCountAfterFirstInit);
+
+    // 実際にイベントを発行して、コールバックが重複発火しないことを確認
+    const handler = jest.fn();
+    eventSystemAfterSecond.on('floor_changed', handler);
+    eventSystemAfterSecond.emit('floor_changed', { floorNumber: 1 });
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it('リスタート時に前回の Entity や状態を残さない', async () => {
     await game.initialize(mockCanvas);
 
-    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity')!;
-    const initialEntityCount = entitySystem.getEntityCount();
+    // 初期化後の EntitySystem を取得
+    const entitySystemAfterFirst = Engine.instance.getSystem<EntitySystem>('entity')!;
+    const initialEntityCount = entitySystemAfterFirst.getEntityCount();
     expect(initialEntityCount).toBeGreaterThan(0); // プレイヤー+リソース
 
     // 再初期化（リスタート）
     await game.initialize(mockCanvas);
 
-    const restartedEntityCount = entitySystem.getEntityCount();
-    // エンティティが累積していない
-    expect(restartedEntityCount).toBeLessThanOrEqual(initialEntityCount + 1);
+    // 再初期化後は新しい EntitySystem インスタンスが登録されるため、再取得する
+    const entitySystemAfterSecond = Engine.instance.getSystem<EntitySystem>('entity')!;
+    expect(entitySystemAfterSecond).not.toBe(entitySystemAfterFirst);
+
+    // 古い EntitySystem は空（エンティティが漏れ出していない）
+    expect(entitySystemAfterFirst.getEntityCount()).toBe(0);
+
+    const restartedEntityCount = entitySystemAfterSecond.getEntityCount();
+    // 新しいシステムにはエンティティが存在する（プレイヤー+リソース）
+    expect(restartedEntityCount).toBeGreaterThan(0);
   });
 
   it('getCurrentFloor() が初期値 1 を返す', async () => {
