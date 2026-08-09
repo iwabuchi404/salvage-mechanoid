@@ -238,17 +238,14 @@ describe('Enemy rendering boundary', () => {
     const enemy = await createAndInitEnemy({ type: EnemyType.SOLDIER });
 
     // Enemy 自身 + SpriteComponent がそれぞれ entity_visibility_changed リスナーを追加する
-    // 注: SpriteComponent も entity_visibility_changed をリッスンするため、+2 になる
     const listenerCountAfterInit = events.getListenerCount('entity_visibility_changed');
     expect(listenerCountAfterInit).toBe(listenerCountBefore + 2);
 
     enemy.destroy();
 
-    // 破棄後に Enemy 自身のリスナーが解除されている（-1）
-    // 注: SpriteComponent のリスナーは別途解除される必要があるが、
-    // ここでは Enemy 自身のリスナー解除を検証する
+    // 破棄後に Enemy 自身 + SpriteComponent の両方のリスナーが解除されている（-2）
     const listenerCountAfterDestroy = events.getListenerCount('entity_visibility_changed');
-    expect(listenerCountAfterDestroy).toBe(listenerCountAfterInit - 1);
+    expect(listenerCountAfterDestroy).toBe(listenerCountBefore);
   });
 
   it('複数Enemy破棄時にリスナーが累積しない', async () => {

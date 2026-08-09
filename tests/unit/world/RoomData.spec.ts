@@ -565,17 +565,13 @@ describe('Room data and connections', () => {
       const floor3Rooms = world.getRooms();
       expect(floor3Rooms.length).toBeGreaterThan(0);
 
-      // フロア2とフロア3で Room 構造が異なる（別インスタンス）
+      // フロア2とフロア3で Room 構造が異なる（別の内容）
       const floor3RoomIds = floor3Rooms.map((r) => `${r.x},${r.y}`);
       expect(floor3RoomIds).not.toBe(floor2RoomIds);
 
-      // フロア2に戻っても同じ Room 配列が保持されている（同一参照）
-      const floor2RoomsBefore = world.getRoomsByFloor(2);
+      // フロア2に戻っても同じ Room 内容が保持されている（値で比較）
       await world.changeFloor(3);
       await world.changeFloor(2);
-      expect(world.getRooms()).toBe(floor2RoomsBefore);
-
-      // Room ID も一致する
       const floor2RoomIdsAfter = world.getRooms().map((r) => `${r.x},${r.y}`);
       expect(floor2RoomIdsAfter).toEqual(floor2RoomIds);
     });
@@ -593,19 +589,22 @@ describe('Room data and connections', () => {
 
       // フロア2を生成
       await world.changeFloor(2);
-      const floor2Corridors = world.getCorridors();
-      expect(floor2Corridors.length).toBeGreaterThan(0);
+      const floor2CorridorIds = world
+        .getCorridors()
+        .map((c) => `${c.startX},${c.startY}->${c.endX},${c.endY}`);
+      expect(floor2CorridorIds.length).toBeGreaterThan(0);
 
       // フロア3を生成
       await world.changeFloor(3);
-      const floor3Corridors = world.getCorridors();
-      expect(floor3Corridors.length).toBeGreaterThan(0);
+      expect(world.getCorridors().length).toBeGreaterThan(0);
 
-      // フロア2に戻っても同じ Corridor 配列が保持されている（同一参照）
-      const floor2CorridorsBefore = world.getCorridorsByFloor(2);
+      // フロア2に戻っても同じ Corridor 内容が保持されている（値で比較）
       await world.changeFloor(3);
       await world.changeFloor(2);
-      expect(world.getCorridors()).toBe(floor2CorridorsBefore);
+      const floor2CorridorIdsAfter = world
+        .getCorridors()
+        .map((c) => `${c.startX},${c.startY}->${c.endX},${c.endY}`);
+      expect(floor2CorridorIdsAfter).toEqual(floor2CorridorIds);
     });
 
     it('setRooms/setCorridors で明示的に Room 情報を設定できる', () => {
@@ -631,10 +630,29 @@ describe('Room data and connections', () => {
       world.setRooms(1, testRooms);
       world.setCorridors(1, testCorridors);
 
-      expect(world.getRooms()).toBe(testRooms);
-      expect(world.getCorridors()).toBe(testCorridors);
-      expect(world.getRoomsByFloor(1)).toBe(testRooms);
-      expect(world.getCorridorsByFloor(1)).toBe(testCorridors);
+      // getter はコピーを返すため、値で比較する
+      expect(world.getRooms()).toEqual(testRooms);
+      expect(world.getCorridors()).toEqual(testCorridors);
+      expect(world.getRoomsByFloor(1)).toEqual(testRooms);
+      expect(world.getCorridorsByFloor(1)).toEqual(testCorridors);
+    });
+
+    it('getter は内部配列のコピーを返す（疎結合）', () => {
+      const map = new TileMap(10, 10);
+      world = new WorldSystem(map);
+
+      const testRooms: Room[] = [
+        { x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
+      ];
+      world.setRooms(1, testRooms);
+
+      // getter の戻り値を変更しても内部配列に影響しない
+      const rooms1 = world.getRooms();
+      rooms1.push({ x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
+
+      const rooms2 = world.getRooms();
+      expect(rooms2).toHaveLength(1);
+      expect(rooms2).toEqual(testRooms);
     });
   });
 });

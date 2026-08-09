@@ -73,6 +73,9 @@ export class Game {
   // ゲームが初期化済みかどうか
   private initialized = false;
 
+  // window に登録した removeItem リスナーの参照（reset 時に解除するため保持）
+  private removeItemListener: ((event: CustomEvent) => void) | null = null;
+
   // ゲームストア（Pinia）
   private gameStore = useGameStore();
   private uiStore = useUIStore();
@@ -129,6 +132,8 @@ export class Game {
 
   /**
    * ゲームをリセット（リトライ時など）
+   * Engine.reset() で全 System の destroy() を呼び、
+   * Renderer/Pixi Application・InputSystem リスナー・EventSystem リスナーを確実に破棄する
    */
   private async reset(): Promise<void> {
     console.log('Game: Resetting game state...');
@@ -136,17 +141,19 @@ export class Game {
     // エンジンを停止
     this.engine.stop();
 
-    // FOVシステムをリセット
-    const fovSystem = this.engine.getSystem<FOVSystem>('fov');
-    if (fovSystem) {
-      fovSystem.reset();
+    // window の removeItem リスナーを解除
+    if (this.removeItemListener) {
+      window.removeEventListener('removeItem', this.removeItemListener as EventListener);
+      this.removeItemListener = null;
     }
 
-    // エンティティシステムをクリア
-    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
-    if (entitySystem) {
-      entitySystem.clear();
-    }
+    // Engine.reset() で全 System の destroy() を呼んでから systems をクリア
+    // これにより RendererSystem（Pixi Application）、InputSystem（DOM リスナー）、
+    // その他の System が確実に破棄される
+    this.engine.reset();
+
+    // フロアマネージャーをクリア
+    this.floorManager = null;
 
     // プレイヤーをクリア
     this.player = null;
@@ -310,6 +317,10 @@ export class Game {
       // タイルマップを作成
       this.tileMap = new TileMap(50, 50);
       this.tileMap.importMapData(mapData.map);
+
+      // クラシックモードでは Room/Corridor 情報は空
+      this.currentRooms = [];
+      this.currentCorridors = [];
     } else {
       // 戦術的モード：新しい戦術的システム
       const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -334,6 +345,15 @@ export class Game {
 
     // WorldSystemを作成してエンジンに登録（タイルマップを使用）
     const worldSystem = new WorldSystem(this.tileMap);
+    // 現在のフロア番号を取得（_floorManager があればそれを使う、なければ 1）
+    const floorNumber = this.floorManager?.getCurrentFloor() || 1;
+    // Room/Corridor 情報を WorldSystem に設定（フロアごとに保存）
+    if (this.currentRooms.length > 0) {
+      worldSystem.setRooms(floorNumber, this.currentRooms);
+    }
+    if (this.currentCorridors.length > 0) {
+      worldSystem.setCorridors(floorNumber, this.currentCorridors);
+    }
     this.engine.registerSystem('world', worldSystem);
     await worldSystem.initialize(this.engine);
 
@@ -826,10 +846,12 @@ export class Game {
     });
 
     // アイテム削除イベント（UIダイアログからのカスタムイベント）
-    window.addEventListener('removeItem', ((event: CustomEvent) => {
+    // リスナー参照を保持し、reset 時に解除できるようにする
+    this.removeItemListener = (event: CustomEvent) => {
       const itemId = event.detail.itemId;
       this.removeItem(itemId);
-    }) as EventListener);
+    };
+    window.addEventListener('removeItem', this.removeItemListener as EventListener);
   }
 
   /**

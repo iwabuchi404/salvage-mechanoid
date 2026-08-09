@@ -109,6 +109,7 @@ describe('Enemy AI', () => {
   /**
    * act() を実行し、内部の waitForMovement/waitForAttack のタイムアウトを解決する。
    * フェイクタイマーを使用して 500ms のタイムアウトを即座に進める。
+   * また、移動アニメーションを完了させるため MovementComponent.update() を呼ぶ。
    */
   const runAct = async (enemy: Enemy): Promise<void> => {
     jest.useFakeTimers();
@@ -117,6 +118,13 @@ describe('Enemy AI', () => {
     jest.advanceTimersByTime(700);
     await actPromise;
     jest.useRealTimers();
+
+    // 移動アニメーションを完了させる（update を呼んで isMoving を false にする）
+    const movement = enemy.getComponent<MovementComponent>('movement');
+    if (movement && movement.isMoving) {
+      // moveDuration 以上の deltaTime を与えて移動を完了させる
+      movement.update(1000);
+    }
   };
 
   it('STATIC は移動せずプレイヤーの方向を向く', async () => {
@@ -170,10 +178,10 @@ describe('Enemy AI', () => {
       { x: 5, y: 5, z: 0 },
       { x: 7, y: 5, z: 0 },
     ];
-    // 開始位置を巡回ルートの最後の点（端）に設定
+    // 開始位置を巡回ルートの最初の点に設定（patrolIndex=0 から開始）
     const enemy = await createAndInitEnemy({
       id: 'patrol-bounce-enemy',
-      x: 7,
+      x: 5,
       y: 5,
       behavior: EnemyBehavior.PATROL,
       patrolRoute,
@@ -183,12 +191,44 @@ describe('Enemy AI', () => {
     // プレイヤーを遠くに配置
     playerTransform.setPosition(0, 0, 0);
 
-    // 1回目の act: 端にいるので折り返して最初の点 (5,5) に向かう
+    // 1回目の act: 開始位置 (5,5) は patrolRoute[0] と一致するため、
+    // patrolIndex が 0→1 に進む（移動はしない）
+    await runAct(enemy);
+    expect(transform.position.x).toBe(5);
+
+    // 2回目の act: patrolRoute[1] (7,5) に向かって移動（1マス移動）
+    await runAct(enemy);
+    expect(transform.position.x).toBe(6);
+    expect(enemy.getDirection()).toBe('right');
+
+    // 3回目の act: (7,5) に向かって移動（1マス移動）
+    await runAct(enemy);
+    expect(transform.position.x).toBe(7);
+
+    // 4回目の act: (7,5) に到達したので patrolIndex が 1→2 に進み、
+    // patrolIndex >= length(2) のため patrolIndex=0, patrolDirection=-1 に反転
+    // この act 内では到達判定のみで移動はしない
     await runAct(enemy);
 
+    // 5回目の act: patrolRoute[0] (5,5) に向かって移動（左方向）
+    await runAct(enemy);
     // 折り返して左方向に移動する（x が減少）
-    expect(transform.position.x).toBe(6);
+    expect(transform.position.x).toBeLessThan(7);
     expect(enemy.getDirection()).toBe('left');
+
+    // 6回目の act: (5,5) に向かって移動
+    await runAct(enemy);
+    expect(transform.position.x).toBeLessThanOrEqual(6);
+
+    // 7回目の act: さらに (5,5) に向かって移動
+    await runAct(enemy);
+    expect(transform.position.x).toBeLessThanOrEqual(5);
+
+    // 8回目の act: (5,5) に到達したので patrolIndex が反転し、
+    // patrolDirection=1 に反転して right 方向に向かう
+    await runAct(enemy);
+    // patrolDirection が 1 に反転し、right 方向に移動
+    expect(enemy.getDirection()).toBe('right');
   });
 
   it('PATROL は巡回ルートがない場合にランダム移動へフォールバックする', async () => {

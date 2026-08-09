@@ -35,12 +35,19 @@ export class Engine {
 
   /**
    * システムをエンジンに登録する
+   * 同名のシステムが既に登録されている場合は、旧システムの destroy() を呼んでから上書きする
    * @param name システムの一意の識別子
    * @param system 登録するシステムのインスタンス
    */
   registerSystem(name: string, system: System): void {
-    if (this.systems.has(name)) {
-      console.warn(`System with name "${name}" already registered, overwriting`);
+    const existing = this.systems.get(name);
+    if (existing) {
+      console.warn(`System with name "${name}" already registered, destroying old instance`);
+      try {
+        existing.destroy?.();
+      } catch (error) {
+        console.error(`Error destroying old system "${name}":`, error);
+      }
     }
     this.systems.set(name, system);
   }

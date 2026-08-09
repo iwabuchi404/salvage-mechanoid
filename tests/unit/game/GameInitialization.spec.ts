@@ -131,6 +131,11 @@ describe('Game initialization and shutdown', () => {
     const entityCountAfterFirstInit = entitySystemAfterFirst.getEntityCount();
     expect(entityCountAfterFirstInit).toBeGreaterThan(0);
 
+    // 初期化後のエンティティIDを記録
+    const firstInitEntityIds = new Set(
+      entitySystemAfterFirst.getEntities().map((e) => e.id)
+    );
+
     // 再初期化（reset → initialize で新しい EntitySystem が登録される）
     await game.initialize(mockCanvas);
 
@@ -140,10 +145,19 @@ describe('Game initialization and shutdown', () => {
 
     const entityCountAfterSecondInit = entitySystemAfterSecond.getEntityCount();
     // エンティティ数が初回と同等（プレイヤー+リソースのみで累積しない）
-    // 注: マップ生成のランダム性によりリソース数は変動するため、
-    // 古い EntitySystem のエンティティが新しいシステムに漏れ出していないことを確認
-    expect(entitySystemAfterFirst.getEntityCount()).toBe(0); // 古いシステムは空
     expect(entityCountAfterSecondInit).toBeGreaterThan(0);
+
+    // 古いエンティティIDが新しいシステムに漏れ出していないことを確認
+    // 注: プレイヤーIDは固定（'player'）のため一致する可能性があるが、
+    // リソースエンティティのIDは毎回異なるため、古いIDが新しいシステムに
+    // 引き継がれていないことを確認する
+    const secondInitEntityIds = new Set(
+      entitySystemAfterSecond.getEntities().map((e) => e.id)
+    );
+    // プレイヤー以外の古いエンティティIDが新しいシステムに存在しないことを確認
+    const oldResourceIds = [...firstInitEntityIds].filter((id) => id !== 'player');
+    const leakedIds = oldResourceIds.filter((id) => secondInitEntityIds.has(id));
+    expect(leakedIds).toHaveLength(0);
   });
 
   it('再初期化でイベントリスナーが二重登録されない（イベントが重複発火しない）', async () => {
@@ -162,14 +176,79 @@ describe('Game initialization and shutdown', () => {
     expect(eventSystemAfterSecond).not.toBe(eventSystemAfterFirst);
 
     // 新しい EventSystem のリスナー数は前回と同等（二重登録されていない）
+    // 注: Engine.reset() で古い EventSystem が破棄され、新しい EventSystem が作られるため、
+    // 古いリスナーは新しいシステムに引き継がれない
     const listenerCountAfterSecondInit = eventSystemAfterSecond.getListenerCount('floor_changed');
-    expect(listenerCountAfterSecondInit).toBeLessThanOrEqual(listenerCountAfterFirstInit);
+    expect(listenerCountAfterSecondInit).toBe(listenerCountAfterFirstInit);
 
+    // 古い EventSystem のリスナーは破棄されている（空または同じ数だが別インスタンス）
     // 実際にイベントを発行して、コールバックが重複発火しないことを確認
     const handler = jest.fn();
     eventSystemAfterSecond.on('floor_changed', handler);
     eventSystemAfterSecond.emit('floor_changed', { floorNumber: 1 });
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('再初期化で古い RendererSystem が破棄される（Pixi Application が破棄される）', async () => {
+    await game.initialize(mockCanvas);
+
+    // 初期化後の RendererSystem を取得
+    const rendererAfterFirst = Engine.instance.getSystem<any>('renderer')!;
+    const appAfterFirst = rendererAfterFirst.getApp();
+    expect(appAfterFirst).toBeDefined();
+
+    // 再初期化
+    await game.initialize(mockCanvas);
+
+    // 再初期化後は新しい RendererSystem インスタンスが登録される
+    const rendererAfterSecond = Engine.instance.getSystem<any>('renderer')!;
+    expect(rendererAfterSecond).not.toBe(rendererAfterFirst);
+
+    // 古い Pixi Application は破棄されている（app.destroy が呼ばれる）
+    // 注: Engine.reset() → RendererSystem.destroy() → app.destroy(true) の順で呼ばれる
+    // appAfterFirst は破棄済みなので getApp() は null を返すはず
+    expect(rendererAfterFirst.getApp()).toBeNull();
+  });
+
+  it('再初期化で InputSystem の DOM リスナーが解除される', async () => {
+    await game.initialize(mockCanvas);
+
+    // 初期化後の InputSystem を取得
+    const inputAfterFirst = Engine.instance.getSystem<any>('input')!;
+    expect(inputAfterFirst).toBeDefined();
+
+    // window に keydown リスナーが登録されていることを確認
+    // （jsdom では addEventListener の呼び出しを直接確認できないため、
+    //  InputSystem の destroy が呼ばれたことを検証する）
+    const destroySpy = jest.spyOn(inputAfterFirst, 'destroy');
+
+    // 再初期化
+    await game.initialize(mockCanvas);
+
+    // Engine.reset() で古い InputSystem の destroy() が呼ばれる
+    expect(destroySpy).toHaveBeenCalled();
+
+    // 再初期化後は新しい InputSystem インスタンスが登録される
+    const inputAfterSecond = Engine.instance.getSystem<any>('input')!;
+    expect(inputAfterSecond).not.toBe(inputAfterFirst);
+  });
+
+  it('再初期化で window の removeItem リスナーが解除される', async () => {
+    await game.initialize(mockCanvas);
+
+    // removeItem イベントを発行して、リスナーが登録されていることを確認
+    const removeItemSpy = jest.spyOn(window, 'removeEventListener');
+
+    // 再初期化
+    await game.initialize(mockCanvas);
+
+    // reset 時に window.removeEventListener('removeItem', ...) が呼ばれる
+    expect(removeItemSpy).toHaveBeenCalledWith(
+      'removeItem',
+      expect.any(Function)
+    );
+
+    removeItemSpy.mockRestore();
   });
 
   it('リスタート時に前回の Entity や状態を残さない', async () => {
@@ -180,6 +259,11 @@ describe('Game initialization and shutdown', () => {
     const initialEntityCount = entitySystemAfterFirst.getEntityCount();
     expect(initialEntityCount).toBeGreaterThan(0); // プレイヤー+リソース
 
+    // 初期化後のエンティティIDを記録
+    const firstInitEntityIds = new Set(
+      entitySystemAfterFirst.getEntities().map((e) => e.id)
+    );
+
     // 再初期化（リスタート）
     await game.initialize(mockCanvas);
 
@@ -187,12 +271,17 @@ describe('Game initialization and shutdown', () => {
     const entitySystemAfterSecond = Engine.instance.getSystem<EntitySystem>('entity')!;
     expect(entitySystemAfterSecond).not.toBe(entitySystemAfterFirst);
 
-    // 古い EntitySystem は空（エンティティが漏れ出していない）
-    expect(entitySystemAfterFirst.getEntityCount()).toBe(0);
-
-    const restartedEntityCount = entitySystemAfterSecond.getEntityCount();
     // 新しいシステムにはエンティティが存在する（プレイヤー+リソース）
+    const restartedEntityCount = entitySystemAfterSecond.getEntityCount();
     expect(restartedEntityCount).toBeGreaterThan(0);
+
+    // 古いエンティティIDが新しいシステムに漏れ出していないことを確認
+    const secondInitEntityIds = new Set(
+      entitySystemAfterSecond.getEntities().map((e) => e.id)
+    );
+    const oldResourceIds = [...firstInitEntityIds].filter((id) => id !== 'player');
+    const leakedIds = oldResourceIds.filter((id) => secondInitEntityIds.has(id));
+    expect(leakedIds).toHaveLength(0);
   });
 
   it('getCurrentFloor() が初期値 1 を返す', async () => {

@@ -504,18 +504,20 @@ export class WorldSystem implements System {
 
   /**
    * 現在のフロアの部屋情報を取得
-   * @returns 部屋の配列（未設定の場合は空配列）
+   * @returns 部屋の配列のコピー（未設定の場合は空配列）
    */
   getRooms(): Room[] {
-    return this.floorRooms.get(this.currentFloor) || [];
+    const rooms = this.floorRooms.get(this.currentFloor);
+    return rooms ? [...rooms] : [];
   }
 
   /**
    * 現在のフロアの通路情報を取得
-   * @returns 通路の配列（未設定の場合は空配列）
+   * @returns 通路の配列のコピー（未設定の場合は空配列）
    */
   getCorridors(): Corridor[] {
-    return this.floorCorridors.get(this.currentFloor) || [];
+    const corridors = this.floorCorridors.get(this.currentFloor);
+    return corridors ? [...corridors] : [];
   }
 
   /**
@@ -539,19 +541,21 @@ export class WorldSystem implements System {
   /**
    * 指定フロアの部屋情報を取得
    * @param floorNumber フロア番号
-   * @returns 部屋の配列（未設定の場合は空配列）
+   * @returns 部屋の配列のコピー（未設定の場合は空配列）
    */
   getRoomsByFloor(floorNumber: number): Room[] {
-    return this.floorRooms.get(floorNumber) || [];
+    const rooms = this.floorRooms.get(floorNumber);
+    return rooms ? [...rooms] : [];
   }
 
   /**
    * 指定フロアの通路情報を取得
    * @param floorNumber フロア番号
-   * @returns 通路の配列（未設定の場合は空配列）
+   * @returns 通路の配列のコピー（未設定の場合は空配列）
    */
   getCorridorsByFloor(floorNumber: number): Corridor[] {
-    return this.floorCorridors.get(floorNumber) || [];
+    const corridors = this.floorCorridors.get(floorNumber);
+    return corridors ? [...corridors] : [];
   }
 
   /**

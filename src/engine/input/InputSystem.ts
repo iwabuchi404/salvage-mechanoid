@@ -31,6 +31,12 @@ export class InputSystem implements System {
   // キャンバス要素
   private canvas: HTMLCanvasElement | null = null;
 
+  // 登録したリスナーの参照（destroy 時に解除するため保持）
+  private keydownListener: ((event: KeyboardEvent) => void) | null = null;
+  private keyupListener: ((event: KeyboardEvent) => void) | null = null;
+  private clickListener: ((event: MouseEvent) => void) | null = null;
+  private mousemoveListener: ((event: MouseEvent) => void) | null = null;
+
   /**
    * システムを初期化
    * @param engine エンジンのインスタンス
@@ -69,7 +75,7 @@ export class InputSystem implements System {
    */
   private setupKeyboardListeners(): void {
     // キーダウンイベント
-    window.addEventListener('keydown', (event) => {
+    this.keydownListener = (event: KeyboardEvent) => {
       if (!this.inputEnabled) return;
 
       const key = event.key.toLowerCase();
@@ -79,13 +85,15 @@ export class InputSystem implements System {
       if (!this.waitingForInput) return;
 
       this.handleKeyPress(key, event);
-    });
+    };
+    window.addEventListener('keydown', this.keydownListener);
 
     // キーアップイベント
-    window.addEventListener('keyup', (event) => {
+    this.keyupListener = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       this.keysPressed.delete(key);
-    });
+    };
+    window.addEventListener('keyup', this.keyupListener);
   }
 
   /**
@@ -95,18 +103,46 @@ export class InputSystem implements System {
     if (!this.canvas) return;
 
     // クリックイベント
-    this.canvas.addEventListener('click', (event) => {
+    this.clickListener = (event: MouseEvent) => {
       if (!this.inputEnabled) return;
 
       this.handleMouseClick(event);
-    });
+    };
+    this.canvas.addEventListener('click', this.clickListener);
 
     // ホバーイベント
-    this.canvas.addEventListener('mousemove', (event) => {
+    this.mousemoveListener = (event: MouseEvent) => {
       if (!this.inputEnabled) return;
 
       this.handleMouseMove(event);
-    });
+    };
+    this.canvas.addEventListener('mousemove', this.mousemoveListener);
+  }
+
+  /**
+   * システムを破棄（登録したリスナーをすべて解除）
+   */
+  destroy(): void {
+    if (this.keydownListener) {
+      window.removeEventListener('keydown', this.keydownListener);
+      this.keydownListener = null;
+    }
+    if (this.keyupListener) {
+      window.removeEventListener('keyup', this.keyupListener);
+      this.keyupListener = null;
+    }
+    if (this.clickListener && this.canvas) {
+      this.canvas.removeEventListener('click', this.clickListener);
+      this.clickListener = null;
+    }
+    if (this.mousemoveListener && this.canvas) {
+      this.canvas.removeEventListener('mousemove', this.mousemoveListener);
+      this.mousemoveListener = null;
+    }
+    this.canvas = null;
+    this.engine = null;
+    this.eventSystem = null;
+    this.entitySystem = null;
   }
 
   /**

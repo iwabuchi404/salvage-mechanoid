@@ -24,6 +24,9 @@ export class SpriteComponent implements Component {
   private anchor: { x: number; y: number };
   private lastPosition: { x: number; y: number; z: number } = { x: -1, y: -1, z: -1 };
 
+  // 登録したリスナーの参照（destroy 時に解除するため保持）
+  private visibilityChangedListener: ((data: { entityId: string; inFOV: boolean }) => void) | null = null;
+
   /**
    * コンストラクタ
    * @param textureSrc テクスチャのパスまたはPIXIテクスチャ
@@ -91,11 +94,12 @@ export class SpriteComponent implements Component {
     // エンティティ可視性変更イベントをリッスン
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
     if (eventSystem && this.entity) {
-      eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+      this.visibilityChangedListener = (data: { entityId: string; inFOV: boolean }) => {
         if (data.entityId === this.entity?.id) {
           this.setInFOV(data.inFOV);
         }
-      });
+      };
+      eventSystem.on('entity_visibility_changed', this.visibilityChangedListener);
     }
   }
 
@@ -300,8 +304,16 @@ export class SpriteComponent implements Component {
   /**
    * コンポーネントの破棄処理
    * スプライトをレイヤーから削除し、リソースを解放
+   * EventSystem のリスナーも解除する
    */
   destroy(): void {
+    // EventSystem のリスナーを解除
+    if (this.visibilityChangedListener) {
+      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+      eventSystem?.off('entity_visibility_changed', this.visibilityChangedListener);
+      this.visibilityChangedListener = null;
+    }
+
     if (this.sprite) {
       const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
       if (rendererSystem) {
