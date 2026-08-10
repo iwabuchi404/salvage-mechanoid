@@ -309,6 +309,9 @@ export class Game {
     // MapGeneratorFacadeを使用
     const mapGenerator = new MapGeneratorFacade(50, 50);
 
+    // 現在のフロア番号を取得（floorManager があればそれを使う、なければ 1）
+    const floorNumber = this.floorManager?.getCurrentFloor() || 1;
+
     // ステージタイプに応じてマップ生成
     if (stageType === StageType.CLASSIC) {
       // クラシックモード：従来の方式
@@ -318,9 +321,9 @@ export class Game {
       this.tileMap = new TileMap(50, 50);
       this.tileMap.importMapData(mapData.map);
 
-      // クラシックモードでは Room/Corridor 情報は空
-      this.currentRooms = [];
-      this.currentCorridors = [];
+      // クラシックモードでも Room/Corridor 情報を保存
+      this.currentRooms = mapData.rooms || [];
+      this.currentCorridors = mapData.corridors || [];
     } else {
       // 戦術的モード：新しい戦術的システム
       const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -343,19 +346,17 @@ export class Game {
       // TODO: ゲームストアに戦術的データ保存機能を追加
     }
 
-    // WorldSystemを作成してエンジンに登録（タイルマップを使用）
-    const worldSystem = new WorldSystem(this.tileMap);
-    // 現在のフロア番号を取得（_floorManager があればそれを使う、なければ 1）
-    const floorNumber = this.floorManager?.getCurrentFloor() || 1;
-    // Room/Corridor 情報を WorldSystem に設定（フロアごとに保存）
-    if (this.currentRooms.length > 0) {
-      worldSystem.setRooms(floorNumber, this.currentRooms);
+    // 既存の WorldSystem を再利用（単一インスタンス維持）
+    // なければ新規作成してエンジンに登録
+    let worldSystem = this.engine.getSystem<WorldSystem>('world');
+    if (!worldSystem) {
+      worldSystem = new WorldSystem(this.tileMap);
+      this.engine.registerSystem('world', worldSystem);
+      await worldSystem.initialize(this.engine);
     }
-    if (this.currentCorridors.length > 0) {
-      worldSystem.setCorridors(floorNumber, this.currentCorridors);
-    }
-    this.engine.registerSystem('world', worldSystem);
-    await worldSystem.initialize(this.engine);
+
+    // 生成結果をフロア単位で WorldSystem に登録し、現在階を切り替える
+    worldSystem.registerFloor(floorNumber, this.tileMap, this.currentRooms, this.currentCorridors);
 
     // タイルマップの描画は、カメラ位置設定後に行う
     // （プレイヤー作成後に renderTileMap を呼び出す）

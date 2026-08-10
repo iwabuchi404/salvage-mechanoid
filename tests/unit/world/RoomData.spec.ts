@@ -565,12 +565,22 @@ describe('Room data and connections', () => {
       const floor3Rooms = world.getRooms();
       expect(floor3Rooms.length).toBeGreaterThan(0);
 
-      // フロア2とフロア3で Room 構造が異なる（別の内容）
+      // フロア2とフロア3で Room 構造が異なる（内容ベースで比較）
       const floor3RoomIds = floor3Rooms.map((r) => `${r.x},${r.y}`);
-      expect(floor3RoomIds).not.toBe(floor2RoomIds);
+      expect(floor3RoomIds).not.toEqual(floor2RoomIds);
 
-      // フロア2に戻っても同じ Room 内容が保持されている（値で比較）
+      // 独立性検証: floor2 の Room 配列を変更しても floor3 に影響しない
+      const floor2RoomsRef = world.getRooms();
+      // floor3 に切り替えてから floor3 の Room を取得
       await world.changeFloor(3);
+      const floor3RoomsRef = world.getRooms();
+      // floor2 の Room 配列を破壊的に変更
+      floor2RoomsRef.push({ x: 999, y: 999, width: 1, height: 1 } as any);
+      // floor3 の Room 配列は影響を受けないことを検証
+      expect(floor3RoomsRef.length).toBe(floor3Rooms.length);
+      expect(floor3RoomsRef.some((r) => r.x === 999 && r.y === 999)).toBe(false);
+
+      // フロア2に戻っても元の Room 内容が保持されている（値で比較）
       await world.changeFloor(2);
       const floor2RoomIdsAfter = world.getRooms().map((r) => `${r.x},${r.y}`);
       expect(floor2RoomIdsAfter).toEqual(floor2RoomIds);

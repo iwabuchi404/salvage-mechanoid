@@ -495,6 +495,50 @@ export class WorldSystem implements System {
   }
 
   /**
+   * 現在のフロア番号を設定し、対応する TileMap に切り替える
+   * 対象フロアの TileMap が未登録の場合は何もしない
+   * @param floorNumber 設定するフロア番号
+   */
+  setCurrentFloor(floorNumber: number): void {
+    if (!this.floorMaps.has(floorNumber)) {
+      console.warn(`Floor ${floorNumber} not found in WorldSystem, cannot switch`);
+      return;
+    }
+    this.currentFloor = floorNumber;
+    this.tileMap = this.floorMaps.get(floorNumber)!;
+    console.log(`WorldSystem: switched to floor ${floorNumber}`);
+  }
+
+  /**
+   * 指定フロアのマップ・Room・Corridor を一括で登録し、現在のフロアを切り替える
+   * Game.generateMap などから呼ばれることを想定
+   * @param floorNumber フロア番号
+   * @param tileMap タイルマップ
+   * @param rooms 部屋の配列（省略可）
+   * @param corridors 通路の配列（省略可）
+   */
+  registerFloor(
+    floorNumber: number,
+    tileMap: TileMap,
+    rooms: Room[] = [],
+    corridors: Corridor[] = []
+  ): void {
+    this.floorMaps.set(floorNumber, tileMap);
+    if (rooms.length > 0) {
+      this.floorRooms.set(floorNumber, rooms);
+    }
+    if (corridors.length > 0) {
+      this.floorCorridors.set(floorNumber, corridors);
+    }
+    // 現在のフロアを切り替え
+    this.currentFloor = floorNumber;
+    this.tileMap = tileMap;
+    console.log(
+      `WorldSystem: registered floor ${floorNumber} (${rooms.length} rooms, ${corridors.length} corridors)`
+    );
+  }
+
+  /**
    * 現在のタイルマップを取得
    * @returns タイルマップ
    */

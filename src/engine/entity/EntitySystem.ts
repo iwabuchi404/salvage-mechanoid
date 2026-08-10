@@ -155,4 +155,13 @@ export class EntitySystem implements System {
 
     this.entities.clear();
   }
+
+  /**
+   * システムを破棄（Engine.reset() から呼ばれる）
+   * clear() と同等の処理を行い、すべてのエンティティを破棄する
+   */
+  destroy(): void {
+    this.clear();
+    this.eventSystem = null;
+  }
 }

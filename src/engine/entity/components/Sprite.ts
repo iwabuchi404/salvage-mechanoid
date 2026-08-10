@@ -25,7 +25,8 @@ export class SpriteComponent implements Component {
   private lastPosition: { x: number; y: number; z: number } = { x: -1, y: -1, z: -1 };
 
   // 登録したリスナーの参照（destroy 時に解除するため保持）
-  private visibilityChangedListener: ((data: { entityId: string; inFOV: boolean }) => void) | null = null;
+  private visibilityChangedListener: ((data: { entityId: string; inFOV: boolean }) => void) | null =
+    null;
 
   /**
    * コンストラクタ

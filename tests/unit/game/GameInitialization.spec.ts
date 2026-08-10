@@ -143,6 +143,10 @@ describe('Game initialization and shutdown', () => {
     const entitySystemAfterSecond = Engine.instance.getSystem<EntitySystem>('entity')!;
     expect(entitySystemAfterSecond).not.toBe(entitySystemAfterFirst);
 
+    // 旧 EntitySystem は Engine.reset() 内で destroy() が呼ばれるため、
+    // エンティティが破棄されて空になっていることを検証
+    expect(entitySystemAfterFirst.getEntityCount()).toBe(0);
+
     const entityCountAfterSecondInit = entitySystemAfterSecond.getEntityCount();
     // エンティティ数が初回と同等（プレイヤー+リソースのみで累積しない）
     expect(entityCountAfterSecondInit).toBeGreaterThan(0);
