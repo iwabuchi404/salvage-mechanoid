@@ -28,9 +28,7 @@ describe('FloorManager', () => {
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
 
-    assetsLoadSpy = jest
-      .spyOn(PIXI.Assets, 'load')
-      .mockResolvedValue(PIXI.Texture.EMPTY as any);
+    assetsLoadSpy = jest.spyOn(PIXI.Assets, 'load').mockResolvedValue(PIXI.Texture.EMPTY as any);
 
     Engine.instance.reset();
     events = new EventSystem();
@@ -112,6 +110,43 @@ describe('FloorManager', () => {
       maxFloors: 10,
     });
     expect(floorManager.getCurrentFloor()).toBe(2);
+  });
+
+  it('実際のフロア生成完了後に floor_changed を発行する', async () => {
+    const order: string[] = [];
+    let completeGeneration!: () => void;
+    const generationGate = new Promise<void>((resolve) => {
+      completeGeneration = resolve;
+    });
+
+    const generationHandler = jest.fn(async () => {
+      order.push('generation-started');
+      await generationGate;
+      order.push('generation-completed');
+    });
+    floorManager.setFloorGenerationHandler(generationHandler);
+    events.on('floor_generated', () => order.push('floor-generated'));
+    events.on('floor_changed', () => order.push('floor-changed'));
+
+    const movement = floorManager.moveToNextFloor();
+    await Promise.resolve();
+
+    expect(order).toEqual(['generation-started']);
+
+    completeGeneration();
+    await movement;
+
+    expect(generationHandler).toHaveBeenCalledWith({
+      floor: 2,
+      stageType: StageType.CLASSIC,
+      difficulty: 1.2,
+    });
+    expect(order).toEqual([
+      'generation-started',
+      'generation-completed',
+      'floor-generated',
+      'floor-changed',
+    ]);
   });
 
   it('前の階への移動でも floor_changed を発行する', async () => {

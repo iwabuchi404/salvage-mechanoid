@@ -4,6 +4,9 @@ import { Engine } from '@/engine/Engine';
 import { Game } from '@/game/Game';
 import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { EventSystem } from '@/engine/events/EventSystem';
+import { WorldSystem } from '@/engine/world/WorldSystem';
+import { FloorManager } from '@/engine/world/FloorManager';
+import { EventName } from '@/engine/types';
 import { useGameStore } from '@/stores/gameStore';
 
 // SoundManager をモック（jsdom では AudioBuffer が未定義のため）
@@ -37,25 +40,25 @@ describe('Game initialization and shutdown', () => {
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
 
-    assetsLoadSpy = jest
-      .spyOn(PIXI.Assets, 'load')
-      .mockResolvedValue(PIXI.Texture.EMPTY as any);
+    assetsLoadSpy = jest.spyOn(PIXI.Assets, 'load').mockResolvedValue(PIXI.Texture.EMPTY as any);
 
     // PIXI.Application.init をモック（jsdom では CanvasRenderer が使えないため）
     // init 後に必要なプロパティ（canvas, stage, renderer）を設定する
-    appInitSpy = jest.spyOn(PIXI.Application.prototype, 'init').mockImplementation(async function (this: any) {
-      // canvas は getter-only のため defineProperty で上書き
-      Object.defineProperty(this, 'canvas', {
-        value: document.createElement('canvas'),
-        writable: true,
-        configurable: true,
+    appInitSpy = jest
+      .spyOn(PIXI.Application.prototype, 'init')
+      .mockImplementation(async function (this: any) {
+        // canvas は getter-only のため defineProperty で上書き
+        Object.defineProperty(this, 'canvas', {
+          value: document.createElement('canvas'),
+          writable: true,
+          configurable: true,
+        });
+        this.stage = new PIXI.Container();
+        this.renderer = {
+          resize: jest.fn(),
+          destroy: jest.fn(),
+        };
       });
-      this.stage = new PIXI.Container();
-      this.renderer = {
-        resize: jest.fn(),
-        destroy: jest.fn(),
-      };
-    });
     appDestroySpy = jest.spyOn(PIXI.Application.prototype, 'destroy').mockImplementation();
 
     // モック canvas を作成（appendChild などの DOM メソッドを含む）
@@ -132,9 +135,7 @@ describe('Game initialization and shutdown', () => {
     expect(entityCountAfterFirstInit).toBeGreaterThan(0);
 
     // 初期化後のエンティティIDを記録
-    const firstInitEntityIds = new Set(
-      entitySystemAfterFirst.getEntities().map((e) => e.id)
-    );
+    const firstInitEntityIds = new Set(entitySystemAfterFirst.getEntities().map((e) => e.id));
 
     // 再初期化（reset → initialize で新しい EntitySystem が登録される）
     await game.initialize(mockCanvas);
@@ -155,9 +156,7 @@ describe('Game initialization and shutdown', () => {
     // 注: プレイヤーIDは固定（'player'）のため一致する可能性があるが、
     // リソースエンティティのIDは毎回異なるため、古いIDが新しいシステムに
     // 引き継がれていないことを確認する
-    const secondInitEntityIds = new Set(
-      entitySystemAfterSecond.getEntities().map((e) => e.id)
-    );
+    const secondInitEntityIds = new Set(entitySystemAfterSecond.getEntities().map((e) => e.id));
     // プレイヤー以外の古いエンティティIDが新しいシステムに存在しないことを確認
     const oldResourceIds = [...firstInitEntityIds].filter((id) => id !== 'player');
     const leakedIds = oldResourceIds.filter((id) => secondInitEntityIds.has(id));
@@ -165,32 +164,31 @@ describe('Game initialization and shutdown', () => {
   });
 
   it('再初期化でイベントリスナーが二重登録されない（イベントが重複発火しない）', async () => {
+    const onGameOver = jest.fn();
+    game.setOnGameOver(onGameOver);
     await game.initialize(mockCanvas);
 
-    // 初期化後の EventSystem を取得
     const eventSystemAfterFirst = Engine.instance.getSystem<EventSystem>('event')!;
-    // getListenerCount は Set の size を返すため、正確なリスナー数が取得できる
-    const listenerCountAfterFirstInit = eventSystemAfterFirst.getListenerCount('floor_changed');
+    const listenerCountAfterFirstInit = eventSystemAfterFirst.getListenerCount(EventName.GAME_OVER);
+    expect(listenerCountAfterFirstInit).toBeGreaterThan(0);
 
-    // 再初期化（reset → initialize で新しい EventSystem が登録される）
     await game.initialize(mockCanvas);
 
-    // 再初期化後は新しい EventSystem インスタンスが登録されるため、再取得する
     const eventSystemAfterSecond = Engine.instance.getSystem<EventSystem>('event')!;
     expect(eventSystemAfterSecond).not.toBe(eventSystemAfterFirst);
+    expect(eventSystemAfterFirst.getListenerCount(EventName.GAME_OVER)).toBe(0);
 
-    // 新しい EventSystem のリスナー数は前回と同等（二重登録されていない）
-    // 注: Engine.reset() で古い EventSystem が破棄され、新しい EventSystem が作られるため、
-    // 古いリスナーは新しいシステムに引き継がれない
-    const listenerCountAfterSecondInit = eventSystemAfterSecond.getListenerCount('floor_changed');
+    const listenerCountAfterSecondInit = eventSystemAfterSecond.getListenerCount(
+      EventName.GAME_OVER
+    );
     expect(listenerCountAfterSecondInit).toBe(listenerCountAfterFirstInit);
 
-    // 古い EventSystem のリスナーは破棄されている（空または同じ数だが別インスタンス）
-    // 実際にイベントを発行して、コールバックが重複発火しないことを確認
-    const handler = jest.fn();
-    eventSystemAfterSecond.on('floor_changed', handler);
-    eventSystemAfterSecond.emit('floor_changed', { floorNumber: 1 });
-    expect(handler).toHaveBeenCalledTimes(1);
+    eventSystemAfterFirst.emit(EventName.GAME_OVER, { score: 10 });
+    expect(onGameOver).not.toHaveBeenCalled();
+
+    eventSystemAfterSecond.emit(EventName.GAME_OVER, { score: 20 });
+    expect(onGameOver).toHaveBeenCalledTimes(1);
+    expect(onGameOver).toHaveBeenCalledWith(20);
   });
 
   it('再初期化で古い RendererSystem が破棄される（Pixi Application が破棄される）', async () => {
@@ -247,10 +245,7 @@ describe('Game initialization and shutdown', () => {
     await game.initialize(mockCanvas);
 
     // reset 時に window.removeEventListener('removeItem', ...) が呼ばれる
-    expect(removeItemSpy).toHaveBeenCalledWith(
-      'removeItem',
-      expect.any(Function)
-    );
+    expect(removeItemSpy).toHaveBeenCalledWith('removeItem', expect.any(Function));
 
     removeItemSpy.mockRestore();
   });
@@ -264,9 +259,7 @@ describe('Game initialization and shutdown', () => {
     expect(initialEntityCount).toBeGreaterThan(0); // プレイヤー+リソース
 
     // 初期化後のエンティティIDを記録
-    const firstInitEntityIds = new Set(
-      entitySystemAfterFirst.getEntities().map((e) => e.id)
-    );
+    const firstInitEntityIds = new Set(entitySystemAfterFirst.getEntities().map((e) => e.id));
 
     // 再初期化（リスタート）
     await game.initialize(mockCanvas);
@@ -280,9 +273,7 @@ describe('Game initialization and shutdown', () => {
     expect(restartedEntityCount).toBeGreaterThan(0);
 
     // 古いエンティティIDが新しいシステムに漏れ出していないことを確認
-    const secondInitEntityIds = new Set(
-      entitySystemAfterSecond.getEntities().map((e) => e.id)
-    );
+    const secondInitEntityIds = new Set(entitySystemAfterSecond.getEntities().map((e) => e.id));
     const oldResourceIds = [...firstInitEntityIds].filter((id) => id !== 'player');
     const leakedIds = oldResourceIds.filter((id) => secondInitEntityIds.has(id));
     expect(leakedIds).toHaveLength(0);
@@ -292,6 +283,30 @@ describe('Game initialization and shutdown', () => {
     await game.initialize(mockCanvas);
 
     expect(game.getCurrentFloor()).toBe(1);
+  });
+
+  it('floor_changed は新フロアが同じ WorldSystem に登録された後で発行される', async () => {
+    await game.initialize(mockCanvas);
+
+    const worldSystem = Engine.instance.getSystem<WorldSystem>('world')!;
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event')!;
+    const floor1Rooms = worldSystem.getRoomsByFloor(1);
+    const observations: Array<{ floor: number; roomCount: number }> = [];
+    eventSystem.on('floor_changed', () => {
+      observations.push({
+        floor: worldSystem.getCurrentFloor(),
+        roomCount: worldSystem.getRooms().length,
+      });
+    });
+
+    const floorManager = (game as unknown as { floorManager: FloorManager }).floorManager;
+    await floorManager.moveToNextFloor();
+
+    expect(Engine.instance.getSystem<WorldSystem>('world')).toBe(worldSystem);
+    expect(worldSystem.getCurrentFloor()).toBe(2);
+    expect(worldSystem.getRooms()).not.toHaveLength(0);
+    expect(worldSystem.getRoomsByFloor(1)).toEqual(floor1Rooms);
+    expect(observations).toEqual([{ floor: 2, roomCount: worldSystem.getRooms().length }]);
   });
 
   it('getMaxFloors() が正の値を返す', async () => {

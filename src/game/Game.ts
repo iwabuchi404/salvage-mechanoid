@@ -109,6 +109,9 @@ export class Game {
 
     // フロアマネージャーを初期化
     this.floorManager = new FloorManager(this.engine, 10);
+    this.floorManager.setFloorGenerationHandler(async ({ stageType }) => {
+      await this.regenerateFloor(stageType);
+    });
 
     // マップを生成
     await this.generateMap();
@@ -324,6 +327,7 @@ export class Game {
       // クラシックモードでも Room/Corridor 情報を保存
       this.currentRooms = mapData.rooms || [];
       this.currentCorridors = mapData.corridors || [];
+      this.currentTacticalElements = [];
     } else {
       // 戦術的モード：新しい戦術的システム
       const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -686,10 +690,7 @@ export class Game {
       // 次の階層へ移動
       if (this.floorManager) {
         const success = await this.floorManager.moveToNextFloor();
-        if (success) {
-          // フロア移動後、マップとリソースを再生成
-          await this.regenerateFloor();
-        } else {
+        if (!success) {
           // 最終フロアに到達した場合はゲームクリア
           eventSystem?.emit('game_clear', { floor: this.floorManager.getCurrentFloor() });
         }
@@ -1024,9 +1025,9 @@ export class Game {
   /**
    * フロアを再生成（フロア移動後）
    */
-  private async regenerateFloor(): Promise<void> {
+  private async regenerateFloor(stageType: StageType): Promise<void> {
     // マップを再生成
-    await this.generateMap();
+    await this.generateMap(stageType);
 
     // プレイヤーを再配置
     if (this.player && this.tileMap) {

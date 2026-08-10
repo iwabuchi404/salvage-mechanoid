@@ -14,10 +14,7 @@ import {
   StageType,
   TileType,
 } from '@/engine/types';
-import {
-  RoomGenerationConfig,
-  RoomGenerationResult,
-} from '@/engine/world/MapGeneratorInterface';
+import { RoomGenerationConfig, RoomGenerationResult } from '@/engine/world/MapGeneratorInterface';
 
 /**
  * Room データと接続のテスト
@@ -48,7 +45,9 @@ describe('Room data and connections', () => {
     jest.restoreAllMocks();
   });
 
-  const createRoomConfig = (overrides: Partial<RoomGenerationConfig> = {}): RoomGenerationConfig => ({
+  const createRoomConfig = (
+    overrides: Partial<RoomGenerationConfig> = {}
+  ): RoomGenerationConfig => ({
     minSize: 4,
     maxSize: 8,
     density: 0.7,
@@ -202,14 +201,9 @@ describe('Room data and connections', () => {
 
       const exitConnected = result.corridors.some((c) => {
         const inExit = (px: number, py: number) =>
-          px >= exit.x &&
-          px < exit.x + exit.width &&
-          py >= exit.y &&
-          py < exit.y + exit.height;
+          px >= exit.x && px < exit.x + exit.width && py >= exit.y && py < exit.y + exit.height;
         return (
-          c.connectedRooms.includes(exitId) ||
-          inExit(c.startX, c.startY) ||
-          inExit(c.endX, c.endY)
+          c.connectedRooms.includes(exitId) || inExit(c.startX, c.startY) || inExit(c.endX, c.endY)
         );
       });
 
@@ -651,9 +645,7 @@ describe('Room data and connections', () => {
       const map = new TileMap(10, 10);
       world = new WorldSystem(map);
 
-      const testRooms: Room[] = [
-        { x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
-      ];
+      const testRooms: Room[] = [{ x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE }];
       world.setRooms(1, testRooms);
 
       // getter の戻り値を変更しても内部配列に影響しない
@@ -663,6 +655,36 @@ describe('Room data and connections', () => {
       const rooms2 = world.getRooms();
       expect(rooms2).toHaveLength(1);
       expect(rooms2).toEqual(testRooms);
+    });
+
+    it('registerFloor は入力配列をコピーし、空配列で再登録すると古い情報を消す', () => {
+      const map = new TileMap(10, 10);
+      world = new WorldSystem(map);
+
+      const rooms: Room[] = [{ x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE }];
+      const corridors: Corridor[] = [
+        {
+          startX: 5,
+          startY: 3,
+          endX: 8,
+          endY: 3,
+          width: 1,
+          method: 'astar' as any,
+          connectedRooms: ['1,1', '8,1'],
+        },
+      ];
+
+      world.registerFloor(1, map, rooms, corridors);
+      rooms.push({ x: 8, y: 1, width: 2, height: 2, type: RoomType.EXIT });
+      corridors.length = 0;
+
+      expect(world.getRooms()).toHaveLength(1);
+      expect(world.getCorridors()).toHaveLength(1);
+
+      world.registerFloor(1, map, [], []);
+
+      expect(world.getRooms()).toEqual([]);
+      expect(world.getCorridors()).toEqual([]);
     });
   });
 });

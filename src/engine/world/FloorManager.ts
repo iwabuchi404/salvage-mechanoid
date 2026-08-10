@@ -1,13 +1,23 @@
 import { Engine } from '../Engine';
 import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
-import { WorldSystem } from './WorldSystem';
-import { MapGeneratorFacade } from './MapGeneratorFacade';
-import { ResourceGenerationSystem } from './ResourceGenerationSystem';
-import { TileMap } from './TileMap';
 import { Player } from '../entity/Player';
 import { HealthComponent } from '../entity/components/Health';
 import { StageType } from '../types';
+
+/**
+ * フロア生成を依頼するときに Game へ渡す情報
+ */
+export interface FloorGenerationRequest {
+  floor: number;
+  stageType: StageType;
+  difficulty: number;
+}
+
+/**
+ * 実際のマップ・リソース生成を担当するコールバック
+ */
+export type FloorGenerationHandler = (request: FloorGenerationRequest) => Promise<void>;
 
 /**
  * フロアマネージャー - ダンジョンの階層管理を担当
@@ -23,11 +33,8 @@ export class FloorManager {
   // 最大フロア数
   private maxFloors = 10;
 
-  // マップジェネレーター
-  private mapGenerator: MapGeneratorFacade;
-
-  // リソース生成システム
-  private resourceGenerator: ResourceGenerationSystem;
+  // 実際のフロア生成処理は Game 側から注入する
+  private floorGenerationHandler: FloorGenerationHandler | null = null;
 
   /**
    * コンストラクタ
@@ -37,8 +44,6 @@ export class FloorManager {
   constructor(engine: Engine, maxFloors = 10) {
     this.engine = engine;
     this.maxFloors = maxFloors;
-    this.mapGenerator = new MapGeneratorFacade(40, 30);
-    this.resourceGenerator = new ResourceGenerationSystem(40, 30);
 
     console.log(`FloorManager created with ${maxFloors} floors`);
   }
@@ -57,6 +62,14 @@ export class FloorManager {
    */
   getMaxFloors(): number {
     return this.maxFloors;
+  }
+
+  /**
+   * 実際のマップ・リソース生成処理を設定する
+   * @param handler フロア生成処理。null で解除する
+   */
+  setFloorGenerationHandler(handler: FloorGenerationHandler | null): void {
+    this.floorGenerationHandler = handler;
   }
 
   /**
@@ -197,13 +210,19 @@ export class FloorManager {
     // ステージタイプを決定（フロアに応じて変化）
     const stageType = this.determineStageType(this.currentFloor);
 
-    // フロア生成イベントを発行（Game.tsで処理）
-    const eventSystem = this.engine.getSystem<EventSystem>('event');
-    eventSystem?.emit('floor_generated', {
+    const request: FloorGenerationRequest = {
       floor: this.currentFloor,
-      stageType: stageType,
-      difficulty: difficulty,
-    });
+      stageType,
+      difficulty,
+    };
+
+    // 実際のマップ・リソース生成が完了するまで待つ。
+    // 呼び出し元はこの後にプレイヤー状態を復元し、floor_changed を発行する。
+    await this.floorGenerationHandler?.(request);
+
+    // フロア生成の完了を通知する
+    const eventSystem = this.engine.getSystem<EventSystem>('event');
+    eventSystem?.emit('floor_generated', request);
 
     console.log(`Floor ${this.currentFloor} generated successfully`);
   }

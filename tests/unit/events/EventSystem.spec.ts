@@ -69,4 +69,25 @@ describe('EventSystem', () => {
     expect(next).toHaveBeenCalledWith({ value: 1 });
     error.mockRestore();
   });
+
+  it('destroyでリスナーと未配送イベントを破棄し、バッファリングも解除する', () => {
+    const events = new EventSystem();
+    const oldListener = jest.fn();
+    events.on('test', oldListener);
+    events.setBuffering(true);
+    events.emit('test', { value: 'queued' });
+
+    events.destroy();
+    events.update(16);
+    events.emit('test', { value: 'after-destroy' });
+
+    expect(events.getListenerCount('test')).toBe(0);
+    expect(oldListener).not.toHaveBeenCalled();
+
+    const newListener = jest.fn();
+    events.on('test', newListener);
+    events.emit('test', { value: 'new' });
+
+    expect(newListener).toHaveBeenCalledWith({ value: 'new' });
+  });
 });

@@ -524,12 +524,8 @@ export class WorldSystem implements System {
     corridors: Corridor[] = []
   ): void {
     this.floorMaps.set(floorNumber, tileMap);
-    if (rooms.length > 0) {
-      this.floorRooms.set(floorNumber, rooms);
-    }
-    if (corridors.length > 0) {
-      this.floorCorridors.set(floorNumber, corridors);
-    }
+    this.floorRooms.set(floorNumber, [...rooms]);
+    this.floorCorridors.set(floorNumber, [...corridors]);
     // 現在のフロアを切り替え
     this.currentFloor = floorNumber;
     this.tileMap = tileMap;
@@ -570,7 +566,7 @@ export class WorldSystem implements System {
    * @param rooms 部屋の配列
    */
   setRooms(floorNumber: number, rooms: Room[]): void {
-    this.floorRooms.set(floorNumber, rooms);
+    this.floorRooms.set(floorNumber, [...rooms]);
   }
 
   /**
@@ -579,7 +575,7 @@ export class WorldSystem implements System {
    * @param corridors 通路の配列
    */
   setCorridors(floorNumber: number, corridors: Corridor[]): void {
-    this.floorCorridors.set(floorNumber, corridors);
+    this.floorCorridors.set(floorNumber, [...corridors]);
   }
 
   /**

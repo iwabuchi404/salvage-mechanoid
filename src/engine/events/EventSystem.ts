@@ -129,4 +129,13 @@ export class EventSystem implements System {
   getListenerCount(eventName: string): number {
     return this.listeners.has(eventName) ? this.listeners.get(eventName)!.size : 0;
   }
+
+  /**
+   * 登録済みリスナーと未配送イベントを破棄する
+   */
+  destroy(): void {
+    this.listeners.clear();
+    this.eventBuffer = [];
+    this.bufferingEnabled = false;
+  }
 }
