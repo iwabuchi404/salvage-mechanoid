@@ -3,7 +3,9 @@ import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Player } from '../entity/Player';
 import { HealthComponent } from '../entity/components/Health';
+import { TransformComponent } from '../entity/components/Transform';
 import { StageType } from '../types';
+import { WorldSystem } from './WorldSystem';
 
 /**
  * フロア生成を依頼するときに Game へ渡す情報
@@ -81,34 +83,7 @@ export class FloorManager {
       console.log('Already at the last floor!');
       return false;
     }
-
-    console.log(`Moving from floor ${this.currentFloor} to ${this.currentFloor + 1}`);
-
-    // プレイヤーの状態を保存
-    const playerState = this.savePlayerState();
-    if (!playerState) {
-      console.error('Failed to save player state');
-      return false;
-    }
-
-    // フロアを進める
-    this.currentFloor++;
-
-    // 新しいフロアを生成
-    await this.generateFloor();
-
-    // プレイヤーの状態を復元
-    this.restorePlayerState(playerState);
-
-    // フロア移動イベントを発行
-    const eventSystem = this.engine.getSystem<EventSystem>('event');
-    eventSystem?.emit('floor_changed', {
-      floor: this.currentFloor,
-      maxFloors: this.maxFloors,
-    });
-
-    console.log(`Successfully moved to floor ${this.currentFloor}`);
-    return true;
+    return await this.transitionToFloor(this.currentFloor + 1);
   }
 
   /**
@@ -120,34 +95,7 @@ export class FloorManager {
       console.log('Already at the first floor!');
       return false;
     }
-
-    console.log(`Moving from floor ${this.currentFloor} to ${this.currentFloor - 1}`);
-
-    // プレイヤーの状態を保存
-    const playerState = this.savePlayerState();
-    if (!playerState) {
-      console.error('Failed to save player state');
-      return false;
-    }
-
-    // フロアを戻す
-    this.currentFloor--;
-
-    // 新しいフロアを生成
-    await this.generateFloor();
-
-    // プレイヤーの状態を復元
-    this.restorePlayerState(playerState);
-
-    // フロア移動イベントを発行
-    const eventSystem = this.engine.getSystem<EventSystem>('event');
-    eventSystem?.emit('floor_changed', {
-      floor: this.currentFloor,
-      maxFloors: this.maxFloors,
-    });
-
-    console.log(`Successfully moved to floor ${this.currentFloor}`);
-    return true;
+    return await this.transitionToFloor(this.currentFloor - 1);
   }
 
   /**
@@ -160,28 +108,51 @@ export class FloorManager {
       console.error(`Invalid floor number: ${floor}`);
       return false;
     }
-
     if (floor === this.currentFloor) {
       console.log('Already at this floor');
       return false;
     }
+    return await this.transitionToFloor(floor);
+  }
 
-    console.log(`Moving from floor ${this.currentFloor} to ${floor}`);
+  /**
+   * フロア遷移の共通処理（生成→コミット→イベント発行）
+   * 生成失敗時は旧フロアへロールバックし、イベントを発行しない。
+   * @param targetFloor 移動先フロア番号
+   * @returns 移動に成功したらtrue
+   */
+  private async transitionToFloor(targetFloor: number): Promise<boolean> {
+    const oldFloor = this.currentFloor;
+    console.log(`Moving from floor ${oldFloor} to ${targetFloor}`);
 
-    // プレイヤーの状態を保存
+    // プレイヤーの状態を保存（HP、エネルギー、位置）
     const playerState = this.savePlayerState();
     if (!playerState) {
       console.error('Failed to save player state');
       return false;
     }
 
-    // フロアを変更
-    this.currentFloor = floor;
+    // 暫定的に現在階を切り替え（ハンドラーが getCurrentFloor() で参照するため）
+    this.currentFloor = targetFloor;
 
-    // 新しいフロアを生成
-    await this.generateFloor();
+    try {
+      // 新しいフロアを生成（ハンドラーが例外を投げた場合は catch へ）
+      await this.generateFloor();
+    } catch (error) {
+      console.error(`Failed to generate floor ${targetFloor}:`, error);
+      // ロールバック: 現在階を元に戻す
+      this.currentFloor = oldFloor;
+      // ロールバック: WorldSystem の現在階を元に戻す
+      const worldSystem = this.engine.getSystem<WorldSystem>('world');
+      if (worldSystem) {
+        worldSystem.setCurrentFloor(oldFloor);
+      }
+      // ロールバック: プレイヤー状態を元に戻す（+20 ボーナスなし）
+      this.revertPlayerState(playerState);
+      return false;
+    }
 
-    // プレイヤーの状態を復元
+    // 成功: プレイヤーの状態を復元（エネルギー +20 ボーナス付き）
     this.restorePlayerState(playerState);
 
     // フロア移動イベントを発行
@@ -197,12 +168,11 @@ export class FloorManager {
 
   /**
    * フロアを生成
+   * ハンドラー成功後に旧エンティティを削除し、floor_generated を発行する。
+   * ハンドラーが例外を投げた場合はそのまま例外を伝播する（呼び出し元でロールバック）。
    */
   private async generateFloor(): Promise<void> {
     console.log(`Generating floor ${this.currentFloor}...`);
-
-    // 既存のエンティティをクリア（プレイヤー以外）
-    this.clearEntities();
 
     // フロアの難易度を計算（フロアが進むほど難しくなる）
     const difficulty = Math.min(1 + (this.currentFloor - 1) * 0.2, 3);
@@ -216,9 +186,16 @@ export class FloorManager {
       difficulty,
     };
 
+    // 旧エンティティ（プレイヤー以外）の ID をスナップショット
+    // ハンドラー成功後にこれらを削除するため、失敗時はエンティティが残る
+    const oldEntityIds = this.snapshotNonPlayerEntityIds();
+
     // 実際のマップ・リソース生成が完了するまで待つ。
-    // 呼び出し元はこの後にプレイヤー状態を復元し、floor_changed を発行する。
+    // ハンドラーが例外を投げた場合は catch ブロックへ伝播し、エンティティは削除されない。
     await this.floorGenerationHandler?.(request);
+
+    // ハンドラー成功: 旧エンティティを削除（新規生成されたエンティティは残す）
+    this.removeEntitiesByIds(oldEntityIds);
 
     // フロア生成の完了を通知する
     const eventSystem = this.engine.getSystem<EventSystem>('event');
@@ -246,7 +223,7 @@ export class FloorManager {
   }
 
   /**
-   * プレイヤーの状態を保存
+   * プレイヤーの状態を保存（HP、エネルギー、位置）
    * @returns プレイヤーの状態
    */
   private savePlayerState(): PlayerState | null {
@@ -259,14 +236,18 @@ export class FloorManager {
     const player = players[0] as Player;
     const health = player.getComponent('health');
     const energy = player.getEnergySnapshot();
+    const transform = player.getComponent<TransformComponent>('transform');
 
     if (!health || !energy) return null;
+
+    const position = transform ? transform.position : { x: 0, y: 0, z: 0 };
 
     return {
       hp: (health as unknown as { currentHp: number }).currentHp,
       maxHp: (health as unknown as { maxHp: number }).maxHp,
       energy: energy.currentEnergy,
       maxEnergy: energy.maxEnergy,
+      position: { x: position.x, y: position.y, z: position.z },
     };
   }
 
@@ -302,20 +283,65 @@ export class FloorManager {
   }
 
   /**
-   * エンティティをクリア（プレイヤー以外）
+   * プレイヤーの状態をロールバック（生成失敗時）
+   * +20 ボーナスなしで元の状態へ戻す
+   * @param state プレイヤーの状態
    */
-  private clearEntities(): void {
+  private revertPlayerState(state: PlayerState): void {
     const entitySystem = this.engine.getSystem<EntitySystem>('entity');
     if (!entitySystem) return;
 
-    const entities = entitySystem.getEntities();
-    const entitiesToRemove = entities.filter((entity) => !entity.hasTag('player'));
+    const players = entitySystem.getEntitiesByTag('player');
+    if (players.length === 0) return;
 
-    for (const entity of entitiesToRemove) {
-      entitySystem.removeEntity(entity.id);
+    const player = players[0] as Player;
+    const health = player.getComponent<HealthComponent>('health');
+
+    if (health) {
+      health.restoreSnapshot({ currentHp: state.hp, maxHp: state.maxHp });
     }
 
-    console.log(`Cleared ${entitiesToRemove.length} entities`);
+    player.restoreEnergySnapshot({
+      currentEnergy: state.energy,
+      maxEnergy: state.maxEnergy,
+    });
+
+    // 位置を元に戻す
+    const transform = player.getComponent<TransformComponent>('transform');
+    if (transform) {
+      transform.setPosition(state.position.x, state.position.y, state.position.z);
+    }
+
+    console.log('Player state reverted:', state);
+  }
+
+  /**
+   * プレイヤー以外のエンティティIDをスナップショット
+   * @returns エンティティIDの配列
+   */
+  private snapshotNonPlayerEntityIds(): string[] {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!entitySystem) return [];
+
+    return entitySystem
+      .getEntities()
+      .filter((entity) => !entity.hasTag('player'))
+      .map((entity) => entity.id);
+  }
+
+  /**
+   * 指定IDのエンティティを削除
+   * @param ids 削除するエンティティIDの配列
+   */
+  private removeEntitiesByIds(ids: string[]): void {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!entitySystem) return;
+
+    for (const id of ids) {
+      entitySystem.removeEntity(id);
+    }
+
+    console.log(`Cleared ${ids.length} old entities`);
   }
 
   /**
@@ -336,4 +362,5 @@ interface PlayerState {
   maxHp: number;
   energy: number;
   maxEnergy: number;
+  position: { x: number; y: number; z: number };
 }

@@ -9,7 +9,9 @@ import { EnergyComponent } from '@/engine/entity/components/Energy';
 import { TransformComponent } from '@/engine/entity/components/Transform';
 import { Player } from '@/engine/entity/Player';
 import { FloorManager } from '@/engine/world/FloorManager';
-import { StageType } from '@/engine/types';
+import { WorldSystem } from '@/engine/world/WorldSystem';
+import { TileMap } from '@/engine/world/TileMap';
+import { TileType, StageType } from '@/engine/types';
 
 /**
  * FloorManager の境界テスト
@@ -336,6 +338,207 @@ describe('FloorManager', () => {
 
     await floorManager.reset();
 
+    expect(floorManager.getCurrentFloor()).toBe(1);
+  });
+
+  // ===== フロア生成失敗契約テスト（R0）=====
+
+  /**
+   * WorldSystem をセットアップして FloorManager に登録するヘルパー
+   */
+  async function setupWorldSystem(): Promise<WorldSystem> {
+    const map = new TileMap(10, 10);
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        map.setTileAt(x, y, 0, TileType.TILE, true);
+      }
+    }
+    const worldSystem = new WorldSystem(map);
+    Engine.instance.registerSystem('world', worldSystem);
+    await worldSystem.initialize(Engine.instance);
+    return worldSystem;
+  }
+
+  it('生成ハンドラーが例外を投げた場合は false を返す', async () => {
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    const result = await floorManager.moveToNextFloor();
+
+    expect(result).toBe(false);
+  });
+
+  it('生成失敗時に現在階が元の階に戻る', async () => {
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    expect(floorManager.getCurrentFloor()).toBe(1);
+  });
+
+  it('生成失敗時に floor_changed を発行しない', async () => {
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+    const handler = jest.fn();
+    events.on('floor_changed', handler);
+
+    await floorManager.moveToNextFloor();
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('生成失敗時に floor_generated を発行しない', async () => {
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+    const handler = jest.fn();
+    events.on('floor_generated', handler);
+
+    await floorManager.moveToNextFloor();
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('生成失敗時にプレイヤー以外の旧エンティティが保持される', async () => {
+    const enemy = new Entity('enemy-1', 'enemy');
+    enemy.addTag('enemy');
+    enemy.addComponent(new TransformComponent(3, 3, 0));
+    entities.registerEntity(enemy);
+
+    const item = new Entity('item-1', 'item');
+    item.addTag('item');
+    item.addComponent(new TransformComponent(4, 4, 0));
+    entities.registerEntity(item);
+
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    // 旧エンティティが削除されずに残っている
+    expect(entities.getEntity('enemy-1')).toBeDefined();
+    expect(entities.getEntity('item-1')).toBeDefined();
+    expect(entities.getEntity('player')).toBeDefined();
+  });
+
+  it('生成失敗時にプレイヤーの HP が変わらない', async () => {
+    const health = player.getComponent<HealthComponent>('health')!;
+    health.takeDamage(30, true, true);
+    const hpBefore = health.currentHp;
+
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    expect(health.currentHp).toBe(hpBefore);
+  });
+
+  it('生成失敗時にプレイヤーのエネルギーが変わらない（+20 ボーナスなし）', async () => {
+    const energy = player.getComponent<EnergyComponent>('energy')!;
+    energy.consume(50);
+    const energyBefore = energy.currentEnergy;
+
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    expect(energy.currentEnergy).toBe(energyBefore);
+  });
+
+  it('生成失敗時にプレイヤーの位置が元に戻る', async () => {
+    await setupWorldSystem();
+
+    const transform = player.getComponent<TransformComponent>('transform')!;
+    const originalPos = { x: 5, y: 5, z: 0 };
+    transform.setPosition(originalPos.x, originalPos.y, originalPos.z);
+
+    floorManager.setFloorGenerationHandler(async () => {
+      // ハンドラー内でプレイヤー位置を変更してから例外を投げる
+      transform.setPosition(9, 9, 0);
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    const pos = transform.position;
+    expect(pos.x).toBe(originalPos.x);
+    expect(pos.y).toBe(originalPos.y);
+  });
+
+  it('生成失敗時に WorldSystem の現在階が元の階に戻る', async () => {
+    const worldSystem = await setupWorldSystem();
+
+    // 1階のデータを登録済み（setupWorldSystem で初期マップが1階として登録される）
+    expect(worldSystem.getCurrentFloor()).toBe(1);
+
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    await floorManager.moveToNextFloor();
+
+    // FloorManager と WorldSystem の現在階が一致して 1 のまま
+    expect(floorManager.getCurrentFloor()).toBe(1);
+    expect(worldSystem.getCurrentFloor()).toBe(1);
+  });
+
+  it('生成失敗後に再試行で成功できる', async () => {
+    let attempt = 0;
+    floorManager.setFloorGenerationHandler(async () => {
+      attempt++;
+      if (attempt === 1) {
+        throw new Error('First attempt failed');
+      }
+      // 2回目は成功
+    });
+
+    // 1回目: 失敗
+    const result1 = await floorManager.moveToNextFloor();
+    expect(result1).toBe(false);
+    expect(floorManager.getCurrentFloor()).toBe(1);
+
+    // 2回目: 成功
+    const result2 = await floorManager.moveToNextFloor();
+    expect(result2).toBe(true);
+    expect(floorManager.getCurrentFloor()).toBe(2);
+  });
+
+  it('moveToPreviousFloor でも生成失敗時にロールバックする', async () => {
+    // まず3階へ移動
+    floorManager.setFloorGenerationHandler(async () => {
+      // no-op: 成功するハンドラー
+    });
+    await floorManager.moveToFloor(3);
+    expect(floorManager.getCurrentFloor()).toBe(3);
+
+    // 失敗するハンドラーに切り替え
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    const result = await floorManager.moveToPreviousFloor();
+
+    expect(result).toBe(false);
+    expect(floorManager.getCurrentFloor()).toBe(3);
+  });
+
+  it('moveToFloor でも生成失敗時にロールバックする', async () => {
+    floorManager.setFloorGenerationHandler(async () => {
+      throw new Error('Generation failed');
+    });
+
+    const result = await floorManager.moveToFloor(5);
+
+    expect(result).toBe(false);
     expect(floorManager.getCurrentFloor()).toBe(1);
   });
 });
