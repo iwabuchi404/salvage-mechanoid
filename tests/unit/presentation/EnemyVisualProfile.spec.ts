@@ -1,9 +1,8 @@
 import {
   getEnemyVisualProfile,
   getEnemyTexturePath,
-  EnemyVisualProfile,
 } from '@/engine/presentation/enemy/EnemyVisualProfile';
-import { EnemyType, Direction } from '@/engine/types';
+import { EnemyType, Direction, LayerName } from '@/engine/types';
 
 /**
  * EnemyVisualProfile の純粋関数テスト
@@ -16,7 +15,7 @@ describe('EnemyVisualProfile', () => {
 
       expect(profile.defaultTexturePath).toBe('./robo04_l.png');
       expect(profile.anchor).toEqual({ x: 0.5, y: 1.0 });
-      expect(profile.layer).toBe('characters');
+      expect(profile.layer).toBe(LayerName.CHARACTERS);
     });
 
     it('SOLDIER のプロファイルを取得できる', () => {
@@ -24,7 +23,7 @@ describe('EnemyVisualProfile', () => {
 
       expect(profile.defaultTexturePath).toBe('./robo03_l.png');
       expect(profile.anchor).toEqual({ x: 0.5, y: 1.0 });
-      expect(profile.layer).toBe('characters');
+      expect(profile.layer).toBe(LayerName.CHARACTERS);
     });
 
     it('HEAVY のプロファイルを取得できる', () => {
@@ -32,7 +31,7 @@ describe('EnemyVisualProfile', () => {
 
       expect(profile.defaultTexturePath).toBe('./robo02_l.png');
       expect(profile.anchor).toEqual({ x: 0.5, y: 1.0 });
-      expect(profile.layer).toBe('characters');
+      expect(profile.layer).toBe(LayerName.CHARACTERS);
     });
 
     it('未知の EnemyType にはフォールバック（HEAVY と同等）を返す', () => {
@@ -54,6 +53,14 @@ describe('EnemyVisualProfile', () => {
       for (const dir of ['up', 'down', 'left', 'right'] as Direction[]) {
         expect(typeof profile.texturePaths[dir]).toBe('string');
       }
+    });
+
+    it('プロファイルとネストした設定が凍結され、共有状態を変更できない', () => {
+      const profile = getEnemyVisualProfile(EnemyType.SCOUT);
+
+      expect(Object.isFrozen(profile)).toBe(true);
+      expect(Object.isFrozen(profile.texturePaths)).toBe(true);
+      expect(Object.isFrozen(profile.anchor)).toBe(true);
     });
 
     it('各 EnemyType で方向別テクスチャが4方向すべて定義されている', () => {
@@ -118,7 +125,7 @@ describe('EnemyVisualProfile', () => {
       // アンカーは全タイプ共通
       for (const profile of profiles) {
         expect(profile.anchor).toEqual({ x: 0.5, y: 1.0 });
-        expect(profile.layer).toBe('characters');
+        expect(profile.layer).toBe(LayerName.CHARACTERS);
       }
     });
 

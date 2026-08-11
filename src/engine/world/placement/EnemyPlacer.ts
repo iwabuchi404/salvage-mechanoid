@@ -69,20 +69,17 @@ export class EnemyPlacer {
     // 5. 戦術要素に基づく敵配置
     enemies.push(...this.placeTacticalEnemies(map, tacticalElements, config));
 
-    // 6. チョークポイントの敵配置
-    enemies.push(...this.placeChokeEnemies(map, corridors, rooms, config));
-
-    // 7. 巡回敵の配置
+    // 6. 巡回敵の配置
     const remainingCount = Math.max(0, enemyCount - enemies.length);
     enemies.push(
       ...this.placePatrolEnemies(map, rooms, corridors, obstacles, config, remainingCount)
     );
 
-    // 8. 一般敵の配置（残り）
+    // 7. 一般敵の配置（残り）
     const finalCount = Math.max(0, enemyCount - enemies.length);
     enemies.push(...this.placeGeneralEnemies(map, rooms, obstacles, items, config, finalCount));
 
-    // 9. 障害物やアイテムと重複する敵をフィルタリング（占有済み位置も考慮）
+    // 8. 障害物やアイテムと重複する敵をフィルタリング（占有済み位置も考慮）
     const filteredEnemies = this.filterOverlappingEnemies(
       map,
       enemies,
@@ -299,19 +296,6 @@ export class EnemyPlacer {
     }
 
     return enemies;
-  }
-
-  /**
-   * チョークポイントの敵配置（TURRETは削除されたため空実装）
-   */
-  private placeChokeEnemies(
-    map: number[][],
-    corridors: Corridor[],
-    rooms: Room[],
-    config: EnemyPlacementConfig
-  ): PlacedEnemy[] {
-    // TURRETタイプは削除されたため、何も配置しない
-    return [];
   }
 
   /**

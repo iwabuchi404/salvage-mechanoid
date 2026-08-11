@@ -1,4 +1,3 @@
-import * as PIXI from 'pixi.js';
 import { Engine } from '@/engine/Engine';
 import { Enemy } from '@/engine/entity/Enemy';
 import { Entity } from '@/engine/entity/Entity';
@@ -9,16 +8,7 @@ import { MovementComponent } from '@/engine/entity/components/Movement';
 import { TransformComponent } from '@/engine/entity/components/Transform';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
-import { CoordinateSystem } from '@/engine/graphics/CoordinateSystem';
-import { RendererSystem } from '@/engine/graphics/RendererSystem';
-import {
-  EnemyBehavior,
-  EnemyType,
-  LayerName,
-  PlacedEnemy,
-  TileType,
-  Vector3,
-} from '@/engine/types';
+import { EnemyBehavior, EnemyType, PlacedEnemy, TileType, Vector3 } from '@/engine/types';
 
 /**
  * Enemy AI の行動テスト
@@ -28,8 +18,6 @@ describe('Enemy AI', () => {
   let events: EventSystem;
   let entities: EntitySystem;
   let world: WorldSystem;
-  let renderer: RendererSystem;
-  let assetsLoadSpy: jest.SpyInstance;
   let player: Entity;
   let playerTransform: TransformComponent;
 
@@ -48,10 +36,6 @@ describe('Enemy AI', () => {
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
 
-    assetsLoadSpy = jest
-      .spyOn(PIXI.Assets, 'load')
-      .mockResolvedValue(PIXI.Texture.EMPTY as any);
-
     Engine.instance.reset();
     events = new EventSystem();
     entities = new EntitySystem();
@@ -65,20 +49,9 @@ describe('Enemy AI', () => {
     }
     world = new WorldSystem(map);
 
-    const coordSystem = new CoordinateSystem(160, 120);
-    const charactersLayer = new PIXI.Container();
-    renderer = {
-      getCoordinateSystem: () => coordSystem,
-      getLayer: (name: string) =>
-        name === LayerName.CHARACTERS ? charactersLayer : undefined,
-      renderEntity: jest.fn(),
-      removeSprite: jest.fn(),
-    } as unknown as RendererSystem;
-
     Engine.instance.registerSystem('event', events);
     Engine.instance.registerSystem('entity', entities);
     Engine.instance.registerSystem('world', world);
-    Engine.instance.registerSystem('renderer', renderer);
 
     const engine = Engine.instance;
     await entities.initialize(engine);
@@ -94,15 +67,13 @@ describe('Enemy AI', () => {
 
   afterEach(() => {
     Engine.instance.reset();
-    assetsLoadSpy.mockRestore();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
-  const createAndInitEnemy = async (overrides: Partial<PlacedEnemy> = {}): Promise<Enemy> => {
+  const createHeadlessEnemy = (overrides: Partial<PlacedEnemy> = {}): Enemy => {
     const enemy = new Enemy(createPlacedEnemy(overrides));
     entities.registerEntity(enemy);
-    await enemy.initialize();
     return enemy;
   };
 
@@ -127,10 +98,18 @@ describe('Enemy AI', () => {
     }
   };
 
+  it('Renderer / PixiJS の初期化なしで AI を構築できる', () => {
+    const enemy = createHeadlessEnemy();
+
+    expect(Engine.instance.getSystem('renderer')).toBeUndefined();
+    expect(enemy.getComponent('sprite')).toBeUndefined();
+    expect(enemy.getComponent('movement')).toBeDefined();
+  });
+
   it('STATIC は移動せずプレイヤーの方向を向く', async () => {
     // プレイヤーを右側に配置
     playerTransform.setPosition(8, 5, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'static-enemy',
       x: 5,
       y: 5,
@@ -153,7 +132,7 @@ describe('Enemy AI', () => {
       { x: 7, y: 5, z: 0 },
     ];
     // 開始位置を巡回ルートの最初の点と異なる位置に設定
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'patrol-enemy',
       x: 3,
       y: 5,
@@ -179,7 +158,7 @@ describe('Enemy AI', () => {
       { x: 7, y: 5, z: 0 },
     ];
     // 開始位置を巡回ルートの最初の点に設定（patrolIndex=0 から開始）
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'patrol-bounce-enemy',
       x: 5,
       y: 5,
@@ -232,7 +211,7 @@ describe('Enemy AI', () => {
   });
 
   it('PATROL は巡回ルートがない場合にランダム移動へフォールバックする', async () => {
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'patrol-no-route',
       x: 5,
       y: 5,
@@ -255,7 +234,7 @@ describe('Enemy AI', () => {
   it('GUARD は感知範囲内のプレイヤーを追跡する', async () => {
     // プレイヤーを近く（距離3）に配置
     playerTransform.setPosition(5, 2, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'guard-enemy',
       x: 5,
       y: 5,
@@ -273,7 +252,7 @@ describe('Enemy AI', () => {
   it('GUARD は感知範囲外のプレイヤーを追跡しない', async () => {
     // プレイヤーを遠く（距離 > 8）に配置
     playerTransform.setPosition(0, 0, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'guard-far',
       x: 9,
       y: 9,
@@ -293,7 +272,7 @@ describe('Enemy AI', () => {
   it('AGGRESSIVE は常にプレイヤーを追跡する', async () => {
     // プレイヤーを同じ行の遠くに配置（方向を一意にするため）
     playerTransform.setPosition(0, 5, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'aggressive-enemy',
       x: 9,
       y: 5,
@@ -312,7 +291,7 @@ describe('Enemy AI', () => {
     // プレイヤーを削除
     entities.removeEntity('player');
 
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'no-player-enemy',
       x: 5,
       y: 5,
@@ -327,7 +306,7 @@ describe('Enemy AI', () => {
   });
 
   it('死亡済み Enemy は行動せず非アクティブになる', async () => {
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'dead-enemy',
       x: 5,
       y: 5,
@@ -343,7 +322,7 @@ describe('Enemy AI', () => {
     // HealthComponent の takeDamage が entitySystem.removeEntity を呼ぶため、
     // エンティティが削除されている可能性がある。削除されていない場合は act() を検証。
     // 代わりに: 直接 HP を 0 に設定して act() を呼ぶ
-    const enemy2 = await createAndInitEnemy({
+    const enemy2 = await createHeadlessEnemy({
       id: 'dead-enemy-2',
       x: 5,
       y: 5,
@@ -366,7 +345,7 @@ describe('Enemy AI', () => {
   it('プレイヤー隣接時に移動せず攻撃を要求する', async () => {
     // プレイヤーを隣接（1マス上）に配置
     playerTransform.setPosition(5, 4, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'adjacent-enemy',
       x: 5,
       y: 5,
@@ -407,7 +386,7 @@ describe('Enemy AI', () => {
     map.setTileAt(9, 8, 0, TileType.TILE, true); // 上
     map.setTileAt(8, 9, 0, TileType.TILE, true); // 左
 
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'no-path-enemy',
       x: 9,
       y: 9,
@@ -432,7 +411,7 @@ describe('Enemy AI', () => {
   });
 
   it('移動待ちがタイムアウトしてターンを停止させない', async () => {
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'timeout-enemy',
       x: 5,
       y: 5,
@@ -455,7 +434,7 @@ describe('Enemy AI', () => {
   it('攻撃待ちがタイムアウトしてターンを停止させない', async () => {
     // プレイヤーを隣接に配置して攻撃を発生させる
     playerTransform.setPosition(5, 4, 0);
-    const enemy = await createAndInitEnemy({
+    const enemy = await createHeadlessEnemy({
       id: 'attack-timeout-enemy',
       x: 5,
       y: 5,

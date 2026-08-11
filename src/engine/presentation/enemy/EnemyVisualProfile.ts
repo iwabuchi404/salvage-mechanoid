@@ -1,57 +1,44 @@
-import { EnemyType, Direction } from '../../types';
+import { EnemyType, Direction, LayerName } from '../../types';
 
 /**
  * 敵の表示設定（PixiJS オブジェクトを含まない純粋データ）
  */
 export interface EnemyVisualProfile {
   /** 方向別テクスチャパス */
-  texturePaths: Record<Direction, string>;
+  readonly texturePaths: Readonly<Record<Direction, string>>;
   /** 初期テクスチャパス（方向未確定時） */
-  defaultTexturePath: string;
+  readonly defaultTexturePath: string;
   /** アンカーポイント（0,0 が左上、1,1 が右下） */
-  anchor: { x: number; y: number };
+  readonly anchor: Readonly<{ x: number; y: number }>;
   /** 描画レイヤー名 */
-  layer: string;
+  readonly layer: LayerName;
+}
+
+function createProfile(textureBaseName: string): EnemyVisualProfile {
+  const leftTexturePath = `./${textureBaseName}_l.png`;
+  const rightTexturePath = `./${textureBaseName}_r.png`;
+
+  return Object.freeze({
+    texturePaths: Object.freeze({
+      up: rightTexturePath,
+      down: leftTexturePath,
+      left: leftTexturePath,
+      right: rightTexturePath,
+    }),
+    defaultTexturePath: leftTexturePath,
+    anchor: Object.freeze({ x: 0.5, y: 1.0 }),
+    layer: LayerName.CHARACTERS,
+  });
 }
 
 /**
  * EnemyType ごとの表示プロファイル
  */
-const PROFILES: Record<EnemyType, EnemyVisualProfile> = {
-  [EnemyType.SCOUT]: {
-    texturePaths: {
-      up: './robo04_r.png',
-      down: './robo04_l.png',
-      left: './robo04_l.png',
-      right: './robo04_r.png',
-    },
-    defaultTexturePath: './robo04_l.png',
-    anchor: { x: 0.5, y: 1.0 },
-    layer: 'characters',
-  },
-  [EnemyType.SOLDIER]: {
-    texturePaths: {
-      up: './robo03_r.png',
-      down: './robo03_l.png',
-      left: './robo03_l.png',
-      right: './robo03_r.png',
-    },
-    defaultTexturePath: './robo03_l.png',
-    anchor: { x: 0.5, y: 1.0 },
-    layer: 'characters',
-  },
-  [EnemyType.HEAVY]: {
-    texturePaths: {
-      up: './robo02_r.png',
-      down: './robo02_l.png',
-      left: './robo02_l.png',
-      right: './robo02_r.png',
-    },
-    defaultTexturePath: './robo02_l.png',
-    anchor: { x: 0.5, y: 1.0 },
-    layer: 'characters',
-  },
-};
+const PROFILES: Readonly<Record<EnemyType, EnemyVisualProfile>> = Object.freeze({
+  [EnemyType.SCOUT]: createProfile('robo04'),
+  [EnemyType.SOLDIER]: createProfile('robo03'),
+  [EnemyType.HEAVY]: createProfile('robo02'),
+});
 
 /**
  * フォールバックプロファイル（未知の EnemyType 用）
