@@ -1,6 +1,7 @@
 import { Engine } from '../engine/Engine';
 import { RendererSystem } from '../engine/graphics/RendererSystem';
 import { EntitySystem } from '../engine/entity/EntitySystem';
+import { Entity } from '../engine/entity/Entity';
 import { EventSystem } from '../engine/events/EventSystem';
 import { AudioSystem } from '../engine/audio/AudioSystem';
 import { TurnSystem } from '../engine/turn/TurnSystem';
@@ -40,6 +41,21 @@ import { useGameStore } from '../stores/gameStore';
 import { useUIStore } from '../stores/uiStore';
 import { WorldSystem } from '../engine/world/WorldSystem';
 import { RENDER_CONFIG } from '../engine/graphics/RenderConfig';
+
+interface GeneratedMapState {
+  tileMap: TileMap;
+  rooms: Room[];
+  corridors: Corridor[];
+  tacticalElements: TacticalElement[];
+}
+
+interface GeneratedResourceState {
+  resourceSystem: ResourceGenerationSystem;
+  obstacles: PlacedObstacle[];
+  items: PlacedItem[];
+  enemies: PlacedEnemy[];
+  entities: Entity[];
+}
 
 /**
  * ゲームクラス - ゲームの主要な機能を統合
@@ -109,8 +125,8 @@ export class Game {
 
     // フロアマネージャーを初期化
     this.floorManager = new FloorManager(this.engine, 10);
-    this.floorManager.setFloorGenerationHandler(async ({ stageType }) => {
-      await this.regenerateFloor(stageType);
+    this.floorManager.setFloorGenerationHandler(async ({ floor, stageType }) => {
+      await this.regenerateFloor(floor, stageType);
     });
 
     // マップを生成
@@ -308,12 +324,11 @@ export class Game {
    * マップを生成
    * @param stageType ステージタイプ（オプション、デフォルトはTACTICAL_COMBAT）
    */
-  private async generateMap(stageType: StageType = StageType.TACTICAL_COMBAT): Promise<void> {
+  private async buildMapState(
+    stageType: StageType = StageType.TACTICAL_COMBAT
+  ): Promise<GeneratedMapState> {
     // MapGeneratorFacadeを使用
     const mapGenerator = new MapGeneratorFacade(50, 50);
-
-    // 現在のフロア番号を取得（floorManager があればそれを使う、なければ 1）
-    const floorNumber = this.floorManager?.getCurrentFloor() || 1;
 
     // ステージタイプに応じてマップ生成
     if (stageType === StageType.CLASSIC) {
@@ -321,13 +336,15 @@ export class Game {
       const mapData = await mapGenerator.generateMap(4, 8, stageType);
 
       // タイルマップを作成
-      this.tileMap = new TileMap(50, 50);
-      this.tileMap.importMapData(mapData.map);
+      const tileMap = new TileMap(50, 50);
+      tileMap.importMapData(mapData.map);
 
-      // クラシックモードでも Room/Corridor 情報を保存
-      this.currentRooms = mapData.rooms || [];
-      this.currentCorridors = mapData.corridors || [];
-      this.currentTacticalElements = [];
+      return {
+        tileMap,
+        rooms: mapData.rooms || [],
+        corridors: mapData.corridors || [],
+        tacticalElements: [],
+      };
     } else {
       // 戦術的モード：新しい戦術的システム
       const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
@@ -338,32 +355,56 @@ export class Game {
       });
 
       // タイルマップを作成
-      this.tileMap = new TileMap(50, 50);
-      this.tileMap.importMapData(tacticalData.map);
-
-      // マップ生成情報を保存
-      this.currentRooms = tacticalData.rooms;
-      this.currentCorridors = tacticalData.corridors;
-      this.currentTacticalElements = tacticalData.tacticalElements;
+      const tileMap = new TileMap(50, 50);
+      tileMap.importMapData(tacticalData.map);
 
       // 戦術的データをゲームストアに保存（将来の拡張用）
       // TODO: ゲームストアに戦術的データ保存機能を追加
+      return {
+        tileMap,
+        rooms: tacticalData.rooms,
+        corridors: tacticalData.corridors,
+        tacticalElements: tacticalData.tacticalElements,
+      };
     }
+  }
+
+  /**
+   * 生成済みマップを Game と WorldSystem に反映する
+   */
+  private async commitMapState(state: GeneratedMapState, floorNumber: number): Promise<void> {
+    this.tileMap = state.tileMap;
+    this.currentRooms = state.rooms;
+    this.currentCorridors = state.corridors;
+    this.currentTacticalElements = state.tacticalElements;
 
     // 既存の WorldSystem を再利用（単一インスタンス維持）
     // なければ新規作成してエンジンに登録
     let worldSystem = this.engine.getSystem<WorldSystem>('world');
     if (!worldSystem) {
-      worldSystem = new WorldSystem(this.tileMap);
+      worldSystem = new WorldSystem(state.tileMap);
       this.engine.registerSystem('world', worldSystem);
       await worldSystem.initialize(this.engine);
     }
 
     // 生成結果をフロア単位で WorldSystem に登録し、現在階を切り替える
-    worldSystem.registerFloor(floorNumber, this.tileMap, this.currentRooms, this.currentCorridors);
+    worldSystem.registerFloor(floorNumber, state.tileMap, state.rooms, state.corridors);
 
     // タイルマップの描画は、カメラ位置設定後に行う
     // （プレイヤー作成後に renderTileMap を呼び出す）
+  }
+
+  /**
+   * マップを生成して即時反映する（初期化・デバッグ用）
+   * @param stageType ステージタイプ
+   * @param floorNumber 登録先フロア番号
+   */
+  private async generateMap(
+    stageType: StageType = StageType.TACTICAL_COMBAT,
+    floorNumber = this.floorManager?.getCurrentFloor() || 1
+  ): Promise<void> {
+    const state = await this.buildMapState(stageType);
+    await this.commitMapState(state, floorNumber);
   }
 
   /**
@@ -513,61 +554,110 @@ export class Game {
       return;
     }
 
-    const tileMap = worldSystem.getTileMap();
+    const mapState: GeneratedMapState = {
+      tileMap: this.tileMap,
+      rooms: this.currentRooms,
+      corridors: this.currentCorridors,
+      tacticalElements: this.currentTacticalElements,
+    };
+    const playerStartPos = this.getPlayerGridPosition();
+    const resourceState = await this.buildResourceState(
+      mapState,
+      worldSystem.getCurrentFloor(),
+      playerStartPos
+    );
+    this.commitResourceState(resourceState);
+  }
 
-    // マップデータを取得
-    const mapSize = tileMap.getSize();
+  /**
+   * プレイヤーの現在位置をリソース配置用のグリッド座標として取得する
+   */
+  private getPlayerGridPosition(): { x: number; y: number } | undefined {
+    const transform = this.player?.getComponent('transform');
+    if (!transform || !('position' in transform)) {
+      return undefined;
+    }
+
+    const pos = (transform as { position: Vector3 }).position;
+    return { x: Math.round(pos.x), y: Math.round(pos.y) };
+  }
+
+  /**
+   * マップと配置情報から、未登録のリソースエンティティ一式を構築する。
+   * 構築失敗時は、この処理内で作成済みエンティティをすべて破棄する。
+   */
+  private async buildResourceState(
+    mapState: GeneratedMapState,
+    floorNumber: number,
+    playerStartPos?: { x: number; y: number }
+  ): Promise<GeneratedResourceState> {
+    const mapSize = mapState.tileMap.getSize();
     const map: number[][] = [];
     for (let y = 0; y < mapSize.height; y++) {
       map[y] = [];
       for (let x = 0; x < mapSize.width; x++) {
-        const tile = tileMap.getTile(x, y, 0);
+        const tile = mapState.tileMap.getTile(x, y, 0);
         map[y][x] = tile ? tile.type : 0;
       }
     }
 
-    // 保存されている部屋と通路の情報を使用
-    const rooms = this.currentRooms;
-    const corridors = this.currentCorridors;
-    const tacticalElements = this.currentTacticalElements;
-
-    // リソース生成システムを初期化
-    this.resourceSystem = new ResourceGenerationSystem(mapSize.width, mapSize.height);
-
-    // プレイヤーレベルと難易度を取得
-    const playerLevel = this.gameStore.player.status.level || 1;
-    const currentFloor = worldSystem.getCurrentFloor();
-
-    // プレイヤー位置を取得（配置禁止エリアとして使用）
-    let playerStartPos: { x: number; y: number } | undefined;
-    if (this.player) {
-      const transform = this.player.getComponent('transform');
-      if (transform && 'position' in transform) {
-        const pos = (transform as { position: Vector3 }).position;
-        playerStartPos = { x: Math.round(pos.x), y: Math.round(pos.y) };
-      }
-    }
-
-    // リソースを生成
-    const resources = this.resourceSystem.generateResources(
+    const resourceSystem = new ResourceGenerationSystem(mapSize.width, mapSize.height);
+    const resources = resourceSystem.generateResources(
       map,
-      rooms,
-      corridors,
-      tacticalElements,
+      mapState.rooms,
+      mapState.corridors,
+      mapState.tacticalElements,
       {
-        playerLevel: playerLevel,
-        difficulty: currentFloor,
-        playerStartPos: playerStartPos,
+        playerLevel: this.gameStore.player.status.level || 1,
+        difficulty: floorNumber,
+        playerStartPos,
       }
     );
 
-    // 生成されたリソースを保存
-    this.placedObstacles = resources.obstacles;
-    this.placedItems = resources.items;
-    this.placedEnemies = resources.enemies;
+    // Date.now() ベースの生成IDが旧フロアと衝突しないよう、フロア単位で名前空間を分ける。
+    const obstacles = resources.obstacles.map((obstacle) => ({
+      ...obstacle,
+      id: `floor_${floorNumber}_${obstacle.id}`,
+    }));
+    const items = resources.items.map((item) => ({
+      ...item,
+      id: `floor_${floorNumber}_${item.id}`,
+    }));
+    const enemies = resources.enemies.map((enemy) => ({
+      ...enemy,
+      id: `floor_${floorNumber}_${enemy.id}`,
+    }));
 
-    // エンティティシステムに登録
-    await this.registerResourceEntities(resources.obstacles, resources.items, resources.enemies);
+    const entities = await this.buildResourceEntities(
+      obstacles,
+      items,
+      enemies,
+      mapState.tileMap,
+      floorNumber,
+      playerStartPos
+    );
+
+    return { resourceSystem, obstacles, items, enemies, entities };
+  }
+
+  /**
+   * 構築済みリソースを Game と EntitySystem に反映する
+   */
+  private commitResourceState(state: GeneratedResourceState): void {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!entitySystem) {
+      this.destroyStagedEntities(state.entities);
+      throw new Error('EntitySystem is not available');
+    }
+
+    this.resourceSystem = state.resourceSystem;
+    this.placedObstacles = state.obstacles;
+    this.placedItems = state.items;
+    this.placedEnemies = state.enemies;
+
+    for (const entity of state.entities) {
+      entitySystem.registerEntity(entity);
+    }
   }
 
   /**
@@ -594,83 +684,88 @@ export class Game {
   /**
    * リソースエンティティをEntitySystemに登録
    */
-  private async registerResourceEntities(
+  private async buildResourceEntities(
     obstacles: PlacedObstacle[],
     items: PlacedItem[],
-    enemies: PlacedEnemy[]
-  ): Promise<void> {
-    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
-    if (!entitySystem) {
-      return;
-    }
+    enemies: PlacedEnemy[],
+    tileMap: TileMap,
+    floorNumber: number,
+    playerStartPos?: { x: number; y: number }
+  ): Promise<Entity[]> {
+    const entities: Entity[] = [];
 
-    // 障害物を登録
-    for (const obstacleData of obstacles) {
-      const obstacle = new Obstacle(obstacleData);
-      await obstacle.initialize();
-      entitySystem.registerEntity(obstacle);
-    }
-
-    // アイテムを登録
-    for (const itemData of items) {
-      const item = new Item(itemData);
-
-      // ItemTypeからInventoryItemTypeへのマッピング
-      const inventoryType = this.mapItemTypeToInventoryType(itemData.type);
-      if (inventoryType) {
-        item.setInventoryItemType(inventoryType);
+    try {
+      for (const obstacleData of obstacles) {
+        const obstacle = new Obstacle(obstacleData);
+        entities.push(obstacle);
+        await obstacle.initialize();
       }
 
-      await item.initialize();
-      entitySystem.registerEntity(item);
-    }
+      for (const itemData of items) {
+        const item = new Item(itemData);
+        entities.push(item);
 
-    // 敵を登録
-    for (let i = 0; i < enemies.length; i++) {
-      const enemyData = enemies[i];
-      try {
+        const inventoryType = this.mapItemTypeToInventoryType(itemData.type);
+        if (inventoryType) {
+          item.setInventoryItemType(inventoryType);
+        }
+
+        await item.initialize();
+      }
+
+      for (const enemyData of enemies) {
         const enemy = new Enemy(enemyData);
+        entities.push(enemy);
         await enemy.initialize();
-        entitySystem.registerEntity(enemy);
-      } catch (error) {
-        console.error(`Failed to register enemy ${i}:`, error);
       }
-    }
 
-    // イベントオブジェクトを配置
-    await this.placeEventObjects(entitySystem);
+      const eventObjects = await this.buildEventObjects(
+        tileMap,
+        entities,
+        floorNumber,
+        playerStartPos
+      );
+      entities.push(...eventObjects);
+      return entities;
+    } catch (error) {
+      this.destroyStagedEntities(entities);
+      throw error;
+    }
   }
 
   /**
-   * イベントオブジェクトを配置
-   * @param entitySystem エンティティシステム
+   * 未登録のイベントオブジェクトを構築する
    */
-  private async placeEventObjects(entitySystem: EntitySystem): Promise<void> {
-    if (!this.tileMap) {
-      return;
-    }
-
+  private async buildEventObjects(
+    tileMap: TileMap,
+    stagedEntities: Entity[],
+    floorNumber: number,
+    playerStartPos?: { x: number; y: number }
+  ): Promise<Entity[]> {
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
     const eventSystem = this.engine.getSystem<EventSystem>('event');
     const audioSystem = this.engine.getSystem<AudioSystem>('audio');
+    const eventObjects: Entity[] = [];
+    const occupiedPositions = new Set<string>();
+
+    if (playerStartPos) {
+      occupiedPositions.add(`${playerStartPos.x},${playerStartPos.y}`);
+    }
+    for (const entity of stagedEntities) {
+      const transform = entity.getComponent('transform');
+      if (transform && 'position' in transform) {
+        const pos = (transform as { position: Vector3 }).position;
+        occupiedPositions.add(`${pos.x},${pos.y}`);
+      }
+    }
 
     // 空いている床タイルを取得
     const floorTiles: Vector3[] = [];
-    for (let y = 0; y < this.tileMap.getHeight(); y++) {
-      for (let x = 0; x < this.tileMap.getWidth(); x++) {
-        const tile = this.tileMap.getTile(x, y);
+    for (let y = 0; y < tileMap.getHeight(); y++) {
+      for (let x = 0; x < tileMap.getWidth(); x++) {
+        const tile = tileMap.getTile(x, y);
         if (tile && (tile.type as any) === 'floor') {
-          // エンティティが既に存在しないかチェック
-          const entities = entitySystem.getEntities();
-          const occupied = entities.some((entity) => {
-            const transform = entity.getComponent('transform');
-            if (transform && 'position' in transform) {
-              const pos = (transform as { position: Vector3 }).position;
-              return pos.x === x && pos.y === y;
-            }
-            return false;
-          });
-
-          if (!occupied) {
+          if (!occupiedPositions.has(`${x},${y}`)) {
             floorTiles.push({ x, y, z: 0 });
           }
         }
@@ -678,68 +773,97 @@ export class Game {
     }
 
     if (floorTiles.length === 0) {
-      return;
+      return eventObjects;
     }
 
-    // ポータルを1つ配置（階段の代わり）
-    const portalPos = floorTiles[Math.floor(Math.random() * floorTiles.length)];
-    const portal = createPortal(`portal_${Date.now()}`, portalPos, async (playerId) => {
-      audioSystem?.playSE('item');
-      eventSystem?.emit('portal_activated', { playerId, position: portalPos });
-
-      // 次の階層へ移動
-      if (this.floorManager) {
-        const success = await this.floorManager.moveToNextFloor();
-        if (!success) {
-          // 最終フロアに到達した場合はゲームクリア
-          eventSystem?.emit('game_clear', { floor: this.floorManager.getCurrentFloor() });
-        }
-      }
-    });
-    await portal.initialize();
-    entitySystem.registerEntity(portal);
-
-    // エネルギーチャージャーを2-3個配置
-    const chargerCount = 2 + Math.floor(Math.random() * 2); // 2-3個
-    for (let i = 0; i < chargerCount && floorTiles.length > 0; i++) {
-      // ポータルと同じ位置を避ける
-      const availableTiles = floorTiles.filter(
-        (pos) => pos.x !== portalPos.x || pos.y !== portalPos.y
-      );
-      if (availableTiles.length === 0) break;
-
-      const chargerPos = availableTiles[Math.floor(Math.random() * availableTiles.length)];
-      const chargeAmount = 10 + Math.floor(Math.random() * 11); // 10-20
-      const maxUses = 1 + Math.floor(Math.random() * 3); // 1-3回使用可能
-
-      const charger = createEnergyCharger(
-        `charger_${Date.now()}_${i}`,
-        chargerPos,
-        chargeAmount,
-        maxUses,
-        (playerId) => {
+    try {
+      // ポータルを1つ配置（階段の代わり）
+      const portalPos = floorTiles[Math.floor(Math.random() * floorTiles.length)];
+      const portal = createPortal(
+        `floor_${floorNumber}_portal_${Date.now()}`,
+        portalPos,
+        async (playerId) => {
           audioSystem?.playSE('item');
+          eventSystem?.emit('portal_activated', { playerId, position: portalPos });
 
-          // プレイヤーのエネルギーを回復
-          const player = entitySystem.getEntity(playerId);
-          if (player instanceof Player) {
-            const restoredAmount = player.restoreEnergy(chargeAmount);
-
-            eventSystem?.emit('energy_recharged', {
-              playerId,
-              amount: restoredAmount,
-              position: chargerPos,
-            });
+          // 次の階層へ移動
+          if (this.floorManager) {
+            const success = await this.floorManager.moveToNextFloor();
+            if (
+              !success &&
+              this.floorManager.getCurrentFloor() >= this.floorManager.getMaxFloors()
+            ) {
+              // 最終フロアに到達した場合はゲームクリア
+              eventSystem?.emit('game_clear', { floor: this.floorManager.getCurrentFloor() });
+            }
           }
         }
       );
-      await charger.initialize();
-      entitySystem.registerEntity(charger);
+      eventObjects.push(portal);
+      await portal.initialize();
 
-      // 使用済みの位置を削除
-      const index = floorTiles.findIndex((pos) => pos.x === chargerPos.x && pos.y === chargerPos.y);
-      if (index !== -1) {
-        floorTiles.splice(index, 1);
+      // エネルギーチャージャーを2-3個配置
+      const chargerCount = 2 + Math.floor(Math.random() * 2); // 2-3個
+      for (let i = 0; i < chargerCount && floorTiles.length > 0; i++) {
+        // ポータルと同じ位置を避ける
+        const availableTiles = floorTiles.filter(
+          (pos) => pos.x !== portalPos.x || pos.y !== portalPos.y
+        );
+        if (availableTiles.length === 0) break;
+
+        const chargerPos = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+        const chargeAmount = 10 + Math.floor(Math.random() * 11); // 10-20
+        const maxUses = 1 + Math.floor(Math.random() * 3); // 1-3回使用可能
+
+        const charger = createEnergyCharger(
+          `floor_${floorNumber}_charger_${Date.now()}_${i}`,
+          chargerPos,
+          chargeAmount,
+          maxUses,
+          (playerId) => {
+            audioSystem?.playSE('item');
+
+            // プレイヤーのエネルギーを回復
+            const player = entitySystem?.getEntity(playerId);
+            if (player instanceof Player) {
+              const restoredAmount = player.restoreEnergy(chargeAmount);
+
+              eventSystem?.emit('energy_recharged', {
+                playerId,
+                amount: restoredAmount,
+                position: chargerPos,
+              });
+            }
+          }
+        );
+        eventObjects.push(charger);
+        await charger.initialize();
+
+        // 使用済みの位置を削除
+        const index = floorTiles.findIndex(
+          (pos) => pos.x === chargerPos.x && pos.y === chargerPos.y
+        );
+        if (index !== -1) {
+          floorTiles.splice(index, 1);
+        }
+      }
+    } catch (error) {
+      this.destroyStagedEntities(eventObjects);
+      throw error;
+    }
+
+    return eventObjects;
+  }
+
+  /**
+   * EntitySystem へ公開する前のエンティティを破棄する
+   */
+  private destroyStagedEntities(entities: Entity[]): void {
+    for (const entity of [...entities].reverse()) {
+      try {
+        entity.destroy();
+      } catch (error) {
+        console.error(`Failed to destroy staged entity ${entity.id}:`, error);
       }
     }
   }
@@ -1025,27 +1149,46 @@ export class Game {
   /**
    * フロアを再生成（フロア移動後）
    */
-  private async regenerateFloor(stageType: StageType): Promise<void> {
-    // マップを再生成
-    await this.generateMap(stageType);
+  private async regenerateFloor(floorNumber: number, stageType: StageType): Promise<void> {
+    // マップ、配置データ、描画オブジェクトをすべてステージングする。
+    // ここで失敗しても Game / WorldSystem / EntitySystem の現行状態は変更しない。
+    const mapState = await this.buildMapState(stageType);
+    const startPos = mapState.tileMap.getRandomFloorTile();
+    const playerStartPos = startPos ? { x: startPos.x, y: startPos.y } : undefined;
+    const resourceState = await this.buildResourceState(mapState, floorNumber, playerStartPos);
 
-    // プレイヤーを再配置
-    if (this.player && this.tileMap) {
-      const startPos = this.tileMap.getRandomFloorTile();
-      if (startPos) {
-        const transform = this.player.getComponent('transform');
-        if (transform && 'position' in transform) {
-          (transform as { position: { x: number; y: number; z: number } }).position = {
-            x: startPos.x,
-            y: startPos.y,
-            z: 0,
-          };
-        }
-      }
+    const worldSystem = this.engine.getSystem<WorldSystem>('world');
+    const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+    if (!worldSystem || !entitySystem) {
+      this.destroyStagedEntities(resourceState.entities);
+      throw new Error('Cannot commit generated floor without WorldSystem and EntitySystem');
     }
 
-    // リソースを再生成
-    await this.generateResources();
+    // 以降は例外を投げない同期操作のみ。全生成完了後に一括で公開する。
+    this.tileMap = mapState.tileMap;
+    this.currentRooms = mapState.rooms;
+    this.currentCorridors = mapState.corridors;
+    this.currentTacticalElements = mapState.tacticalElements;
+    this.resourceSystem = resourceState.resourceSystem;
+    this.placedObstacles = resourceState.obstacles;
+    this.placedItems = resourceState.items;
+    this.placedEnemies = resourceState.enemies;
+
+    for (const entity of resourceState.entities) {
+      entitySystem.registerEntity(entity);
+    }
+    worldSystem.registerFloor(floorNumber, mapState.tileMap, mapState.rooms, mapState.corridors);
+
+    if (this.player && startPos) {
+      const transform = this.player.getComponent('transform');
+      if (transform && 'position' in transform) {
+        (transform as { position: { x: number; y: number; z: number } }).position = {
+          x: startPos.x,
+          y: startPos.y,
+          z: 0,
+        };
+      }
+    }
   }
 
   /**

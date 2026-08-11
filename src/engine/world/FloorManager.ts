@@ -132,16 +132,12 @@ export class FloorManager {
       return false;
     }
 
-    // 暫定的に現在階を切り替え（ハンドラーが getCurrentFloor() で参照するため）
-    this.currentFloor = targetFloor;
-
     try {
-      // 新しいフロアを生成（ハンドラーが例外を投げた場合は catch へ）
-      await this.generateFloor();
+      // 新しいフロアを生成する。生成中は currentFloor を切り替えず、
+      // ハンドラーには request.floor で移動先を明示する。
+      await this.generateFloor(targetFloor);
     } catch (error) {
       console.error(`Failed to generate floor ${targetFloor}:`, error);
-      // ロールバック: 現在階を元に戻す
-      this.currentFloor = oldFloor;
       // ロールバック: WorldSystem の現在階を元に戻す
       const worldSystem = this.engine.getSystem<WorldSystem>('world');
       if (worldSystem) {
@@ -151,6 +147,9 @@ export class FloorManager {
       this.revertPlayerState(playerState);
       return false;
     }
+
+    // 生成が完了してから FloorManager の現在階をコミットする
+    this.currentFloor = targetFloor;
 
     // 成功: プレイヤーの状態を復元（エネルギー +20 ボーナス付き）
     this.restorePlayerState(playerState);
@@ -171,17 +170,17 @@ export class FloorManager {
    * ハンドラー成功後に旧エンティティを削除し、floor_generated を発行する。
    * ハンドラーが例外を投げた場合はそのまま例外を伝播する（呼び出し元でロールバック）。
    */
-  private async generateFloor(): Promise<void> {
-    console.log(`Generating floor ${this.currentFloor}...`);
+  private async generateFloor(floor = this.currentFloor): Promise<void> {
+    console.log(`Generating floor ${floor}...`);
 
     // フロアの難易度を計算（フロアが進むほど難しくなる）
-    const difficulty = Math.min(1 + (this.currentFloor - 1) * 0.2, 3);
+    const difficulty = Math.min(1 + (floor - 1) * 0.2, 3);
 
     // ステージタイプを決定（フロアに応じて変化）
-    const stageType = this.determineStageType(this.currentFloor);
+    const stageType = this.determineStageType(floor);
 
     const request: FloorGenerationRequest = {
-      floor: this.currentFloor,
+      floor,
       stageType,
       difficulty,
     };
@@ -201,7 +200,7 @@ export class FloorManager {
     const eventSystem = this.engine.getSystem<EventSystem>('event');
     eventSystem?.emit('floor_generated', request);
 
-    console.log(`Floor ${this.currentFloor} generated successfully`);
+    console.log(`Floor ${floor} generated successfully`);
   }
 
   /**

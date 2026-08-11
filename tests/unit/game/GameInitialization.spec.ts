@@ -6,7 +6,17 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { EventSystem } from '@/engine/events/EventSystem';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { FloorManager } from '@/engine/world/FloorManager';
-import { EventName } from '@/engine/types';
+import { RendererSystem } from '@/engine/graphics/RendererSystem';
+import { TileMap } from '@/engine/world/TileMap';
+import {
+  EventName,
+  Room,
+  Corridor,
+  TacticalElement,
+  PlacedObstacle,
+  PlacedItem,
+  PlacedEnemy,
+} from '@/engine/types';
 import { useGameStore } from '@/stores/gameStore';
 
 // SoundManager をモック（jsdom では AudioBuffer が未定義のため）
@@ -307,6 +317,76 @@ describe('Game initialization and shutdown', () => {
     expect(worldSystem.getRooms()).not.toHaveLength(0);
     expect(worldSystem.getRoomsByFloor(1)).toEqual(floor1Rooms);
     expect(observations).toEqual([{ floor: 2, roomCount: worldSystem.getRooms().length }]);
+  });
+
+  it('本番のフロア生成経路が失敗しても Game・World・Entity の旧状態を完全に保持する', async () => {
+    await game.initialize(mockCanvas);
+
+    const gameState = game as unknown as {
+      floorManager: FloorManager;
+      tileMap: TileMap;
+      currentRooms: Room[];
+      currentCorridors: Corridor[];
+      currentTacticalElements: TacticalElement[];
+      placedObstacles: PlacedObstacle[];
+      placedItems: PlacedItem[];
+      placedEnemies: PlacedEnemy[];
+      resourceSystem: unknown;
+      buildEventObjects: (...args: unknown[]) => Promise<unknown[]>;
+    };
+    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity')!;
+    const worldSystem = Engine.instance.getSystem<WorldSystem>('world')!;
+    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer')!;
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event')!;
+
+    const oldEntities = entitySystem.getEntities();
+    const oldTileMap = gameState.tileMap;
+    const oldRooms = gameState.currentRooms;
+    const oldCorridors = gameState.currentCorridors;
+    const oldTacticalElements = gameState.currentTacticalElements;
+    const oldObstacles = gameState.placedObstacles;
+    const oldItems = gameState.placedItems;
+    const oldEnemies = gameState.placedEnemies;
+    const oldResourceSystem = gameState.resourceSystem;
+    const oldWorldMap = worldSystem.getTileMap();
+    const oldVisibilityListenerCount = eventSystem.getListenerCount('entity_visibility_changed');
+    const oldLayerSizes = {
+      characters: rendererSystem.getLayer('characters')!.children.length,
+      objects: rendererSystem.getLayer('objects')!.children.length,
+    };
+    const floorChanged = jest.fn();
+    const floorGenerated = jest.fn();
+    eventSystem.on('floor_changed', floorChanged);
+    eventSystem.on('floor_generated', floorGenerated);
+
+    // マップと通常リソースの構築後、イベントオブジェクト構築で失敗させる。
+    // 生成途中の Entity は初期化済みだが EntitySystem には未登録の状態になる。
+    jest
+      .spyOn(gameState, 'buildEventObjects')
+      .mockRejectedValueOnce(new Error('staged event object generation failed'));
+
+    const result = await gameState.floorManager.moveToNextFloor();
+
+    expect(result).toBe(false);
+    expect(game.getCurrentFloor()).toBe(1);
+    expect(worldSystem.getCurrentFloor()).toBe(1);
+    expect(worldSystem.getTileMap()).toBe(oldWorldMap);
+    expect(entitySystem.getEntities()).toEqual(oldEntities);
+    expect(gameState.tileMap).toBe(oldTileMap);
+    expect(gameState.currentRooms).toBe(oldRooms);
+    expect(gameState.currentCorridors).toBe(oldCorridors);
+    expect(gameState.currentTacticalElements).toBe(oldTacticalElements);
+    expect(gameState.placedObstacles).toBe(oldObstacles);
+    expect(gameState.placedItems).toBe(oldItems);
+    expect(gameState.placedEnemies).toBe(oldEnemies);
+    expect(gameState.resourceSystem).toBe(oldResourceSystem);
+    expect(rendererSystem.getLayer('characters')!.children).toHaveLength(oldLayerSizes.characters);
+    expect(rendererSystem.getLayer('objects')!.children).toHaveLength(oldLayerSizes.objects);
+    expect(eventSystem.getListenerCount('entity_visibility_changed')).toBe(
+      oldVisibilityListenerCount
+    );
+    expect(floorChanged).not.toHaveBeenCalled();
+    expect(floorGenerated).not.toHaveBeenCalled();
   });
 
   it('getMaxFloors() が正の値を返す', async () => {

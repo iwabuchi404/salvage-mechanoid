@@ -2,7 +2,7 @@ import { Entity } from './Entity';
 import { TransformComponent } from './components/Transform';
 import { SpriteComponent } from './components/Sprite';
 import { HealthComponent } from './components/Health';
-import { Vector3, ObstacleType, PlacedObstacle } from '../types';
+import { ObstacleType, PlacedObstacle } from '../types';
 
 /**
  * 障害物エンティティクラス
@@ -92,14 +92,9 @@ export class Obstacle extends Entity {
    * 障害物を破壊
    */
   destroy(): void {
-    if (this.destructible) {
-      const health = this.getComponent<HealthComponent>('health');
-      if (health) {
-        health.takeDamage(health.currentHp);
-      }
-      this.active = false;
-      console.log(`Obstacle destroyed: ${this.id}`);
-    }
+    this.active = false;
+    super.destroy();
+    console.log(`Obstacle destroyed: ${this.id}`);
   }
 
   /**

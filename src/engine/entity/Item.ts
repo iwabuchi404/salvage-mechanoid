@@ -26,6 +26,8 @@ export class Item extends Entity {
   private inventoryItemType: InventoryItemType | null = null;
   private itemData: Omit<InventoryItem, 'id'> | null = null;
   private inPlayerFOV = false;
+  private visibilityChangedListener: ((data: { entityId: string; inFOV: boolean }) => void) | null =
+    null;
 
   /**
    * コンストラクタ
@@ -60,12 +62,13 @@ export class Item extends Entity {
     // FOV変更イベントをリッスン
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
     if (eventSystem) {
-      eventSystem.on('entity_visibility_changed', (data: { entityId: string; inFOV: boolean }) => {
+      this.visibilityChangedListener = (data: { entityId: string; inFOV: boolean }) => {
         if (data.entityId === this.id) {
           this.inPlayerFOV = data.inFOV;
           this.updateGraphicsVisibility();
         }
-      });
+      };
+      eventSystem.on('entity_visibility_changed', this.visibilityChangedListener);
     }
   }
 
@@ -381,6 +384,12 @@ export class Item extends Entity {
    * アイテムを削除（取得時）
    */
   override destroy(): void {
+    if (this.visibilityChangedListener) {
+      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+      eventSystem?.off('entity_visibility_changed', this.visibilityChangedListener);
+      this.visibilityChangedListener = null;
+    }
+
     // グラフィックを削除
     if (this.graphics && this.graphics.parent) {
       this.graphics.parent.removeChild(this.graphics);

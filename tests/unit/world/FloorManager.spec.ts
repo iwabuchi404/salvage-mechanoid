@@ -369,6 +369,22 @@ describe('FloorManager', () => {
     expect(result).toBe(false);
   });
 
+  it('生成中は旧階を維持し、移動先はリクエストでハンドラーへ渡す', async () => {
+    const observations: Array<{ currentFloor: number; requestedFloor: number }> = [];
+    floorManager.setFloorGenerationHandler(async ({ floor }) => {
+      observations.push({
+        currentFloor: floorManager.getCurrentFloor(),
+        requestedFloor: floor,
+      });
+    });
+
+    const result = await floorManager.moveToNextFloor();
+
+    expect(result).toBe(true);
+    expect(observations).toEqual([{ currentFloor: 1, requestedFloor: 2 }]);
+    expect(floorManager.getCurrentFloor()).toBe(2);
+  });
+
   it('生成失敗時に現在階が元の階に戻る', async () => {
     floorManager.setFloorGenerationHandler(async () => {
       throw new Error('Generation failed');
