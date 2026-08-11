@@ -20,10 +20,10 @@ import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
 import { FloorManager } from '../engine/world/FloorManager';
 import { Player } from '../engine/entity/Player';
-import { Obstacle } from '../engine/entity/Obstacle';
 import { Item } from '../engine/entity/Item';
-import { Enemy } from '../engine/entity/Enemy';
-import { EnemyPresentationFactory } from '../engine/presentation/enemy/EnemyPresentationFactory';
+import { EnemyFactory } from '../engine/factory/EnemyFactory';
+import { ItemFactory } from '../engine/factory/ItemFactory';
+import { ObstacleFactory } from '../engine/factory/ObstacleFactory';
 import { createPortal, createEnergyCharger } from '../engine/entity/EventObjectEntity';
 import {
   Vector3,
@@ -35,8 +35,6 @@ import {
   Room,
   Corridor,
   TacticalElement,
-  InventoryItemType,
-  ItemType,
 } from '../engine/types';
 import { useGameStore } from '../stores/gameStore';
 import { useUIStore } from '../stores/uiStore';
@@ -662,27 +660,6 @@ export class Game {
   }
 
   /**
-   * ItemTypeをInventoryItemTypeにマッピング
-   */
-  private mapItemTypeToInventoryType(itemType: ItemType): InventoryItemType | null {
-    switch (itemType) {
-      case ItemType.HEALTH:
-        return InventoryItemType.HEALTH_PACK;
-      case ItemType.ENERGY:
-        return InventoryItemType.ENERGY_CELL;
-      case ItemType.WEAPON:
-      case ItemType.UPGRADE:
-        return InventoryItemType.WEAPON_UPGRADE;
-      case ItemType.ARMOR:
-        return InventoryItemType.ARMOR_UPGRADE;
-      case ItemType.KEY:
-        return InventoryItemType.KEY_ITEM;
-      default:
-        return null;
-    }
-  }
-
-  /**
    * リソースエンティティをEntitySystemに登録
    */
   private async buildResourceEntities(
@@ -697,28 +674,18 @@ export class Game {
 
     try {
       for (const obstacleData of obstacles) {
-        const obstacle = new Obstacle(obstacleData);
+        const obstacle = await ObstacleFactory.create(obstacleData);
         entities.push(obstacle);
-        await obstacle.initialize();
       }
 
       for (const itemData of items) {
-        const item = new Item(itemData);
+        const item = await ItemFactory.create(itemData);
         entities.push(item);
-
-        const inventoryType = this.mapItemTypeToInventoryType(itemData.type);
-        if (inventoryType) {
-          item.setInventoryItemType(inventoryType);
-        }
-
-        await item.initialize();
       }
 
       for (const enemyData of enemies) {
-        const enemy = new Enemy(enemyData);
+        const enemy = await EnemyFactory.create(enemyData);
         entities.push(enemy);
-        await enemy.initialize();
-        await EnemyPresentationFactory.create(enemy, enemyData.type);
       }
 
       const eventObjects = await this.buildEventObjects(
