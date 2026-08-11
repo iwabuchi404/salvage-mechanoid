@@ -5,10 +5,9 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { EventSystem } from '@/engine/events/EventSystem';
 import { HealthComponent } from '@/engine/entity/components/Health';
 import { SpriteComponent } from '@/engine/entity/components/Sprite';
-import { TransformComponent } from '@/engine/entity/components/Transform';
-import { Entity } from '@/engine/entity/Entity';
 import { CoordinateSystem } from '@/engine/graphics/CoordinateSystem';
 import { RendererSystem } from '@/engine/graphics/RendererSystem';
+import { EnemyPresentationFactory } from '@/engine/presentation/enemy/EnemyPresentationFactory';
 import { EnemyBehavior, EnemyType, LayerName, PlacedEnemy } from '@/engine/types';
 
 /**
@@ -75,9 +74,11 @@ describe('Enemy rendering boundary', () => {
   });
 
   const createAndInitEnemy = async (overrides: Partial<PlacedEnemy> = {}): Promise<Enemy> => {
-    const enemy = new Enemy(createPlacedEnemy(overrides));
+    const enemyData = createPlacedEnemy(overrides);
+    const enemy = new Enemy(enemyData);
     entities.registerEntity(enemy);
     await enemy.initialize();
+    await EnemyPresentationFactory.create(enemy, enemyData.type);
     return enemy;
   };
 

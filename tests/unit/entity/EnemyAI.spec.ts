@@ -98,11 +98,14 @@ describe('Enemy AI', () => {
     }
   };
 
-  it('Renderer / PixiJS の初期化なしで AI を構築できる', () => {
+  it('Renderer / PixiJS の初期化なしで Enemy を初期化できる', async () => {
     const enemy = createHeadlessEnemy();
+
+    await enemy.initialize();
 
     expect(Engine.instance.getSystem('renderer')).toBeUndefined();
     expect(enemy.getComponent('sprite')).toBeUndefined();
+    expect(enemy.getComponent('enemy-presentation')).toBeUndefined();
     expect(enemy.getComponent('movement')).toBeDefined();
   });
 

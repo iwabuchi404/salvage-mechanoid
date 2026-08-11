@@ -23,6 +23,7 @@ import { Player } from '../engine/entity/Player';
 import { Obstacle } from '../engine/entity/Obstacle';
 import { Item } from '../engine/entity/Item';
 import { Enemy } from '../engine/entity/Enemy';
+import { EnemyPresentationFactory } from '../engine/presentation/enemy/EnemyPresentationFactory';
 import { createPortal, createEnergyCharger } from '../engine/entity/EventObjectEntity';
 import {
   Vector3,
@@ -717,6 +718,7 @@ export class Game {
         const enemy = new Enemy(enemyData);
         entities.push(enemy);
         await enemy.initialize();
+        await EnemyPresentationFactory.create(enemy, enemyData.type);
       }
 
       const eventObjects = await this.buildEventObjects(

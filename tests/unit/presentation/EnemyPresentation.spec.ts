@@ -76,7 +76,8 @@ describe('EnemyPresentation', () => {
   ): Promise<{ entity: Entity; presentation: EnemyPresentation }> => {
     const entity = createEntity(id, enemyType);
     entities.registerEntity(entity);
-    const presentation = new EnemyPresentation(entity, enemyType);
+    const presentation = new EnemyPresentation(enemyType);
+    entity.addComponent(presentation);
     await presentation.initialize();
     return { entity, presentation };
   };
@@ -137,16 +138,27 @@ describe('EnemyPresentation', () => {
     expect(changeTextureSpy).not.toHaveBeenCalled();
   });
 
-  it('destroy で direction_changed リスナーを解除する', async () => {
-    const listenerCountBefore = events.getListenerCount('direction_changed');
+  it('destroy で Sprite と描画イベント購読をすべて破棄する', async () => {
+    const directionListenerCountBefore = events.getListenerCount('direction_changed');
+    const visibilityListenerCountBefore = events.getListenerCount('entity_visibility_changed');
 
-    const { presentation } = await createAndInitPresentation();
+    const { entity, presentation } = await createAndInitPresentation();
+    const spriteComponent = entity.getComponent<SpriteComponent>('sprite')!;
+    const sprite = spriteComponent.getSprite()!;
 
-    expect(events.getListenerCount('direction_changed')).toBe(listenerCountBefore + 1);
+    expect(events.getListenerCount('direction_changed')).toBe(directionListenerCountBefore + 1);
+    expect(events.getListenerCount('entity_visibility_changed')).toBe(
+      visibilityListenerCountBefore + 1
+    );
 
     presentation.destroy();
 
-    expect(events.getListenerCount('direction_changed')).toBe(listenerCountBefore);
+    expect(removeSpriteSpy).toHaveBeenCalledWith(sprite, LayerName.CHARACTERS);
+    expect(entity.getComponent('sprite')).toBeUndefined();
+    expect(events.getListenerCount('direction_changed')).toBe(directionListenerCountBefore);
+    expect(events.getListenerCount('entity_visibility_changed')).toBe(
+      visibilityListenerCountBefore
+    );
   });
 
   it('destroy 後に direction_changed イベントへ反応しない', async () => {
@@ -169,7 +181,8 @@ describe('EnemyPresentation', () => {
     for (let i = 0; i < 3; i++) {
       const entity = createEntity(`enemy-${i}`, EnemyType.SOLDIER);
       entities.registerEntity(entity);
-      const presentation = new EnemyPresentation(entity, EnemyType.SOLDIER);
+      const presentation = new EnemyPresentation(EnemyType.SOLDIER);
+      entity.addComponent(presentation);
       await presentation.initialize();
       presentations.push(presentation);
     }
@@ -195,6 +208,23 @@ describe('EnemyPresentation', () => {
     presentation.destroy();
   });
 
+  it('Factory の初期化失敗時に Presentation と Sprite をロールバックする', async () => {
+    const entity = createEntity('factory-failure', EnemyType.SOLDIER);
+    entities.registerEntity(entity);
+    renderEntitySpy.mockImplementationOnce(() => {
+      throw new Error('render failed');
+    });
+
+    await expect(EnemyPresentationFactory.create(entity, EnemyType.SOLDIER)).rejects.toThrow(
+      'render failed'
+    );
+
+    expect(entity.getComponent('enemy-presentation')).toBeUndefined();
+    expect(entity.getComponent('sprite')).toBeUndefined();
+    expect(events.getListenerCount('direction_changed')).toBe(0);
+    expect(events.getListenerCount('entity_visibility_changed')).toBe(0);
+  });
+
   it('FOV 外でスプライトを非表示にし、FOV 内で再表示する', async () => {
     const { entity } = await createAndInitPresentation();
     const sprite = entity.getComponent<SpriteComponent>('sprite')!.getSprite()!;
@@ -206,6 +236,16 @@ describe('EnemyPresentation', () => {
 
     events.emit('entity_visibility_changed', { entityId: entity.id, inFOV: true });
     expect(sprite.visible).toBe(true);
+  });
+
+  it('非アクティブ状態では可視性イベント受信後もスプライトを表示しない', async () => {
+    const { entity } = await createAndInitPresentation();
+    const sprite = entity.getComponent<SpriteComponent>('sprite')!.getSprite()!;
+
+    entity.active = false;
+    events.emit('entity_visibility_changed', { entityId: entity.id, inFOV: true });
+
+    expect(sprite.visible).toBe(false);
   });
 
   it('別 Entity 宛ての可視性変更イベントを無視する', async () => {

@@ -7,8 +7,6 @@ import { Engine } from '../Engine';
 import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from './EntitySystem';
 import { WorldSystem } from '../world/WorldSystem';
-import { EnemyPresentation } from '../presentation/enemy/EnemyPresentation';
-import { EnemyPresentationFactory } from '../presentation/enemy/EnemyPresentationFactory';
 
 /**
  * 敵エンティティクラス
@@ -23,9 +21,6 @@ export class Enemy extends Entity {
   private patrolIndex = 0;
   private patrolDirection = 1;
   private waitTime = 0;
-
-  // 描画ライフサイクルを管理する Presentation（破棄時に参照を解放するため保持）
-  private presentation: EnemyPresentation | null = null;
 
   /**
    * コンストラクタ
@@ -66,18 +61,6 @@ export class Enemy extends Entity {
       150 // 移動アニメーション時間
     );
     this.addComponent(movementComponent);
-  }
-
-  /**
-   * 初期化
-   */
-  async initialize(): Promise<void> {
-    // 親クラスの initialize() を呼び出して既存コンポーネント（Transform/Health/Movement）を初期化
-    await super.initialize();
-
-    // Presentation を生成・初期化（SpriteComponent 生成・direction_changed 購読を含む）
-    // Presentation.initialize 内で SpriteComponent が Entity に追加され、初期化される
-    this.presentation = await EnemyPresentationFactory.create(this, this.enemyType);
   }
 
   /**
@@ -278,19 +261,6 @@ export class Enemy extends Entity {
     if (health && health.currentHp <= 0) {
       this.active = false;
     }
-  }
-
-  /**
-   * 破棄処理
-   */
-  override destroy(): void {
-    // Presentation を破棄（direction_changed リスナーの解除など）
-    if (this.presentation) {
-      this.presentation.destroy();
-      this.presentation = null;
-    }
-
-    super.destroy();
   }
 
   /**

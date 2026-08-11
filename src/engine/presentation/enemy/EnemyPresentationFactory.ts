@@ -16,8 +16,18 @@ export class EnemyPresentationFactory {
    * @returns 初期化済みの EnemyPresentation
    */
   static async create(entity: Entity, enemyType: EnemyType): Promise<EnemyPresentation> {
-    const presentation = new EnemyPresentation(entity, enemyType);
-    await presentation.initialize();
-    return presentation;
+    const existing = entity.getComponent<EnemyPresentation>('enemy-presentation');
+    if (existing) return existing;
+
+    const presentation = new EnemyPresentation(enemyType);
+    entity.addComponent(presentation);
+
+    try {
+      await presentation.initialize();
+      return presentation;
+    } catch (error) {
+      entity.removeComponent(presentation.type);
+      throw error;
+    }
   }
 }

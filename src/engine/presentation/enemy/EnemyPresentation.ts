@@ -1,4 +1,5 @@
 import { Entity } from '../../entity/Entity';
+import { Component } from '../../entity/Component';
 import { SpriteComponent } from '../../entity/components/Sprite';
 import { Engine } from '../../Engine';
 import { EventSystem } from '../../events/EventSystem';
@@ -14,21 +15,23 @@ import { getEnemyVisualProfile, getEnemyTexturePath } from './EnemyVisualProfile
  * Enemy（ドメイン）側は方向を MovementComponent に設定するだけでよく、
  * テクスチャ切替は本クラスが direction_changed イベント経由で行う。
  */
-export class EnemyPresentation {
-  private entity: Entity;
-  private enemyType: EnemyType;
+export class EnemyPresentation implements Component {
+  readonly type = 'enemy-presentation';
+  entity: Entity | null = null;
+
+  private readonly enemyType: EnemyType;
   private spriteComponent: SpriteComponent | null = null;
+  private eventSystem: EventSystem | null = null;
+  private destroyed = false;
   private directionChangedListener:
     | ((data: { entityId: string; direction: Direction }) => void)
     | null = null;
 
   /**
    * コンストラクタ
-   * @param entity 対象の Enemy エンティティ
    * @param enemyType 敵タイプ（テクスチャ選択用）
    */
-  constructor(entity: Entity, enemyType: EnemyType) {
-    this.entity = entity;
+  constructor(enemyType: EnemyType) {
     this.enemyType = enemyType;
   }
 
@@ -37,6 +40,9 @@ export class EnemyPresentation {
    * SpriteComponent を生成して Entity に追加し、初期化してから direction_changed リスナーを登録する
    */
   async initialize(): Promise<void> {
+    const entity = this.entity;
+    if (!entity || this.destroyed || this.spriteComponent) return;
+
     const profile = getEnemyVisualProfile(this.enemyType);
 
     // SpriteComponent を生成して Entity に追加
@@ -44,7 +50,7 @@ export class EnemyPresentation {
       x: profile.anchor.x,
       y: profile.anchor.y,
     });
-    this.entity.addComponent(this.spriteComponent);
+    entity.addComponent(this.spriteComponent);
 
     // SpriteComponent を初期化（テクスチャ読み込み・Renderer への登録など）
     if (this.spriteComponent.initialize) {
@@ -52,15 +58,19 @@ export class EnemyPresentation {
     }
 
     // direction_changed イベントを購読
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
+    this.eventSystem = Engine.instance.getSystem<EventSystem>('event') ?? null;
+    if (this.eventSystem) {
       this.directionChangedListener = (data) => {
-        if (data.entityId === this.entity.id) {
+        if (data.entityId === entity.id) {
           this.updateDirectionTexture(data.direction);
         }
       };
-      eventSystem.on('direction_changed', this.directionChangedListener);
+      this.eventSystem.on('direction_changed', this.directionChangedListener);
     }
+  }
+
+  update(): void {
+    // 描画位置・active・FOV の更新は Entity が所有する SpriteComponent が担当する
   }
 
   /**
@@ -76,17 +86,26 @@ export class EnemyPresentation {
 
   /**
    * Presentation を破棄する
-   * direction_changed リスナーを解除する
-   * SpriteComponent 自体の破棄は Entity.destroy() 経由で行われる
+   * direction_changed リスナーと SpriteComponent を破棄する
    */
   destroy(): void {
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem && this.directionChangedListener) {
-      eventSystem.off('direction_changed', this.directionChangedListener);
+    if (this.destroyed) return;
+    this.destroyed = true;
+
+    if (this.eventSystem && this.directionChangedListener) {
+      this.eventSystem.off('direction_changed', this.directionChangedListener);
       this.directionChangedListener = null;
     }
 
+    const entity = this.entity;
+    if (entity && entity.getComponent<SpriteComponent>('sprite') === this.spriteComponent) {
+      entity.removeComponent('sprite');
+    } else {
+      this.spriteComponent?.destroy();
+    }
+
     this.spriteComponent = null;
-    this.entity = null as unknown as Entity;
+    this.eventSystem = null;
+    this.entity = null;
   }
 }
