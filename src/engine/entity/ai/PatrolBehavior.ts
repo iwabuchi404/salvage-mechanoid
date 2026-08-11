@@ -24,7 +24,10 @@ export class PatrolBehavior implements EnemyBehaviorStrategy {
     this.patrolRoute = patrolRoute;
   }
 
-  async act(enemy: Enemy, _context: EnemyActionContext): Promise<void> {
+  async act(enemy: Enemy, context: EnemyActionContext): Promise<void> {
+    // R3 以前と同様、プレイヤーが存在しない間は行動しない
+    if (!context.getPlayerPosition()) return;
+
     const transform = enemy.getComponent<TransformComponent>('transform');
     const movement = enemy.getComponent<MovementComponent>('movement');
     if (!transform || !movement) return;

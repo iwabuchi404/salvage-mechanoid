@@ -1,15 +1,9 @@
-import { Engine } from '@/engine/Engine';
 import { Enemy } from '@/engine/entity/Enemy';
-import { Entity } from '@/engine/entity/Entity';
-import { EntitySystem } from '@/engine/entity/EntitySystem';
-import { EventSystem } from '@/engine/events/EventSystem';
-import { HealthComponent } from '@/engine/entity/components/Health';
 import { MovementComponent } from '@/engine/entity/components/Movement';
 import { TransformComponent } from '@/engine/entity/components/Transform';
-import { TileMap } from '@/engine/world/TileMap';
-import { WorldSystem } from '@/engine/world/WorldSystem';
-import { EnemyBehavior, EnemyType, PlacedEnemy, TileType, Vector3 } from '@/engine/types';
+import { EnemyBehavior, EnemyType, PlacedEnemy, Vector3 } from '@/engine/types';
 import { EnemyActionContext } from '@/engine/entity/ai/EnemyActionContext';
+import { EnemyBehaviorStrategy } from '@/engine/entity/ai/EnemyBehaviorStrategy';
 import { EnemyBehaviorStrategyFactory } from '@/engine/entity/ai/EnemyBehaviorStrategyFactory';
 import { StaticBehavior } from '@/engine/entity/ai/StaticBehavior';
 import { PatrolBehavior } from '@/engine/entity/ai/PatrolBehavior';
@@ -25,30 +19,40 @@ import { getDirectionFromPositions, getDirectionToTarget } from '@/engine/entity
  * Engine.instance や PixiJS に依存しない純粋なロジックテスト。
  */
 describe('Enemy AI Strategy', () => {
-  let events: EventSystem;
-  let entities: EntitySystem;
-  let world: WorldSystem;
-  let player: Entity;
-  let playerTransform: TransformComponent;
+  let playerPosition: Vector3 | null;
+  const strategies = new WeakMap<Enemy, EnemyBehaviorStrategy>();
+
+  const createManhattanPath = (from: Vector3, to: Vector3): Vector3[] => {
+    const path: Vector3[] = [{ ...from }];
+    const current = { ...from };
+
+    while (current.y !== to.y) {
+      current.y += Math.sign(to.y - current.y);
+      path.push({ ...current });
+    }
+    while (current.x !== to.x) {
+      current.x += Math.sign(to.x - current.x);
+      path.push({ ...current });
+    }
+
+    return path;
+  };
 
   /**
    * モック ActionContext を生成する
    */
-  const createMockContext = (overrides: Partial<EnemyActionContext> = {}): EnemyActionContext => {
+  const createMockContext = (
+    overrides: Partial<EnemyActionContext> = {}
+  ): jest.Mocked<EnemyActionContext> => {
     return {
-      getPlayerPosition: () => {
-        const transform = player.getComponent<TransformComponent>('transform');
-        return transform ? transform.position : null;
-      },
-      findPath: (from: Vector3, to: Vector3, _maxSteps?: number, _excludeEntityId?: string) => {
-        return world.findPath(from, to, 20, _excludeEntityId);
-      },
-      getDistance: (from: Vector3, to: Vector3) => world.getDistance(from, to),
-      requestAttack: (enemyId: string, targetId: string) => {
-        events.emit('enemy_attack_requested', { enemyId, targetId });
-      },
+      getPlayerPosition: jest.fn(() => playerPosition),
+      findPath: jest.fn((from: Vector3, to: Vector3) => createManhattanPath(from, to)),
+      getDistance: jest.fn(
+        (from: Vector3, to: Vector3) => Math.abs(to.x - from.x) + Math.abs(to.y - from.y)
+      ),
+      requestAttack: jest.fn(),
       ...overrides,
-    };
+    } as jest.Mocked<EnemyActionContext>;
   };
 
   const createPlacedEnemy = (overrides: Partial<PlacedEnemy> = {}): PlacedEnemy => ({
@@ -62,56 +66,43 @@ describe('Enemy AI Strategy', () => {
   });
 
   const createEnemy = (overrides: Partial<PlacedEnemy> = {}): Enemy => {
-    const enemy = new Enemy(createPlacedEnemy(overrides));
-    entities.registerEntity(enemy);
+    const placedEnemy = createPlacedEnemy(overrides);
+    const enemy = new Enemy(placedEnemy);
+    strategies.set(
+      enemy,
+      EnemyBehaviorStrategyFactory.create(placedEnemy.behavior, placedEnemy.patrolRoute)
+    );
     return enemy;
   };
 
-  beforeEach(async () => {
+  const getTransform = (enemy: Enemy): TransformComponent => {
+    const transform = enemy.getComponent<TransformComponent>('transform');
+    if (!transform) throw new Error(`Transform is not registered for ${enemy.id}`);
+    return transform;
+  };
+
+  beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation();
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
-
-    Engine.instance.reset();
-    events = new EventSystem();
-    entities = new EntitySystem();
-
-    const map = new TileMap(10, 10);
-    for (let y = 0; y < 10; y++) {
-      for (let x = 0; x < 10; x++) {
-        map.setTileAt(x, y, 0, TileType.TILE, true);
-      }
-    }
-    world = new WorldSystem(map);
-
-    Engine.instance.registerSystem('event', events);
-    Engine.instance.registerSystem('entity', entities);
-    Engine.instance.registerSystem('world', world);
-
-    const engine = Engine.instance;
-    await entities.initialize(engine);
-    await world.initialize(engine);
-
-    player = new Entity('player', 'player');
-    player.addTag('player');
-    playerTransform = new TransformComponent(2, 2, 0);
-    player.addComponent(playerTransform);
-    entities.registerEntity(player);
+    playerPosition = { x: 2, y: 2, z: 0 };
   });
 
   afterEach(() => {
-    Engine.instance.reset();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
   /**
    * act() を実行し、内部のタイムアウトを解決する
-   * Enemy.act() 経由で Strategy を呼び出す（Strategy 状態が維持される）
+   * 同じ Strategy インスタンスを直接呼び出す（Strategy 状態が維持される）
    */
-  const runAct = async (enemy: Enemy, _context: EnemyActionContext): Promise<void> => {
+  const runAct = async (enemy: Enemy, context: EnemyActionContext): Promise<void> => {
+    const strategy = strategies.get(enemy);
+    if (!strategy) throw new Error(`Strategy is not registered for ${enemy.id}`);
+
     jest.useFakeTimers();
-    const actPromise = enemy.act();
+    const actPromise = strategy.act(enemy, context);
     jest.advanceTimersByTime(700);
     await actPromise;
     jest.useRealTimers();
@@ -124,31 +115,33 @@ describe('Enemy AI Strategy', () => {
 
   describe('StaticBehavior', () => {
     it('移動せずプレイヤーの方向を向く', async () => {
-      playerTransform.setPosition(8, 5, 0);
+      playerPosition = { x: 8, y: 5, z: 0 };
       const enemy = createEnemy({
         id: 'static-1',
         x: 5,
         y: 5,
         behavior: EnemyBehavior.STATIC,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      await runAct(enemy, createMockContext());
+      const context = createMockContext();
+      await runAct(enemy, context);
 
       expect(enemy.getDirection()).toBe('right');
       expect(transform.position).toEqual(initialPos);
+      expect(context.getPlayerPosition).toHaveBeenCalledTimes(1);
     });
 
     it('プレイヤー不在時に何もしない', async () => {
-      entities.removeEntity('player');
+      playerPosition = null;
       const enemy = createEnemy({
         id: 'static-no-player',
         x: 5,
         y: 5,
         behavior: EnemyBehavior.STATIC,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
       await runAct(enemy, createMockContext());
@@ -170,9 +163,9 @@ describe('Enemy AI Strategy', () => {
         behavior: EnemyBehavior.PATROL,
         patrolRoute,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
 
-      playerTransform.setPosition(0, 0, 0);
+      playerPosition = { x: 0, y: 0, z: 0 };
 
       await runAct(enemy, createMockContext());
 
@@ -192,9 +185,9 @@ describe('Enemy AI Strategy', () => {
         behavior: EnemyBehavior.PATROL,
         patrolRoute,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
 
-      playerTransform.setPosition(0, 0, 0);
+      playerPosition = { x: 0, y: 0, z: 0 };
 
       // 1回目: 到達判定 → patrolIndex 0→1
       await runAct(enemy, createMockContext());
@@ -225,45 +218,64 @@ describe('Enemy AI Strategy', () => {
         y: 5,
         behavior: EnemyBehavior.PATROL,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
       const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
 
-      playerTransform.setPosition(0, 0, 0);
+      playerPosition = { x: 0, y: 0, z: 0 };
       await runAct(enemy, createMockContext());
 
       expect(transform.position).not.toEqual(initialPos);
       randomSpy.mockRestore();
     });
+
+    it('プレイヤー不在時に何もしない', async () => {
+      playerPosition = null;
+      const enemy = createEnemy({
+        id: 'patrol-no-player',
+        x: 3,
+        y: 5,
+        behavior: EnemyBehavior.PATROL,
+        patrolRoute: [{ x: 5, y: 5, z: 0 }],
+      });
+      const transform = getTransform(enemy);
+      const initialPos = transform.position;
+
+      await runAct(enemy, createMockContext());
+
+      expect(transform.position).toEqual(initialPos);
+    });
   });
 
   describe('GuardBehavior', () => {
     it('感知範囲内のプレイヤーを追跡する', async () => {
-      playerTransform.setPosition(5, 2, 0);
+      playerPosition = { x: 5, y: 2, z: 0 };
       const enemy = createEnemy({
         id: 'guard-1',
         x: 5,
         y: 5,
         behavior: EnemyBehavior.GUARD,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
 
-      await runAct(enemy, createMockContext());
+      const context = createMockContext();
+      await runAct(enemy, context);
 
       expect(transform.position.y).toBe(4);
       expect(enemy.getDirection()).toBe('up');
+      expect(context.findPath).toHaveBeenCalled();
     });
 
     it('感知範囲外のプレイヤーを追跡しない', async () => {
-      playerTransform.setPosition(0, 0, 0);
+      playerPosition = { x: 0, y: 0, z: 0 };
       const enemy = createEnemy({
         id: 'guard-far',
         x: 9,
         y: 9,
         behavior: EnemyBehavior.GUARD,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
       await runAct(enemy, createMockContext());
@@ -275,14 +287,14 @@ describe('Enemy AI Strategy', () => {
 
   describe('AggressiveBehavior', () => {
     it('常にプレイヤーを追跡する', async () => {
-      playerTransform.setPosition(0, 5, 0);
+      playerPosition = { x: 0, y: 5, z: 0 };
       const enemy = createEnemy({
         id: 'aggressive-1',
         x: 9,
         y: 5,
         behavior: EnemyBehavior.AGGRESSIVE,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
 
       await runAct(enemy, createMockContext());
 
@@ -291,37 +303,32 @@ describe('Enemy AI Strategy', () => {
     });
 
     it('プレイヤー隣接時に攻撃を要求する', async () => {
-      playerTransform.setPosition(5, 4, 0);
+      playerPosition = { x: 5, y: 4, z: 0 };
       const enemy = createEnemy({
         id: 'aggressive-adjacent',
         x: 5,
         y: 5,
         behavior: EnemyBehavior.AGGRESSIVE,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      const attackHandler = jest.fn();
-      events.on('enemy_attack_requested', attackHandler);
-
-      await runAct(enemy, createMockContext());
+      const context = createMockContext();
+      await runAct(enemy, context);
 
       expect(transform.position).toEqual(initialPos);
-      expect(attackHandler).toHaveBeenCalledWith({
-        enemyId: 'aggressive-adjacent',
-        targetId: 'player',
-      });
+      expect(context.requestAttack).toHaveBeenCalledWith('aggressive-adjacent', 'player');
     });
 
     it('プレイヤー不在時に何もしない', async () => {
-      entities.removeEntity('player');
+      playerPosition = null;
       const enemy = createEnemy({
         id: 'aggressive-no-player',
         x: 5,
         y: 5,
         behavior: EnemyBehavior.AGGRESSIVE,
       });
-      const transform = enemy.getComponent<TransformComponent>('transform')!;
+      const transform = getTransform(enemy);
       const initialPos = transform.position;
 
       await runAct(enemy, createMockContext());
