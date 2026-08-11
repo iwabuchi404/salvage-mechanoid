@@ -39,23 +39,31 @@ describe('Entity Factory', () => {
   let renderer: RendererSystem;
   let assetsLoadSpy: jest.SpyInstance;
   let charactersLayer: PIXI.Container;
+  let objectsLayer: PIXI.Container;
 
   beforeEach(async () => {
     jest.spyOn(console, 'log').mockImplementation();
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
 
-    assetsLoadSpy = jest.spyOn(PIXI.Assets, 'load').mockResolvedValue(PIXI.Texture.EMPTY as any);
+    assetsLoadSpy = jest
+      .spyOn(PIXI.Assets, 'load')
+      .mockResolvedValue(PIXI.Texture.EMPTY as unknown as Record<string, unknown>);
 
     Engine.instance.reset();
     events = new EventSystem();
     entities = new EntitySystem();
     charactersLayer = new PIXI.Container();
+    objectsLayer = new PIXI.Container();
 
     const coordSystem = new CoordinateSystem(160, 120);
     renderer = {
       getCoordinateSystem: () => coordSystem,
-      getLayer: (name: string) => (name === LayerName.CHARACTERS ? charactersLayer : undefined),
+      getLayer: (name: string) => {
+        if (name === LayerName.CHARACTERS) return charactersLayer;
+        if (name === LayerName.OBJECTS) return objectsLayer;
+        return undefined;
+      },
       renderEntity: jest.fn(),
       removeSprite: jest.fn(),
     } as unknown as RendererSystem;
@@ -117,6 +125,7 @@ describe('Entity Factory', () => {
 
     it('初期化失敗時に生成済み Enemy を破棄して例外を再送する', async () => {
       // renderEntity を失敗させることで Presentation 初期化を失敗させる
+      const destroySpy = jest.spyOn(Enemy.prototype, 'destroy');
       const renderEntitySpy = jest.spyOn(renderer, 'renderEntity');
       renderEntitySpy.mockImplementationOnce(() => {
         throw new Error('render failed');
@@ -124,8 +133,11 @@ describe('Entity Factory', () => {
 
       await expect(EnemyFactory.create(createPlacedEnemy())).rejects.toThrow('render failed');
 
-      // 例外後でも Presentation のリスナーが残らない
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+      expect(renderer.removeSprite).toHaveBeenCalled();
       expect(events.getListenerCount('direction_changed')).toBe(0);
+      expect(events.getListenerCount('entity_visibility_changed')).toBe(0);
+      expect(entities.getEntity('factory-enemy-1')).toBeUndefined();
 
       renderEntitySpy.mockRestore();
     });
@@ -154,7 +166,7 @@ describe('Entity Factory', () => {
       // toInventoryItem で InventoryItemType が反映されていることを確認
       const invItem = item.toInventoryItem();
       expect(invItem).not.toBeNull();
-      expect(invItem!.type).toBe('health_pack');
+      expect(invItem?.type).toBe('health_pack');
     });
 
     it('ItemType.ENERGY → InventoryItemType.ENERGY_CELL を自動設定する', async () => {
@@ -162,7 +174,7 @@ describe('Entity Factory', () => {
 
       const invItem = item.toInventoryItem();
       expect(invItem).not.toBeNull();
-      expect(invItem!.type).toBe('energy_cell');
+      expect(invItem?.type).toBe('energy_cell');
     });
 
     it('ItemType.KEY → InventoryItemType.KEY_ITEM を自動設定する', async () => {
@@ -170,7 +182,7 @@ describe('Entity Factory', () => {
 
       const invItem = item.toInventoryItem();
       expect(invItem).not.toBeNull();
-      expect(invItem!.type).toBe('key_item');
+      expect(invItem?.type).toBe('key_item');
     });
 
     it('ItemType.CONSUMABLE は InventoryItemType を設定しない', async () => {
@@ -178,6 +190,22 @@ describe('Entity Factory', () => {
 
       // CONSUMABLE は InventoryItemType に該当なし → toInventoryItem は null
       expect(item.toInventoryItem()).toBeNull();
+    });
+
+    it('初期化失敗時に Item の Graphics とイベント購読を破棄して例外を再送する', async () => {
+      const originalInitialize = Item.prototype.initialize;
+      jest.spyOn(Item.prototype, 'initialize').mockImplementation(async function (this: Item) {
+        await originalInitialize.call(this);
+        throw new Error('item init failed');
+      });
+      const destroySpy = jest.spyOn(Item.prototype, 'destroy');
+
+      await expect(ItemFactory.create(createPlacedItem())).rejects.toThrow('item init failed');
+
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+      expect(objectsLayer.children).toHaveLength(0);
+      expect(events.getListenerCount('entity_visibility_changed')).toBe(0);
+      expect(entities.getEntity('factory-item-1')).toBeUndefined();
     });
   });
 
@@ -214,6 +242,26 @@ describe('Entity Factory', () => {
 
       const health = obstacle.getComponent('health');
       expect(health).toBeUndefined();
+    });
+
+    it('初期化失敗時に Obstacle の Sprite とイベント購読を破棄して例外を再送する', async () => {
+      const originalInitialize = Obstacle.prototype.initialize;
+      jest
+        .spyOn(Obstacle.prototype, 'initialize')
+        .mockImplementation(async function (this: Obstacle) {
+          await originalInitialize.call(this);
+          throw new Error('obstacle init failed');
+        });
+      const destroySpy = jest.spyOn(Obstacle.prototype, 'destroy');
+
+      await expect(ObstacleFactory.create(createPlacedObstacle())).rejects.toThrow(
+        'obstacle init failed'
+      );
+
+      expect(destroySpy).toHaveBeenCalledTimes(1);
+      expect(renderer.removeSprite).toHaveBeenCalled();
+      expect(events.getListenerCount('entity_visibility_changed')).toBe(0);
+      expect(entities.getEntity('factory-obstacle-1')).toBeUndefined();
     });
   });
 
