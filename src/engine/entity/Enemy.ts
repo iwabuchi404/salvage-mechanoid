@@ -8,8 +8,10 @@ import { Engine } from '../Engine';
 import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from './EntitySystem';
 import { WorldSystem } from '../world/WorldSystem';
-import { RendererSystem } from '../graphics/RendererSystem';
-import * as PIXI from 'pixi.js';
+import {
+  getEnemyVisualProfile,
+  getEnemyTexturePath,
+} from '../presentation/enemy/EnemyVisualProfile';
 
 /**
  * 敵エンティティクラス
@@ -25,21 +27,8 @@ export class Enemy extends Entity {
   private patrolDirection = 1;
   private waitTime = 0;
 
-  // TURRETタイプ用のグラフィックス
-  private turretGraphics: PIXI.Graphics | null = null;
-  private turretInFOV = false;
-
   // イベントリスナーの参照（破棄時に解除するため保持）
   private directionChangedListener: ((data: any) => void) | null = null;
-  private visibilityChangedListener: ((data: any) => void) | null = null;
-
-  // 方向別テクスチャパス（敵タイプごとに異なる）
-  private texturePaths: Record<Direction, string> = {
-    up: './robo02_r.png',
-    down: './robo02_l.png',
-    left: './robo02_l.png',
-    right: './robo02_r.png',
-  };
 
   /**
    * コンストラクタ
@@ -86,12 +75,15 @@ export class Enemy extends Entity {
    * 初期化
    */
   async initialize(): Promise<void> {
-    // 敵タイプに応じたテクスチャパスを設定
-    this.setupTexturePathsForType();
+    // EnemyVisualProfile から表示設定を取得
+    const profile = getEnemyVisualProfile(this.enemyType);
 
     // スプライトコンポーネントを追加
-    const texturePath = this.getTexturePath();
-    const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
+    const spriteComponent = new SpriteComponent(
+      profile.defaultTexturePath,
+      profile.layer,
+      profile.anchor
+    );
     this.addComponent(spriteComponent);
 
     // 親クラスの initialize() を呼び出してコンポーネントを初期化
@@ -99,80 +91,6 @@ export class Enemy extends Entity {
 
     // イベントリスナーを設定
     this.setupEventListeners();
-  }
-
-  /**
-   * TURRETタイプ用のグラフィックスを作成
-   */
-  private createTurretGraphics(): void {
-    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-    if (!rendererSystem) return;
-
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (!transform) return;
-
-    // 赤い丸を描画（アイテムより大きい）
-    const graphics = new PIXI.Graphics();
-    graphics.circle(0, 0, 16); // 半径16（アイテムは8）
-    graphics.fill(0xff0000); // 赤色
-    graphics.stroke({ width: 3, color: 0x880000 }); // 暗い赤の枠線
-
-    // 座標変換（ワールド座標で配置、カメラオフセットはworldContainerが適用）
-    const coordSystem = rendererSystem.getCoordinateSystem();
-    const pos = transform.position;
-    const screenPos = coordSystem.isometricToScreen(pos.x, pos.y, pos.z);
-
-    // ワールド座標で配置（Y座標は少し上にオフセット）
-    graphics.x = screenPos.x;
-    graphics.y = screenPos.y - 16;
-
-    // 深度ソート用のzIndex（SpriteComponentと同じ計算式）
-    const baseZIndex = (pos.y + pos.x) * 1000;
-    graphics.zIndex = baseZIndex + pos.z * 100;
-
-    // グラフィックスを保存
-    this.turretGraphics = graphics;
-
-    // characters レイヤーに追加
-    const layer = rendererSystem.getLayer('characters');
-    if (layer) {
-      layer.addChild(graphics);
-    }
-  }
-
-  /**
-   * 敵タイプに応じたテクスチャパスを設定
-   */
-  private setupTexturePathsForType(): void {
-    switch (this.enemyType) {
-      case EnemyType.SCOUT:
-        this.texturePaths = {
-          up: './robo04_r.png',
-          down: './robo04_l.png',
-          left: './robo04_l.png',
-          right: './robo04_r.png',
-        };
-        break;
-      case EnemyType.SOLDIER:
-        this.texturePaths = {
-          up: './robo03_r.png',
-          down: './robo03_l.png',
-          left: './robo03_l.png',
-          right: './robo03_r.png',
-        };
-        break;
-      case EnemyType.HEAVY:
-        this.texturePaths = {
-          up: './robo02_r.png',
-          down: './robo02_l.png',
-          left: './robo02_l.png',
-          right: './robo02_r.png',
-        };
-        break;
-      default:
-        // デフォルトは robo02
-        break;
-    }
   }
 
   /**
@@ -189,15 +107,6 @@ export class Enemy extends Entity {
       }
     };
     eventSystem.on('direction_changed', this.directionChangedListener);
-
-    // FOV変更イベント - TURRETグラフィックスの可視性を制御
-    this.visibilityChangedListener = (data: { entityId: string; inFOV: boolean }) => {
-      if (data.entityId === this.id) {
-        this.turretInFOV = data.inFOV;
-        this.updateTurretGraphicsVisibility();
-      }
-    };
-    eventSystem.on('entity_visibility_changed', this.visibilityChangedListener);
   }
 
   /**
@@ -208,10 +117,8 @@ export class Enemy extends Entity {
     const sprite = this.getComponent<SpriteComponent>('sprite');
     if (!sprite) return;
 
-    const texturePath = this.texturePaths[direction];
-    if (texturePath) {
-      sprite.changeTexture(texturePath);
-    }
+    const texturePath = getEnemyTexturePath(this.enemyType, direction);
+    sprite.changeTexture(texturePath);
   }
 
   /**
@@ -277,23 +184,6 @@ export class Enemy extends Entity {
           moveSpeed: 4,
           attackPower: 10,
         };
-    }
-  }
-
-  /**
-   * 敵タイプに応じたテクスチャパスを取得
-   */
-  private getTexturePath(): string {
-    // 敵タイプごとのテクスチャマッピング
-    switch (this.enemyType) {
-      case EnemyType.SCOUT:
-        return './robo04_l.png';
-      case EnemyType.SOLDIER:
-        return './robo03_l.png';
-      case EnemyType.HEAVY:
-        return './robo02_l.png';
-      default:
-        return './robo02_l.png';
     }
   }
 
@@ -428,40 +318,6 @@ export class Enemy extends Entity {
     if (health && health.currentHp <= 0) {
       this.active = false;
     }
-
-    // TURRETグラフィックスの位置・可視性を更新
-    this.updateTurretGraphicsPosition();
-    this.updateTurretGraphicsVisibility();
-  }
-
-  /**
-   * TURRETグラフィックスの位置をTransformComponentに同期
-   */
-  private updateTurretGraphicsPosition(): void {
-    if (!this.turretGraphics) return;
-
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (!transform) return;
-
-    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-    if (!rendererSystem) return;
-
-    const pos = transform.position;
-    const screenPos = rendererSystem.getCoordinateSystem().isometricToScreen(pos.x, pos.y, pos.z);
-    this.turretGraphics.x = screenPos.x;
-    this.turretGraphics.y = screenPos.y - 16;
-
-    const baseZIndex = (pos.y + pos.x) * 1000;
-    this.turretGraphics.zIndex = baseZIndex + pos.z * 100;
-  }
-
-  /**
-   * TURRETグラフィックスの可視性を更新（FOV + アクティブ状態）
-   */
-  private updateTurretGraphicsVisibility(): void {
-    if (this.turretGraphics) {
-      this.turretGraphics.visible = this.active && this.turretInFOV;
-    }
   }
 
   /**
@@ -475,17 +331,6 @@ export class Enemy extends Entity {
         eventSystem.off('direction_changed', this.directionChangedListener);
         this.directionChangedListener = null;
       }
-      if (this.visibilityChangedListener) {
-        eventSystem.off('entity_visibility_changed', this.visibilityChangedListener);
-        this.visibilityChangedListener = null;
-      }
-    }
-
-    // TURRETグラフィックスを削除
-    if (this.turretGraphics && this.turretGraphics.parent) {
-      this.turretGraphics.parent.removeChild(this.turretGraphics);
-      this.turretGraphics.destroy();
-      this.turretGraphics = null;
     }
 
     super.destroy();

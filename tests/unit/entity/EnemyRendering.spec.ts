@@ -40,9 +40,7 @@ describe('Enemy rendering boundary', () => {
     jest.spyOn(console, 'error').mockImplementation();
 
     // PIXI.Assets.load をモック（実際のアセット読み込みを回避）
-    assetsLoadSpy = jest
-      .spyOn(PIXI.Assets, 'load')
-      .mockResolvedValue(PIXI.Texture.EMPTY as any);
+    assetsLoadSpy = jest.spyOn(PIXI.Assets, 'load').mockResolvedValue(PIXI.Texture.EMPTY as any);
 
     // Engine シングルトンをリセットしてモックシステムを登録
     Engine.instance.reset();
@@ -237,13 +235,13 @@ describe('Enemy rendering boundary', () => {
 
     const enemy = await createAndInitEnemy({ type: EnemyType.SOLDIER });
 
-    // Enemy 自身 + SpriteComponent がそれぞれ entity_visibility_changed リスナーを追加する
+    // SpriteComponent が entity_visibility_changed リスナーを追加する（Enemy 自身は追加しない）
     const listenerCountAfterInit = events.getListenerCount('entity_visibility_changed');
-    expect(listenerCountAfterInit).toBe(listenerCountBefore + 2);
+    expect(listenerCountAfterInit).toBe(listenerCountBefore + 1);
 
     enemy.destroy();
 
-    // 破棄後に Enemy 自身 + SpriteComponent の両方のリスナーが解除されている（-2）
+    // 破棄後に SpriteComponent のリスナーが解除されている（-1）
     const listenerCountAfterDestroy = events.getListenerCount('entity_visibility_changed');
     expect(listenerCountAfterDestroy).toBe(listenerCountBefore);
   });
