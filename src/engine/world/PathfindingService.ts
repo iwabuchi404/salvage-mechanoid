@@ -6,7 +6,12 @@ import { CoordinateSystem } from '../graphics/CoordinateSystem';
  * PathfindingService は WorldSystem の衝突判定へ依存せず、
  * この関数経由でタイル+エンティティの通行可能性を受け取る。
  */
-export type WalkableChecker = (x: number, y: number, z: number, excludeEntityId?: string) => boolean;
+export type WalkableChecker = (
+  x: number,
+  y: number,
+  z: number,
+  excludeEntityId?: string
+) => boolean;
 
 /**
  * PathfindingService - WorldSystem 内部で A* 経路探索を担当するモジュール。

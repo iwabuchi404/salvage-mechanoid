@@ -49,7 +49,11 @@ export type DoorwayErrorKind =
  * Room 境界上の座標と方向から Direction を推定する。
  * 複数の境界に同時に接する角の場合は、最初に一致した方向を返す。
  */
-export function detectDirection(room: Pick<Room, 'x' | 'y' | 'width' | 'height'>, x: number, y: number): Direction | null {
+export function detectDirection(
+  room: Pick<Room, 'x' | 'y' | 'width' | 'height'>,
+  x: number,
+  y: number
+): Direction | null {
   const onTop = y === room.y;
   const onBottom = y === room.y + room.height - 1;
   const onLeft = x === room.x;
@@ -122,7 +126,10 @@ export function corridorToDoorways(
 /**
  * 複数の Corridor から Doorway の配列へ一括変換する。
  */
-export function corridorsToDoorways(corridors: readonly Corridor[], rooms: readonly Room[]): Doorway[] {
+export function corridorsToDoorways(
+  corridors: readonly Corridor[],
+  rooms: readonly Room[]
+): Doorway[] {
   const result: Doorway[] = [];
   for (let i = 0; i < corridors.length; i++) {
     result.push(...corridorToDoorways(corridors[i], rooms, i));
@@ -133,7 +140,11 @@ export function corridorsToDoorways(corridors: readonly Corridor[], rooms: reado
 /**
  * Doorway が Room の境界上にあるかを判定する。
  */
-export function isOnRoomBoundary(room: Pick<Room, 'x' | 'y' | 'width' | 'height'>, x: number, y: number): boolean {
+export function isOnRoomBoundary(
+  room: Pick<Room, 'x' | 'y' | 'width' | 'height'>,
+  x: number,
+  y: number
+): boolean {
   return detectDirection(room, x, y) !== null;
 }
 
@@ -212,7 +223,10 @@ export function validateDoorways(
  * @param doorways Doorway の配列
  * @returns 孤立していない場合は true
  */
-export function areAllRoomsConnected(rooms: readonly Room[], doorways: readonly Doorway[]): boolean {
+export function areAllRoomsConnected(
+  rooms: readonly Room[],
+  doorways: readonly Doorway[]
+): boolean {
   if (rooms.length === 0) return true;
 
   const connectedRoomIds = new Set<RoomId>();
@@ -228,7 +242,10 @@ export function areAllRoomsConnected(rooms: readonly Room[], doorways: readonly 
  * Room 接続グラフを構築する。
  * RoomId -> 接続先 RoomId の配列。
  */
-export function buildRoomGraph(rooms: readonly Room[], doorways: readonly Doorway[]): Map<RoomId, RoomId[]> {
+export function buildRoomGraph(
+  rooms: readonly Room[],
+  doorways: readonly Doorway[]
+): Map<RoomId, RoomId[]> {
   const graph = new Map<RoomId, RoomId[]>();
   for (const room of rooms) {
     graph.set(roomToId(room), []);
@@ -246,7 +263,10 @@ export function buildRoomGraph(rooms: readonly Room[], doorways: readonly Doorwa
  * Room 接続グラフが全 Room 到達可能（連結）かを判定する。
  * BFS で先頭 Room から全 Room へ到達できるかを確認する。
  */
-export function isRoomGraphConnected(rooms: readonly Room[], doorways: readonly Doorway[]): boolean {
+export function isRoomGraphConnected(
+  rooms: readonly Room[],
+  doorways: readonly Doorway[]
+): boolean {
   if (rooms.length === 0) return true;
 
   const graph = buildRoomGraph(rooms, doorways);

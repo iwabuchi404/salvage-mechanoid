@@ -112,7 +112,9 @@ export class WorldSystem implements System {
     if (!entity) return;
 
     // 現在の位置のタイルを取得
-    const tile = this.floorStore.getCurrentTileMap().getTile(data.position.x, data.position.y, data.position.z);
+    const tile = this.floorStore
+      .getCurrentTileMap()
+      .getTile(data.position.x, data.position.y, data.position.z);
     if (!tile) return;
 
     // タイルの効果を適用
@@ -529,9 +531,7 @@ export class WorldSystem implements System {
     rooms: Room[] = [],
     corridors: Corridor[] = []
   ): void {
-    this.registerFloorSnapshot(
-      createFloorSnapshot(floorNumber, tileMap, { rooms, corridors })
-    );
+    this.registerFloorSnapshot(createFloorSnapshot(floorNumber, tileMap, { rooms, corridors }));
   }
 
   /**
@@ -547,7 +547,11 @@ export class WorldSystem implements System {
     const { floor, tileMap, rooms, corridors, tacticalElements, doorways } = snapshot;
     this.floorStore.register(floor, tileMap, rooms, corridors, tacticalElements, doorways);
     console.log(
-      `WorldSystem: registered floor ${floor} (${rooms.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements, ${this.floorStore.getDoorwaysByFloor(floor).length} doorways)`
+      `WorldSystem: registered floor ${floor} (${rooms.length} rooms, ${
+        corridors.length
+      } corridors, ${tacticalElements.length} tactical elements, ${
+        this.floorStore.getDoorwaysByFloor(floor).length
+      } doorways)`
     );
   }
 
