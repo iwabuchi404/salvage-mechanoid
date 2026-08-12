@@ -9,17 +9,19 @@ import { Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/Transform';
 import { CoordinateSystem } from '../graphics/CoordinateSystem';
 import { FloorSnapshot, createFloorSnapshot } from './FloorSnapshot';
-import { RoomId, roomToId } from './RoomId';
-import { Doorway, corridorsToDoorways } from './Doorway';
+import { RoomId } from './RoomId';
+import { Doorway } from './Doorway';
+import { FloorStore } from './FloorStore';
+import { PathfindingService } from './PathfindingService';
 
 /**
  * WorldSystem - ゲーム世界と地形を管理するシステム
  * タイルマップ、コリジョン検出、環境効果などを扱う
+ *
+ * フロアデータの保持は FloorStore、経路探索は PathfindingService へ委譲する。
+ * WorldSystem 自体はイベント処理、タイル効果、衝突判定、公開 API の調整を担当する。
  */
 export class WorldSystem implements System {
-  // タイルマップ
-  private tileMap: TileMap;
-
   // エンジンへの参照
   private engine: Engine | null = null;
 
@@ -32,32 +34,25 @@ export class WorldSystem implements System {
   // 座標変換システム
   private coordinateSystem: CoordinateSystem;
 
-  // 現在のフロア番号
-  private currentFloor = 1;
+  // フロアデータの保持（内部モジュール）
+  private floorStore: FloorStore;
 
-  // フロアごとのマップを保存（複数フロア対応）
-  private floorMaps: Map<number, TileMap> = new Map();
-
-  // フロアごとの部屋情報を保存
-  private floorRooms: Map<number, Room[]> = new Map();
-
-  // フロアごとの通路情報を保存
-  private floorCorridors: Map<number, Corridor[]> = new Map();
-
-  // フロアごとの戦術的要素を保存
-  private floorTacticalElements: Map<number, TacticalElement[]> = new Map();
-
-  // フロアごとの Doorway（Room 間接続）を保存
-  private floorDoorways: Map<number, Doorway[]> = new Map();
+  // 経路探索（内部モジュール）
+  private pathfinding: PathfindingService;
 
   /**
    * コンストラクタ
    * @param tileMap 初期タイルマップ
    */
   constructor(tileMap: TileMap) {
-    this.tileMap = tileMap;
     this.coordinateSystem = new CoordinateSystem(160, 120); // 仮のタイルサイズ
-    this.floorMaps.set(this.currentFloor, tileMap);
+    this.floorStore = new FloorStore(tileMap);
+    // 初期フロア(1)として空の Room/Corridor/TacticalElement で登録
+    this.floorStore.register(1, tileMap, [], [], []);
+    // 経路探索サービスは isWalkable を注入して構築
+    this.pathfinding = new PathfindingService(this.coordinateSystem, (x, y, z, excludeEntityId) =>
+      this.isWalkable(x, y, z, excludeEntityId)
+    );
 
     console.log('WorldSystem created');
   }
@@ -117,7 +112,7 @@ export class WorldSystem implements System {
     if (!entity) return;
 
     // 現在の位置のタイルを取得
-    const tile = this.tileMap.getTile(data.position.x, data.position.y, data.position.z);
+    const tile = this.floorStore.getCurrentTileMap().getTile(data.position.x, data.position.y, data.position.z);
     if (!tile) return;
 
     // タイルの効果を適用
@@ -145,7 +140,7 @@ export class WorldSystem implements System {
     if (!entity || !entity.hasTag('player')) return;
 
     // 目標フロアを決定
-    const targetFloor = data.targetFloor || this.currentFloor + 1;
+    const targetFloor = data.targetFloor || this.floorStore.getCurrentFloor() + 1;
 
     // 指定されたフロアに移動
     this.changeFloor(targetFloor);
@@ -270,7 +265,7 @@ export class WorldSystem implements System {
     if (entity.hasTag('player') && this.eventSystem) {
       this.eventSystem.emit('portal_discovered', {
         entityId: entity.id,
-        currentFloor: this.currentFloor,
+        currentFloor: this.floorStore.getCurrentFloor(),
       });
     }
   }
@@ -285,7 +280,7 @@ export class WorldSystem implements System {
    */
   isWalkable(x: number, y: number, z = 0, excludeEntityId?: string): boolean {
     // タイルの通行可能性をチェック
-    const tileWalkable = this.tileMap.isWalkable(x, y, z);
+    const tileWalkable = this.floorStore.getCurrentTileMap().isWalkable(x, y, z);
     if (!tileWalkable) return false;
 
     // エンティティとの衝突をチェック
@@ -386,14 +381,13 @@ export class WorldSystem implements System {
    */
   async changeFloor(floorNumber: number): Promise<void> {
     // 既存のフロアマップがあれば使用、なければ新規生成
-    if (!this.floorMaps.has(floorNumber)) {
+    if (!this.floorStore.hasFloor(floorNumber)) {
       // 新しいフロアのマップを生成
       await this.generateNewFloor(floorNumber);
     }
 
     // フロアを切り替え
-    this.currentFloor = floorNumber;
-    this.tileMap = this.floorMaps.get(floorNumber)!;
+    this.floorStore.setCurrentFloor(floorNumber);
 
     // フロア変更イベントを発行
     if (this.eventSystem) {
@@ -439,9 +433,6 @@ export class WorldSystem implements System {
     const newMap = new TileMap(50, 50);
     newMap.importMapData(tacticalData.map);
 
-    // フロアマップに保存
-    this.floorMaps.set(floorNumber, newMap);
-
     // 部屋・通路・戦術的要素を FloorSnapshot として同一世代で保存
     this.registerFloorSnapshot(
       createFloorSnapshot(floorNumber, newMap, {
@@ -463,7 +454,7 @@ export class WorldSystem implements System {
    */
   getRandomWalkableTile(): Vector3 | null {
     const maxAttempts = 100;
-    const mapSize = this.tileMap.getSize();
+    const mapSize = this.floorStore.getCurrentTileMap().getSize();
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const x = Math.floor(Math.random() * mapSize.width);
@@ -485,7 +476,7 @@ export class WorldSystem implements System {
    * @returns 位置の配列
    */
   getTilePositionsByType(tileType: TileType): Vector3[] {
-    return this.tileMap.findTilesByType(tileType);
+    return this.floorStore.getCurrentTileMap().findTilesByType(tileType);
   }
 
   /**
@@ -497,7 +488,7 @@ export class WorldSystem implements System {
    * @returns 範囲内のタイルの配列
    */
   getTilesInRange(x: number, y: number, z = 0, radius = 1): Tile[] {
-    return this.tileMap.getTilesInRange(x, y, z, radius);
+    return this.floorStore.getCurrentTileMap().getTilesInRange(x, y, z, radius);
   }
 
   /**
@@ -505,7 +496,7 @@ export class WorldSystem implements System {
    * @returns フロア番号
    */
   getCurrentFloor(): number {
-    return this.currentFloor;
+    return this.floorStore.getCurrentFloor();
   }
 
   /**
@@ -514,12 +505,10 @@ export class WorldSystem implements System {
    * @param floorNumber 設定するフロア番号
    */
   setCurrentFloor(floorNumber: number): void {
-    if (!this.floorMaps.has(floorNumber)) {
+    if (!this.floorStore.setCurrentFloor(floorNumber)) {
       console.warn(`Floor ${floorNumber} not found in WorldSystem, cannot switch`);
       return;
     }
-    this.currentFloor = floorNumber;
-    this.tileMap = this.floorMaps.get(floorNumber)!;
     console.log(`WorldSystem: switched to floor ${floorNumber}`);
   }
 
@@ -556,22 +545,9 @@ export class WorldSystem implements System {
    */
   registerFloorSnapshot(snapshot: FloorSnapshot): void {
     const { floor, tileMap, rooms, corridors, tacticalElements, doorways } = snapshot;
-    // Room へ id が未設定の場合は RoomId を付与する
-    const roomsWithId = rooms.map((room) =>
-      room.id ? room : { ...room, id: roomToId(room) as string }
-    );
-    // Doorway が未指定の場合は corridors から導出する
-    const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, roomsWithId);
-    this.floorMaps.set(floor, tileMap);
-    this.floorRooms.set(floor, roomsWithId);
-    this.floorCorridors.set(floor, [...corridors]);
-    this.floorTacticalElements.set(floor, [...tacticalElements]);
-    this.floorDoorways.set(floor, resolvedDoorways);
-    // 現在のフロアを切り替え
-    this.currentFloor = floor;
-    this.tileMap = tileMap;
+    this.floorStore.register(floor, tileMap, rooms, corridors, tacticalElements, doorways);
     console.log(
-      `WorldSystem: registered floor ${floor} (${roomsWithId.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements, ${resolvedDoorways.length} doorways)`
+      `WorldSystem: registered floor ${floor} (${rooms.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements, ${this.floorStore.getDoorwaysByFloor(floor).length} doorways)`
     );
   }
 
@@ -580,7 +556,7 @@ export class WorldSystem implements System {
    * @returns タイルマップ
    */
   getTileMap(): TileMap {
-    return this.tileMap;
+    return this.floorStore.getCurrentTileMap();
   }
 
   /**
@@ -588,8 +564,7 @@ export class WorldSystem implements System {
    * @returns 部屋の配列のコピー（未設定の場合は空配列）
    */
   getRooms(): Room[] {
-    const rooms = this.floorRooms.get(this.currentFloor);
-    return rooms ? [...rooms] : [];
+    return this.floorStore.getRooms();
   }
 
   /**
@@ -598,9 +573,7 @@ export class WorldSystem implements System {
    * @returns Room（未登録の場合は undefined）
    */
   getRoomById(roomId: RoomId): Room | undefined {
-    const rooms = this.floorRooms.get(this.currentFloor);
-    if (!rooms) return undefined;
-    return rooms.find((room) => room.id === roomId);
+    return this.floorStore.getRoomById(roomId);
   }
 
   /**
@@ -609,9 +582,7 @@ export class WorldSystem implements System {
    * @param roomId RoomId
    */
   getRoomByIdByFloor(floorNumber: number, roomId: RoomId): Room | undefined {
-    const rooms = this.floorRooms.get(floorNumber);
-    if (!rooms) return undefined;
-    return rooms.find((room) => room.id === roomId);
+    return this.floorStore.getRoomByIdByFloor(floorNumber, roomId);
   }
 
   /**
@@ -619,8 +590,7 @@ export class WorldSystem implements System {
    * @returns 通路の配列のコピー（未設定の場合は空配列）
    */
   getCorridors(): Corridor[] {
-    const corridors = this.floorCorridors.get(this.currentFloor);
-    return corridors ? [...corridors] : [];
+    return this.floorStore.getCorridors();
   }
 
   /**
@@ -628,8 +598,7 @@ export class WorldSystem implements System {
    * @returns 戦術的要素の配列のコピー（未設定の場合は空配列）
    */
   getTacticalElements(): TacticalElement[] {
-    const elements = this.floorTacticalElements.get(this.currentFloor);
-    return elements ? [...elements] : [];
+    return this.floorStore.getTacticalElements();
   }
 
   /**
@@ -637,8 +606,7 @@ export class WorldSystem implements System {
    * @returns Doorway の配列のコピー（未設定の場合は空配列）
    */
   getDoorways(): Doorway[] {
-    const doorways = this.floorDoorways.get(this.currentFloor);
-    return doorways ? [...doorways] : [];
+    return this.floorStore.getDoorways();
   }
 
   /**
@@ -647,7 +615,7 @@ export class WorldSystem implements System {
    * @param rooms 部屋の配列
    */
   setRooms(floorNumber: number, rooms: Room[]): void {
-    this.floorRooms.set(floorNumber, [...rooms]);
+    this.floorStore.setRooms(floorNumber, rooms);
   }
 
   /**
@@ -656,7 +624,7 @@ export class WorldSystem implements System {
    * @param corridors 通路の配列
    */
   setCorridors(floorNumber: number, corridors: Corridor[]): void {
-    this.floorCorridors.set(floorNumber, [...corridors]);
+    this.floorStore.setCorridors(floorNumber, corridors);
   }
 
   /**
@@ -665,7 +633,7 @@ export class WorldSystem implements System {
    * @param elements 戦術的要素の配列
    */
   setTacticalElements(floorNumber: number, elements: TacticalElement[]): void {
-    this.floorTacticalElements.set(floorNumber, [...elements]);
+    this.floorStore.setTacticalElements(floorNumber, elements);
   }
 
   /**
@@ -674,8 +642,7 @@ export class WorldSystem implements System {
    * @returns 部屋の配列のコピー（未設定の場合は空配列）
    */
   getRoomsByFloor(floorNumber: number): Room[] {
-    const rooms = this.floorRooms.get(floorNumber);
-    return rooms ? [...rooms] : [];
+    return this.floorStore.getRoomsByFloor(floorNumber);
   }
 
   /**
@@ -684,18 +651,16 @@ export class WorldSystem implements System {
    * @returns 通路の配列のコピー（未設定の場合は空配列）
    */
   getCorridorsByFloor(floorNumber: number): Corridor[] {
-    const corridors = this.floorCorridors.get(floorNumber);
-    return corridors ? [...corridors] : [];
+    return this.floorStore.getCorridorsByFloor(floorNumber);
   }
 
   /**
-   * 指定フロアの戦術的要素を取得
+   * 指定フロア的戦術的要素を取得
    * @param floorNumber フロア番号
    * @returns 戦術的要素の配列のコピー（未設定の場合は空配列）
    */
   getTacticalElementsByFloor(floorNumber: number): TacticalElement[] {
-    const elements = this.floorTacticalElements.get(floorNumber);
-    return elements ? [...elements] : [];
+    return this.floorStore.getTacticalElementsByFloor(floorNumber);
   }
 
   /**
@@ -704,8 +669,7 @@ export class WorldSystem implements System {
    * @returns Doorway の配列のコピー（未設定の場合は空配列）
    */
   getDoorwaysByFloor(floorNumber: number): Doorway[] {
-    const doorways = this.floorDoorways.get(floorNumber);
-    return doorways ? [...doorways] : [];
+    return this.floorStore.getDoorwaysByFloor(floorNumber);
   }
 
   /**
@@ -715,15 +679,15 @@ export class WorldSystem implements System {
    * @param floorNumber フロア番号
    */
   getFloorSnapshot(floorNumber: number): FloorSnapshot | undefined {
-    const tileMap = this.floorMaps.get(floorNumber);
+    const tileMap = this.floorStore.getTileMapByFloor(floorNumber);
     if (!tileMap) return undefined;
     return {
       floor: floorNumber,
       tileMap,
-      rooms: this.getRoomsByFloor(floorNumber),
-      corridors: this.getCorridorsByFloor(floorNumber),
-      tacticalElements: this.getTacticalElementsByFloor(floorNumber),
-      doorways: this.getDoorwaysByFloor(floorNumber),
+      rooms: this.floorStore.getRoomsByFloor(floorNumber),
+      corridors: this.floorStore.getCorridorsByFloor(floorNumber),
+      tacticalElements: this.floorStore.getTacticalElementsByFloor(floorNumber),
+      doorways: this.floorStore.getDoorwaysByFloor(floorNumber),
     };
   }
 
@@ -735,7 +699,7 @@ export class WorldSystem implements System {
    * @returns タイル、または undefined
    */
   getTile(x: number, y: number, z = 0): Tile | undefined {
-    return this.tileMap.getTile(x, y, z);
+    return this.floorStore.getCurrentTileMap().getTile(x, y, z);
   }
 
   /**
@@ -748,154 +712,7 @@ export class WorldSystem implements System {
    * @returns 経路の位置配列、見つからない場合は空配列
    */
   findPath(start: Vector3, goal: Vector3, maxDistance = 50, excludeEntityId?: string): Vector3[] {
-    // 開始位置と目標位置が同じ場合は開始位置のみを返す
-    if (start.x === goal.x && start.y === goal.y && start.z === goal.z) {
-      return [{ ...start }];
-    }
-
-    // 2点間の距離が最大距離を超える場合は空配列を返す
-    const distance = this.coordinateSystem.getDistance(start, goal);
-    if (distance > maxDistance) {
-      return [];
-    }
-
-    // A*アルゴリズムで経路を探索
-    const openSet: PathNode[] = [];
-    const closedSet: Set<string> = new Set();
-    const startNode = new PathNode(start.x, start.y, start.z);
-    const goalNode = new PathNode(goal.x, goal.y, goal.z);
-
-    startNode.g = 0;
-    startNode.h = this.heuristic(startNode, goalNode);
-    startNode.f = startNode.g + startNode.h;
-
-    openSet.push(startNode);
-
-    while (openSet.length > 0) {
-      // F値が最小のノードを取得
-      const currentNode = this.getLowestFScoreNode(openSet);
-
-      // ゴールに到達したか確認
-      if (this.isGoalNode(currentNode, goalNode)) {
-        return this.reconstructPath(currentNode);
-      }
-
-      // 現在のノードをopenSetから削除し、closedSetに追加
-      this.removeFromArray(openSet, currentNode);
-      closedSet.add(this.nodeToString(currentNode));
-
-      // 隣接ノードを取得
-      const neighbors = this.getNeighborNodes(currentNode, excludeEntityId);
-
-      for (const neighbor of neighbors) {
-        // 既に処理済みならスキップ
-        if (closedSet.has(this.nodeToString(neighbor))) {
-          continue;
-        }
-
-        const tentativeGScore = currentNode.g + 1;
-
-        // openSetに含まれていない場合は追加
-        if (!this.isInOpenSet(openSet, neighbor)) {
-          openSet.push(neighbor);
-        } else if (tentativeGScore >= neighbor.g) {
-          // より良いパスではない場合はスキップ
-          continue;
-        }
-
-        // より良いパスが見つかったので更新
-        neighbor.parent = currentNode;
-        neighbor.g = tentativeGScore;
-        neighbor.h = this.heuristic(neighbor, goalNode);
-        neighbor.f = neighbor.g + neighbor.h;
-      }
-    }
-
-    // パスが見つからない場合
-    return [];
-  }
-
-  /**
-   * F値が最小のノードを取得
-   */
-  private getLowestFScoreNode(nodes: PathNode[]): PathNode {
-    return nodes.reduce((lowest, node) => (node.f < lowest.f ? node : lowest));
-  }
-
-  /**
-   * ゴールノードかどうかを判定
-   */
-  private isGoalNode(node: PathNode, goal: PathNode): boolean {
-    return node.x === goal.x && node.y === goal.y && node.z === goal.z;
-  }
-
-  /**
-   * 配列からノードを削除
-   */
-  private removeFromArray(arr: PathNode[], node: PathNode): void {
-    const index = arr.indexOf(node);
-    if (index > -1) {
-      arr.splice(index, 1);
-    }
-  }
-
-  /**
-   * ノードがopenSetに含まれているかを判定
-   */
-  private isInOpenSet(openSet: PathNode[], node: PathNode): boolean {
-    return openSet.some((n) => n.x === node.x && n.y === node.y && n.z === node.z);
-  }
-
-  /**
-   * ノードを文字列に変換（ハッシュキー用）
-   */
-  private nodeToString(node: PathNode): string {
-    return `${node.x},${node.y},${node.z}`;
-  }
-
-  /**
-   * パスを再構築
-   */
-  private reconstructPath(node: PathNode): Vector3[] {
-    const path: Vector3[] = [];
-    let current: PathNode | null = node;
-    while (current != null) {
-      path.unshift({ x: current.x, y: current.y, z: current.z });
-      current = current.parent;
-    }
-    return path;
-  }
-
-  /**
-   * 隣接ノードを取得
-   */
-  private getNeighborNodes(node: PathNode, excludeEntityId?: string): PathNode[] {
-    const neighbors: PathNode[] = [];
-    const directions = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
-    ];
-
-    for (const dir of directions) {
-      const newX = node.x + dir.dx;
-      const newY = node.y + dir.dy;
-
-      // 通行可能かチェック（excludeEntityIdを使用して自分自身を除外）
-      if (this.isWalkable(newX, newY, node.z, excludeEntityId)) {
-        neighbors.push(new PathNode(newX, newY, node.z));
-      }
-    }
-
-    return neighbors;
-  }
-
-  /**
-   * ヒューリスティック関数（マンハッタン距離）
-   */
-  private heuristic(a: PathNode, b: PathNode): number {
-    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z);
+    return this.pathfinding.findPath(start, goal, maxDistance, excludeEntityId);
   }
 
   /**
@@ -922,37 +739,10 @@ export class WorldSystem implements System {
    * @returns 有効範囲内の場合はtrue
    */
   isInBounds(x: number, y: number, z = 0): boolean {
-    return this.tileMap.isInBounds(x, y, z);
+    return this.floorStore.getCurrentTileMap().isInBounds(x, y, z);
   }
 }
 
 // 必要なインポート
 import { MapGeneratorFacade } from './MapGeneratorFacade';
 import { StageType } from '../types';
-
-/**
- * A*パスファインディング用のノードクラス
- */
-class PathNode {
-  x: number;
-  y: number;
-  z: number;
-  g: number; // 開始ノードからのコスト
-  h: number; // ゴールまでの推定コスト
-  f: number; // g + h
-  parent: PathNode | null;
-
-  constructor(x: number, y: number, z: number) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
-    this.g = 0;
-    this.h = 0;
-    this.f = 0;
-    this.parent = null;
-  }
-
-  equals(other: PathNode): boolean {
-    return this.x === other.x && this.y === other.y && this.z === other.z;
-  }
-}
