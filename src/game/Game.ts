@@ -39,6 +39,7 @@ import {
 import { useGameStore } from '../stores/gameStore';
 import { useUIStore } from '../stores/uiStore';
 import { WorldSystem } from '../engine/world/WorldSystem';
+import { createFloorSnapshot } from '../engine/world/FloorSnapshot';
 import { RENDER_CONFIG } from '../engine/graphics/RenderConfig';
 
 interface GeneratedMapState {
@@ -387,7 +388,13 @@ export class Game {
     }
 
     // 生成結果をフロア単位で WorldSystem に登録し、現在階を切り替える
-    worldSystem.registerFloor(floorNumber, state.tileMap, state.rooms, state.corridors);
+    worldSystem.registerFloorSnapshot(
+      createFloorSnapshot(floorNumber, state.tileMap, {
+        rooms: state.rooms,
+        corridors: state.corridors,
+        tacticalElements: state.tacticalElements,
+      })
+    );
 
     // タイルマップの描画は、カメラ位置設定後に行う
     // （プレイヤー作成後に renderTileMap を呼び出す）
@@ -1146,7 +1153,13 @@ export class Game {
     for (const entity of resourceState.entities) {
       entitySystem.registerEntity(entity);
     }
-    worldSystem.registerFloor(floorNumber, mapState.tileMap, mapState.rooms, mapState.corridors);
+    worldSystem.registerFloorSnapshot(
+      createFloorSnapshot(floorNumber, mapState.tileMap, {
+        rooms: mapState.rooms,
+        corridors: mapState.corridors,
+        tacticalElements: mapState.tacticalElements,
+      })
+    );
 
     if (this.player && startPos) {
       const transform = this.player.getComponent('transform');

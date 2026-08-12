@@ -2,12 +2,13 @@ import { System } from '../System';
 import { Engine } from '../Engine';
 import { TileMap } from './TileMap';
 import { Tile } from './Tile';
-import { Vector3, TileType, EventName, Room, Corridor } from '../types';
+import { Vector3, TileType, EventName, Room, Corridor, TacticalElement } from '../types';
 import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/Transform';
 import { CoordinateSystem } from '../graphics/CoordinateSystem';
+import { FloorSnapshot, createFloorSnapshot } from './FloorSnapshot';
 
 /**
  * WorldSystem - ゲーム世界と地形を管理するシステム
@@ -40,6 +41,9 @@ export class WorldSystem implements System {
 
   // フロアごとの通路情報を保存
   private floorCorridors: Map<number, Corridor[]> = new Map();
+
+  // フロアごとの戦術的要素を保存
+  private floorTacticalElements: Map<number, TacticalElement[]> = new Map();
 
   /**
    * コンストラクタ
@@ -433,9 +437,14 @@ export class WorldSystem implements System {
     // フロアマップに保存
     this.floorMaps.set(floorNumber, newMap);
 
-    // 部屋・通路情報もフロアごとに保存
-    this.floorRooms.set(floorNumber, tacticalData.rooms);
-    this.floorCorridors.set(floorNumber, tacticalData.corridors);
+    // 部屋・通路・戦術的要素を FloorSnapshot として同一世代で保存
+    this.registerFloorSnapshot(
+      createFloorSnapshot(floorNumber, newMap, {
+        rooms: tacticalData.rooms,
+        corridors: tacticalData.corridors,
+        tacticalElements: tacticalData.tacticalElements,
+      })
+    );
 
     console.log(`Generated new floor ${floorNumber} with stage type: ${stageType}`);
     console.log(`  Rooms: ${tacticalData.rooms.length}`);
@@ -512,6 +521,9 @@ export class WorldSystem implements System {
   /**
    * 指定フロアのマップ・Room・Corridor を一括で登録し、現在のフロアを切り替える
    * Game.generateMap などから呼ばれることを想定
+   *
+   * 旧API。新規コードは registerFloorSnapshot を使用し、
+   * TacticalElement も同一世代で登録すること。
    * @param floorNumber フロア番号
    * @param tileMap タイルマップ
    * @param rooms 部屋の配列（省略可）
@@ -523,14 +535,29 @@ export class WorldSystem implements System {
     rooms: Room[] = [],
     corridors: Corridor[] = []
   ): void {
-    this.floorMaps.set(floorNumber, tileMap);
-    this.floorRooms.set(floorNumber, [...rooms]);
-    this.floorCorridors.set(floorNumber, [...corridors]);
+    this.registerFloorSnapshot(
+      createFloorSnapshot(floorNumber, tileMap, { rooms, corridors })
+    );
+  }
+
+  /**
+   * フロアデータ 1 個（FloorSnapshot）を受け取って登録し、現在のフロアを切り替える。
+   *
+   * TileMap・Room・Corridor・TacticalElement は常に同じ世代で登録される。
+   * 同一フロア番号へ再登録した場合は上書きされる。
+   * @param snapshot フロアデータ
+   */
+  registerFloorSnapshot(snapshot: FloorSnapshot): void {
+    const { floor, tileMap, rooms, corridors, tacticalElements } = snapshot;
+    this.floorMaps.set(floor, tileMap);
+    this.floorRooms.set(floor, [...rooms]);
+    this.floorCorridors.set(floor, [...corridors]);
+    this.floorTacticalElements.set(floor, [...tacticalElements]);
     // 現在のフロアを切り替え
-    this.currentFloor = floorNumber;
+    this.currentFloor = floor;
     this.tileMap = tileMap;
     console.log(
-      `WorldSystem: registered floor ${floorNumber} (${rooms.length} rooms, ${corridors.length} corridors)`
+      `WorldSystem: registered floor ${floor} (${rooms.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements)`
     );
   }
 
@@ -561,6 +588,15 @@ export class WorldSystem implements System {
   }
 
   /**
+   * 現在のフロアの戦術的要素を取得
+   * @returns 戦術的要素の配列のコピー（未設定の場合は空配列）
+   */
+  getTacticalElements(): TacticalElement[] {
+    const elements = this.floorTacticalElements.get(this.currentFloor);
+    return elements ? [...elements] : [];
+  }
+
+  /**
    * 指定フロアの部屋情報を設定
    * @param floorNumber フロア番号
    * @param rooms 部屋の配列
@@ -576,6 +612,15 @@ export class WorldSystem implements System {
    */
   setCorridors(floorNumber: number, corridors: Corridor[]): void {
     this.floorCorridors.set(floorNumber, [...corridors]);
+  }
+
+  /**
+   * 指定フロアの戦術的要素を設定
+   * @param floorNumber フロア番号
+   * @param elements 戦術的要素の配列
+   */
+  setTacticalElements(floorNumber: number, elements: TacticalElement[]): void {
+    this.floorTacticalElements.set(floorNumber, [...elements]);
   }
 
   /**
@@ -596,6 +641,34 @@ export class WorldSystem implements System {
   getCorridorsByFloor(floorNumber: number): Corridor[] {
     const corridors = this.floorCorridors.get(floorNumber);
     return corridors ? [...corridors] : [];
+  }
+
+  /**
+   * 指定フロアの戦術的要素を取得
+   * @param floorNumber フロア番号
+   * @returns 戦術的要素の配列のコピー（未設定の場合は空配列）
+   */
+  getTacticalElementsByFloor(floorNumber: number): TacticalElement[] {
+    const elements = this.floorTacticalElements.get(floorNumber);
+    return elements ? [...elements] : [];
+  }
+
+  /**
+   * 指定フロアの FloorSnapshot を取得する。
+   * TileMap は参照、Room/Corridor/TacticalElement はコピーを返す。
+   * 未登録フロアの場合は undefined を返す。
+   * @param floorNumber フロア番号
+   */
+  getFloorSnapshot(floorNumber: number): FloorSnapshot | undefined {
+    const tileMap = this.floorMaps.get(floorNumber);
+    if (!tileMap) return undefined;
+    return {
+      floor: floorNumber,
+      tileMap,
+      rooms: this.getRoomsByFloor(floorNumber),
+      corridors: this.getCorridorsByFloor(floorNumber),
+      tacticalElements: this.getTacticalElementsByFloor(floorNumber),
+    };
   }
 
   /**

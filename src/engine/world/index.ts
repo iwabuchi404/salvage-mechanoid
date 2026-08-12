@@ -34,6 +34,8 @@ export { BaseFeaturePlacer } from './features/BaseFeaturePlacer';
 // 基本システム
 export { TileMap } from './TileMap';
 export { WorldSystem } from './WorldSystem';
+export { createFloorSnapshot } from './FloorSnapshot';
+export type { FloorSnapshot, FloorNumber } from './FloorSnapshot';
 
 // パスファインディング
 export { AStar } from './pathfinding/AStar';
