@@ -1,5 +1,6 @@
 import { Room, Corridor, TacticalElement } from '../types';
 import { TileMap } from './TileMap';
+import { Doorway } from './Doorway';
 
 /**
  * フロア番号を識別する型
@@ -14,6 +15,9 @@ export type FloorNumber = number;
  * 単一の FloorSnapshot として同一世代で保持する。
  * これにより、複数の Map へ分散していたフロア構成データを
  * 1単位で登録・参照・破棄できる。
+ *
+ * doorways は corridors から導出される接続情報。
+ * 登録時に明示的に渡さない場合は WorldSystem が corridors から生成する。
  */
 export interface FloorSnapshot {
   /** フロア番号（1始まり） */
@@ -26,6 +30,8 @@ export interface FloorSnapshot {
   readonly corridors: readonly Corridor[];
   /** 戦術的要素の配列 */
   readonly tacticalElements: readonly TacticalElement[];
+  /** Room 間接続の Doorway 配列（省略時は corridors から導出される） */
+  readonly doorways?: readonly Doorway[];
 }
 
 /**
@@ -39,13 +45,18 @@ export function createFloorSnapshot(
     rooms?: readonly Room[];
     corridors?: readonly Corridor[];
     tacticalElements?: readonly TacticalElement[];
+    doorways?: readonly Doorway[];
   } = {}
 ): FloorSnapshot {
-  return {
+  const snapshot: FloorSnapshot = {
     floor,
     tileMap,
     rooms: partial.rooms ? [...partial.rooms] : [],
     corridors: partial.corridors ? [...partial.corridors] : [],
     tacticalElements: partial.tacticalElements ? [...partial.tacticalElements] : [],
   };
+  if (partial.doorways) {
+    return { ...snapshot, doorways: [...partial.doorways] };
+  }
+  return snapshot;
 }

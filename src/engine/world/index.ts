@@ -38,6 +38,22 @@ export { createFloorSnapshot } from './FloorSnapshot';
 export type { FloorSnapshot, FloorNumber } from './FloorSnapshot';
 export { createRoomId, roomToId, isRoomId, roomIdToCoords } from './RoomId';
 export type { RoomId } from './RoomId';
+export {
+  corridorToDoorways,
+  corridorsToDoorways,
+  detectDirection,
+  isOnRoomBoundary,
+  validateDoorways,
+  areAllRoomsConnected,
+  buildRoomGraph,
+  isRoomGraphConnected,
+} from './Doorway';
+export type {
+  Doorway,
+  DoorwayValidationResult,
+  DoorwayValidationError,
+  DoorwayErrorKind,
+} from './Doorway';
 
 // パスファインディング
 export { AStar } from './pathfinding/AStar';

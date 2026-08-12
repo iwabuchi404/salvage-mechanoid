@@ -10,6 +10,7 @@ import { TransformComponent } from '../entity/components/Transform';
 import { CoordinateSystem } from '../graphics/CoordinateSystem';
 import { FloorSnapshot, createFloorSnapshot } from './FloorSnapshot';
 import { RoomId, roomToId } from './RoomId';
+import { Doorway, corridorsToDoorways } from './Doorway';
 
 /**
  * WorldSystem - ゲーム世界と地形を管理するシステム
@@ -45,6 +46,9 @@ export class WorldSystem implements System {
 
   // フロアごとの戦術的要素を保存
   private floorTacticalElements: Map<number, TacticalElement[]> = new Map();
+
+  // フロアごとの Doorway（Room 間接続）を保存
+  private floorDoorways: Map<number, Doorway[]> = new Map();
 
   /**
    * コンストラクタ
@@ -544,26 +548,30 @@ export class WorldSystem implements System {
   /**
    * フロアデータ 1 個（FloorSnapshot）を受け取って登録し、現在のフロアを切り替える。
    *
-   * TileMap・Room・Corridor・TacticalElement は常に同じ世代で登録される。
+   * TileMap・Room・Corridor・TacticalElement・Doorway は常に同じ世代で登録される。
    * 同一フロア番号へ再登録した場合は上書きされる。
    * Room に id が未設定の場合は "x,y" 形式の RoomId を付与する。
+   * snapshot.doorways が未指定の場合は corridors と rooms から Doorway を導出する。
    * @param snapshot フロアデータ
    */
   registerFloorSnapshot(snapshot: FloorSnapshot): void {
-    const { floor, tileMap, rooms, corridors, tacticalElements } = snapshot;
+    const { floor, tileMap, rooms, corridors, tacticalElements, doorways } = snapshot;
     // Room へ id が未設定の場合は RoomId を付与する
     const roomsWithId = rooms.map((room) =>
       room.id ? room : { ...room, id: roomToId(room) as string }
     );
+    // Doorway が未指定の場合は corridors から導出する
+    const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, roomsWithId);
     this.floorMaps.set(floor, tileMap);
     this.floorRooms.set(floor, roomsWithId);
     this.floorCorridors.set(floor, [...corridors]);
     this.floorTacticalElements.set(floor, [...tacticalElements]);
+    this.floorDoorways.set(floor, resolvedDoorways);
     // 現在のフロアを切り替え
     this.currentFloor = floor;
     this.tileMap = tileMap;
     console.log(
-      `WorldSystem: registered floor ${floor} (${roomsWithId.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements)`
+      `WorldSystem: registered floor ${floor} (${roomsWithId.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements, ${resolvedDoorways.length} doorways)`
     );
   }
 
@@ -625,6 +633,15 @@ export class WorldSystem implements System {
   }
 
   /**
+   * 現在のフロアの Doorway 配列を取得する
+   * @returns Doorway の配列のコピー（未設定の場合は空配列）
+   */
+  getDoorways(): Doorway[] {
+    const doorways = this.floorDoorways.get(this.currentFloor);
+    return doorways ? [...doorways] : [];
+  }
+
+  /**
    * 指定フロアの部屋情報を設定
    * @param floorNumber フロア番号
    * @param rooms 部屋の配列
@@ -682,8 +699,18 @@ export class WorldSystem implements System {
   }
 
   /**
+   * 指定フロアの Doorway 配列を取得する
+   * @param floorNumber フロア番号
+   * @returns Doorway の配列のコピー（未設定の場合は空配列）
+   */
+  getDoorwaysByFloor(floorNumber: number): Doorway[] {
+    const doorways = this.floorDoorways.get(floorNumber);
+    return doorways ? [...doorways] : [];
+  }
+
+  /**
    * 指定フロアの FloorSnapshot を取得する。
-   * TileMap は参照、Room/Corridor/TacticalElement はコピーを返す。
+   * TileMap は参照、Room/Corridor/TacticalElement/Doorway はコピーを返す。
    * 未登録フロアの場合は undefined を返す。
    * @param floorNumber フロア番号
    */
@@ -696,6 +723,7 @@ export class WorldSystem implements System {
       rooms: this.getRoomsByFloor(floorNumber),
       corridors: this.getCorridorsByFloor(floorNumber),
       tacticalElements: this.getTacticalElementsByFloor(floorNumber),
+      doorways: this.getDoorwaysByFloor(floorNumber),
     };
   }
 
