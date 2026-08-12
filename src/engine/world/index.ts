@@ -36,6 +36,8 @@ export { TileMap } from './TileMap';
 export { WorldSystem } from './WorldSystem';
 export { createFloorSnapshot } from './FloorSnapshot';
 export type { FloorSnapshot, FloorNumber } from './FloorSnapshot';
+export { createRoomId, roomToId, isRoomId, roomIdToCoords } from './RoomId';
+export type { RoomId } from './RoomId';
 
 // パスファインディング
 export { AStar } from './pathfinding/AStar';

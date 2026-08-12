@@ -9,6 +9,7 @@ import { Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/Transform';
 import { CoordinateSystem } from '../graphics/CoordinateSystem';
 import { FloorSnapshot, createFloorSnapshot } from './FloorSnapshot';
+import { RoomId, roomToId } from './RoomId';
 
 /**
  * WorldSystem - ゲーム世界と地形を管理するシステム
@@ -545,19 +546,24 @@ export class WorldSystem implements System {
    *
    * TileMap・Room・Corridor・TacticalElement は常に同じ世代で登録される。
    * 同一フロア番号へ再登録した場合は上書きされる。
+   * Room に id が未設定の場合は "x,y" 形式の RoomId を付与する。
    * @param snapshot フロアデータ
    */
   registerFloorSnapshot(snapshot: FloorSnapshot): void {
     const { floor, tileMap, rooms, corridors, tacticalElements } = snapshot;
+    // Room へ id が未設定の場合は RoomId を付与する
+    const roomsWithId = rooms.map((room) =>
+      room.id ? room : { ...room, id: roomToId(room) as string }
+    );
     this.floorMaps.set(floor, tileMap);
-    this.floorRooms.set(floor, [...rooms]);
+    this.floorRooms.set(floor, roomsWithId);
     this.floorCorridors.set(floor, [...corridors]);
     this.floorTacticalElements.set(floor, [...tacticalElements]);
     // 現在のフロアを切り替え
     this.currentFloor = floor;
     this.tileMap = tileMap;
     console.log(
-      `WorldSystem: registered floor ${floor} (${rooms.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements)`
+      `WorldSystem: registered floor ${floor} (${roomsWithId.length} rooms, ${corridors.length} corridors, ${tacticalElements.length} tactical elements)`
     );
   }
 
@@ -576,6 +582,28 @@ export class WorldSystem implements System {
   getRooms(): Room[] {
     const rooms = this.floorRooms.get(this.currentFloor);
     return rooms ? [...rooms] : [];
+  }
+
+  /**
+   * 現在のフロアから RoomId で Room を取得する
+   * @param roomId RoomId
+   * @returns Room（未登録の場合は undefined）
+   */
+  getRoomById(roomId: RoomId): Room | undefined {
+    const rooms = this.floorRooms.get(this.currentFloor);
+    if (!rooms) return undefined;
+    return rooms.find((room) => room.id === roomId);
+  }
+
+  /**
+   * 指定フロアから RoomId で Room を取得する
+   * @param floorNumber フロア番号
+   * @param roomId RoomId
+   */
+  getRoomByIdByFloor(floorNumber: number, roomId: RoomId): Room | undefined {
+    const rooms = this.floorRooms.get(floorNumber);
+    if (!rooms) return undefined;
+    return rooms.find((room) => room.id === roomId);
   }
 
   /**
