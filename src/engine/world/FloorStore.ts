@@ -112,6 +112,21 @@ export class FloorStore {
     return this.findRoom(this.floorRooms.get(floor), roomId);
   }
 
+  /**
+   * 指定タイル座標を含む現在フロアの Room を取得する。
+   * タイルが Room 矩形外（通路やマップ外）の場合は undefined を返す。
+   */
+  getRoomAtPosition(x: number, y: number): Room | undefined {
+    return this.findRoomAt(this.floorRooms.get(this.currentFloor), x, y);
+  }
+
+  /**
+   * 指定フロアの指定タイル座標を含む Room を取得する。
+   */
+  getRoomAtPositionByFloor(floor: number, x: number, y: number): Room | undefined {
+    return this.findRoomAt(this.floorRooms.get(floor), x, y);
+  }
+
   setRooms(floor: number, rooms: Room[]): void {
     this.floorRooms.set(floor, [...rooms]);
   }
@@ -175,5 +190,12 @@ export class FloorStore {
   private findRoom(rooms: Room[] | undefined, roomId: RoomId): Room | undefined {
     if (!rooms) return undefined;
     return rooms.find((room) => room.id === roomId);
+  }
+
+  private findRoomAt(rooms: Room[] | undefined, x: number, y: number): Room | undefined {
+    if (!rooms) return undefined;
+    return rooms.find(
+      (room) => x >= room.x && x < room.x + room.width && y >= room.y && y < room.y + room.height
+    );
   }
 }

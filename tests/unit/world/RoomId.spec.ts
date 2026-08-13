@@ -4,12 +4,7 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
-import {
-  createRoomId,
-  roomToId,
-  isRoomId,
-  roomIdToCoords,
-} from '@/engine/world/RoomId';
+import { createRoomId, roomToId, isRoomId, roomIdToCoords } from '@/engine/world/RoomId';
 import { Room, RoomType, TileType } from '@/engine/types';
 
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
@@ -183,6 +178,86 @@ describe('RoomId', () => {
       // フロア1に戻っても RoomId で参照できる
       world.setCurrentFloor(1);
       expect(world.getRoomById(createRoomId(1, 1))).toBeDefined();
+    });
+
+    it('getRoomAtPosition は座標を含む Room を返す', () => {
+      const map = new TileMap(20, 20);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(1, map, {
+          rooms: [{ x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL }],
+        })
+      );
+
+      // Room 矩形内の座標
+      expect(world.getRoomAtPosition(1, 1)).toBeDefined();
+      expect(world.getRoomAtPosition(4, 4)).toBeDefined();
+      expect(world.getRoomAtPosition(2, 3)).toBeDefined();
+    });
+
+    it('getRoomAtPosition は Room 矩形外の座標に undefined を返す', () => {
+      const map = new TileMap(20, 20);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(1, map, {
+          rooms: [{ x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL }],
+        })
+      );
+
+      // 幅4なので x=5 は矩形外
+      expect(world.getRoomAtPosition(5, 1)).toBeUndefined();
+      expect(world.getRoomAtPosition(1, 5)).toBeUndefined();
+      expect(world.getRoomAtPosition(10, 10)).toBeUndefined();
+    });
+
+    it('getRoomAtPosition は Room 未登録フロアで undefined を返す', () => {
+      const map = new TileMap(20, 20);
+      world.registerFloorSnapshot(createFloorSnapshot(1, map));
+
+      expect(world.getRoomAtPosition(5, 5)).toBeUndefined();
+    });
+
+    it('getRoomAtPosition は複数 Room から該当座標を含むものを返す', () => {
+      const map = new TileMap(20, 20);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(1, map, {
+          rooms: [
+            { x: 1, y: 1, width: 3, height: 3, type: RoomType.ENTRANCE },
+            { x: 6, y: 6, width: 3, height: 3, type: RoomType.EXIT },
+          ],
+        })
+      );
+
+      const room1 = world.getRoomAtPosition(2, 2);
+      expect(room1).toBeDefined();
+      expect(room1!.type).toBe(RoomType.ENTRANCE);
+
+      const room2 = world.getRoomAtPosition(7, 7);
+      expect(room2).toBeDefined();
+      expect(room2!.type).toBe(RoomType.EXIT);
+    });
+
+    it('getRoomAtPositionByFloor は指定フロアの Room を返す', () => {
+      const map1 = new TileMap(20, 20);
+      const map2 = new TileMap(20, 20);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(1, map1, {
+          rooms: [{ x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE }],
+        })
+      );
+      world.registerFloorSnapshot(
+        createFloorSnapshot(2, map2, {
+          rooms: [{ x: 5, y: 5, width: 4, height: 4, type: RoomType.EXIT }],
+        })
+      );
+
+      // フロア1のまま、フロア2の Room を位置で取得
+      const room2 = world.getRoomAtPositionByFloor(2, 6, 6);
+      expect(room2).toBeDefined();
+      expect(room2!.type).toBe(RoomType.EXIT);
+
+      // フロア1の Room も位置で取得
+      const room1 = world.getRoomAtPositionByFloor(1, 2, 2);
+      expect(room1).toBeDefined();
+      expect(room1!.type).toBe(RoomType.ENTRANCE);
     });
   });
 });

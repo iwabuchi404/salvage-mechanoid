@@ -6,11 +6,16 @@ import { TransformComponent } from '../entity/components/Transform';
 import { InteractableComponent } from '../entity/components/Interactable';
 import { RendererSystem } from '../graphics/RendererSystem';
 import { WorldSystem } from '../world/WorldSystem';
+import { findEntityAtTilePosition } from './InteractionQuery';
+import { InteractionExecutor } from './InteractionExecutor';
 
 /**
  * インタラクションシステム - イベントオブジェクトとの相互作用を管理
- * プレイヤーがイベントオブジェクトに接触した時の処理を行う
- * タイル選択、エンティティ選択機能も担当
+ *
+ * 候補抽出は InteractionQuery（純粋関数）、効果実行は InteractionExecutor へ委譲し、
+ * 本クラスはシステム間の依存解決とイベント購読、UI 操作（クリック/ホバー）を担当する。
+ *
+ * タイル選択、エンティティ選択機能も担当する。
  */
 export class InteractionSystem implements System {
   // エンジンへの参照
@@ -28,6 +33,9 @@ export class InteractionSystem implements System {
   // ワールドシステムへの参照
   private worldSystem: WorldSystem | null = null;
 
+  // 効果実行を委譲する Executor
+  private executor: InteractionExecutor | null = null;
+
   /**
    * システムを初期化
    * @param engine エンジンのインスタンス
@@ -38,6 +46,10 @@ export class InteractionSystem implements System {
     this.eventSystem = engine.getSystem<EventSystem>('event') || null;
     this.rendererSystem = engine.getSystem<RendererSystem>('renderer') || null;
     this.worldSystem = engine.getSystem<WorldSystem>('world') || null;
+
+    if (this.entitySystem && this.eventSystem) {
+      this.executor = new InteractionExecutor(this.entitySystem, this.eventSystem);
+    }
 
     // イベントリスナーを設定
     this.setupEventListeners();
@@ -101,6 +113,8 @@ export class InteractionSystem implements System {
 
   /**
    * 指定位置でのインタラクションをチェック
+   *
+   * 候補抽出と効果実行を InteractionExecutor へ委譲する。
    * @param playerId プレイヤーID
    * @param position 位置
    */
@@ -108,33 +122,9 @@ export class InteractionSystem implements System {
     playerId: string,
     position: { x: number; y: number; z: number }
   ): void {
-    const eventObjects = this.entitySystem?.getEntitiesByTag('event_object') || [];
+    if (!this.executor || !this.entitySystem) return;
 
-    for (const eventObject of eventObjects) {
-      const transform = eventObject.getComponent<TransformComponent>('transform');
-      const interactable = eventObject.getComponent<InteractableComponent>('interactable');
-
-      if (!transform || !interactable) continue;
-
-      // 位置が一致するかチェック
-      const pos = transform.position;
-      if (pos.x === position.x && pos.y === position.y && pos.z === position.z) {
-        // インタラクション可能かチェック
-        if (interactable.canInteract()) {
-          // インタラクションを実行
-          const success = interactable.interact(playerId);
-
-          if (success) {
-            // インタラクション成功イベントを発行
-            this.eventSystem?.emit('interaction_completed', {
-              playerId: playerId,
-              objectId: eventObject.id,
-              position: position,
-            });
-          }
-        }
-      }
-    }
+    this.executor.executeAtPosition(this.entitySystem.getEntities(), position, playerId);
   }
 
   /**
@@ -144,34 +134,8 @@ export class InteractionSystem implements System {
    * @returns インタラクションが成功したかどうか
    */
   triggerInteraction(playerId: string, objectId: string): boolean {
-    const eventObject = this.entitySystem?.getEntity(objectId);
-    if (!eventObject) {
-      return false;
-    }
-
-    const interactable = eventObject.getComponent<InteractableComponent>('interactable');
-    if (!interactable) {
-      return false;
-    }
-
-    if (!interactable.canInteract()) {
-      return false;
-    }
-
-    // インタラクションを実行
-    const success = interactable.interact(playerId);
-
-    if (success) {
-      // インタラクション成功イベントを発行
-      const transform = eventObject.getComponent<TransformComponent>('transform');
-      this.eventSystem?.emit('interaction_completed', {
-        playerId: playerId,
-        objectId: objectId,
-        position: transform ? transform.position : { x: 0, y: 0, z: 0 },
-      });
-    }
-
-    return success;
+    if (!this.executor) return false;
+    return this.executor.executeById(objectId, playerId);
   }
 
   /**
@@ -207,8 +171,9 @@ export class InteractionSystem implements System {
     const intX = gridPos.x;
     const intY = gridPos.y;
 
-    // まずエンティティを検索
-    const clickedEntity = this.findEntityAtPosition(intX, intY);
+    // まずエンティティを検索（InteractionQuery へ委譲）
+    const entities = this.entitySystem?.getEntities() || [];
+    const clickedEntity = findEntityAtTilePosition(entities, intX, intY);
 
     if (clickedEntity) {
       // エンティティが見つかった場合
@@ -217,28 +182,6 @@ export class InteractionSystem implements System {
       // エンティティがない場合はタイルを選択
       this.selectTile(intX, intY);
     }
-  }
-
-  /**
-   * 指定位置のエンティティを検索
-   * @param x グリッドX座標
-   * @param y グリッドY座標
-   * @returns エンティティまたはnull
-   */
-  private findEntityAtPosition(x: number, y: number): any {
-    const entities = this.entitySystem?.getEntities() || [];
-
-    for (const entity of entities) {
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (!transform) continue;
-
-      const pos = transform.position;
-      if (Math.round(pos.x) === x && Math.round(pos.y) === y) {
-        return entity;
-      }
-    }
-
-    return null;
   }
 
   /**

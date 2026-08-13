@@ -590,6 +590,31 @@ export class WorldSystem implements System {
   }
 
   /**
+   * 指定タイル座標を含む現在フロアの Room を取得する。
+   *
+   * タイルがどの Room にも属さない（通路やマップ外など）場合は undefined を返す。
+   * FOV の可視性イベントへ RoomId を関連付けるために使用する。
+   *
+   * @param x タイルX座標
+   * @param y タイルY座標
+   * @returns 座標を含む Room、または undefined
+   */
+  getRoomAtPosition(x: number, y: number): Room | undefined {
+    return this.floorStore.getRoomAtPosition(x, y);
+  }
+
+  /**
+   * 指定フロアの指定タイル座標を含む Room を取得する。
+   *
+   * @param floorNumber フロア番号
+   * @param x タイルX座標
+   * @param y タイルY座標
+   */
+  getRoomAtPositionByFloor(floorNumber: number, x: number, y: number): Room | undefined {
+    return this.floorStore.getRoomAtPositionByFloor(floorNumber, x, y);
+  }
+
+  /**
    * 現在のフロアの通路情報を取得
    * @returns 通路の配列のコピー（未設定の場合は空配列）
    */
