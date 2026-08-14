@@ -29,22 +29,35 @@ export interface InteractionCandidate {
   canInteract: boolean;
 }
 
+/** インタラクション候補を検索する距離条件 */
+export interface InteractionQueryOptions {
+  /** 候補に含める最小マンハッタン距離（同一マスは 0、隣接だけなら 1） */
+  minRange?: number;
+  /** 候補に含める最大マンハッタン距離（既定は同一マスだけを表す 0） */
+  maxRange?: number;
+}
+
 /**
  * 指定位置と一致するインタラクション候補を抽出する。
  *
  * event_object タグを持ち、Transform・Interactable を保持し、
- * かつ位置が完全一致する Entity を候補として返す。
+ * active で、指定したマンハッタン距離の範囲内にある Entity を候補として返す。
+ * z 座標（階層内の高さ）は常に一致する必要がある。
  * canInteract フラグは候補抽出時点での状態を反映する。
  *
  * 効果実行は呼び出し側（InteractionExecutor）が行う。
  */
 export function findInteractionCandidates(
   entities: readonly Entity[],
-  position: Position3D
+  position: Position3D,
+  options: InteractionQueryOptions = {}
 ): InteractionCandidate[] {
   const candidates: InteractionCandidate[] = [];
+  const minRange = Math.max(0, options.minRange ?? 0);
+  const maxRange = Math.max(minRange, options.maxRange ?? 0);
 
   for (const entity of entities) {
+    if (!entity.active) continue;
     if (!entity.hasTag('event_object')) continue;
 
     const transform = entity.getComponent<TransformComponent>('transform');
@@ -52,7 +65,10 @@ export function findInteractionCandidates(
     if (!transform || !interactable) continue;
 
     const pos = transform.position;
-    if (pos.x !== position.x || pos.y !== position.y || pos.z !== position.z) continue;
+    if (pos.z !== position.z) continue;
+
+    const distance = Math.abs(pos.x - position.x) + Math.abs(pos.y - position.y);
+    if (distance < minRange || distance > maxRange) continue;
 
     candidates.push({
       entityId: entity.id,

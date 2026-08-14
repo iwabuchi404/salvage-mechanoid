@@ -8,7 +8,12 @@ import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
 import { TileType, Direction, Room } from '../types';
 import { computeFOV, tileKey, FOVBoundsQuery, FOVObstacleQuery } from './FOVCalculator';
-import { diffEntityVisibility, diffTileVisibility, isPlayerEntity } from './VisibilityRule';
+import {
+  diffEntityVisibility,
+  diffTileVisibility,
+  isEntityVisible,
+  isPlayerEntity,
+} from './VisibilityRule';
 
 /**
  * Field of View System - プレイヤーの視野を計算・管理
@@ -32,10 +37,16 @@ export class FOVSystem implements System {
   // 視野情報を保存（座標 -> 可視フラグ）
   private visibleTiles: Set<string> = new Set();
   private exploredTiles: Set<string> = new Set();
+  private exploredTilesByFloor: Map<number, Set<string>> = new Map();
+  private activeFloor: number | null = null;
 
   // 前回の可視状態（差分イベント発行のため保持）
   private previousVisibleTiles: Set<string> = new Set();
   private previousEntityVisibility: Map<string, boolean> = new Map();
+
+  private moveCompletedListener: ((data: { entityId?: string }) => void) | null = null;
+  private fovUpdateRequestedListener: ((data: { entityId?: string }) => void) | null = null;
+  private floorChangedListener: (() => void) | null = null;
 
   /**
    * システムを初期化
@@ -59,19 +70,31 @@ export class FOVSystem implements System {
     if (!this.eventSystem) return;
 
     // プレイヤー移動完了時に視野を再計算
-    this.eventSystem.on('move_completed', (data) => {
+    this.moveCompletedListener = (data) => {
       if (data.entityId === 'player' || (data.entityId && data.entityId.startsWith('player'))) {
         console.log(`FOVSystem: move_completed event received for ${data.entityId}`);
         this.updatePlayerFOV();
       }
-    });
+    };
+    this.eventSystem.on('move_completed', this.moveCompletedListener);
 
     // 視野更新リクエスト時（視野半径変更時など）
-    this.eventSystem.on('fov_update_requested', (data) => {
+    this.fovUpdateRequestedListener = (data) => {
       if (data.entityId && data.entityId.startsWith('player')) {
         this.updatePlayerFOV();
       }
-    });
+    };
+    this.eventSystem.on('fov_update_requested', this.fovUpdateRequestedListener);
+
+    // フロアごとに座標キーの意味が異なるため、差分状態を切り替えて再計算する
+    this.floorChangedListener = () => {
+      if (!this.resolveSystems()) return;
+      const worldSystem = this.worldSystem;
+      if (!worldSystem) return;
+      this.activateFloor(worldSystem.getCurrentFloor());
+      this.updatePlayerFOV();
+    };
+    this.eventSystem.on('floor_changed', this.floorChangedListener);
   }
 
   /**
@@ -110,6 +133,7 @@ export class FOVSystem implements System {
 
     const entitySystem = this.entitySystem!;
     const worldSystem = this.worldSystem!;
+    this.activateFloor(worldSystem.getCurrentFloor());
 
     // プレイヤーを取得
     const players = entitySystem.getEntitiesByTag('player');
@@ -290,21 +314,7 @@ export class FOVSystem implements System {
     this.previousEntityVisibility = new Map();
     for (const entity of entities) {
       if (isPlayerEntity(entity)) continue;
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (!transform) continue;
-      // 現在の可視状態を記録（次回差分比較用）
-      const pos = transform.position;
-      const x = Math.round(pos.x);
-      const y = Math.round(pos.y);
-      const checkPositions = [
-        { x, y },
-        { x: x - 1, y },
-        { x: x + 1, y },
-        { x, y: y - 1 },
-        { x, y: y + 1 },
-      ];
-      const inFOV = checkPositions.some((p) => this.visibleTiles.has(tileKey(p.x, p.y)));
-      this.previousEntityVisibility.set(entity.id, inFOV);
+      this.previousEntityVisibility.set(entity.id, isEntityVisible(entity, this.visibleTiles));
     }
 
     console.log(
@@ -323,15 +333,61 @@ export class FOVSystem implements System {
   }
 
   /**
+   * 現在の FOV 状態を指定フロアへ切り替える。
+   * 可視性の差分はフロアを跨いで比較せず、探索済み状態だけをフロア別に保持する。
+   */
+  private activateFloor(floor: number): void {
+    if (this.activeFloor === floor) return;
+
+    this.activeFloor = floor;
+    this.visibleTiles.clear();
+    this.previousVisibleTiles.clear();
+    this.previousEntityVisibility.clear();
+
+    let exploredTiles = this.exploredTilesByFloor.get(floor);
+    if (!exploredTiles) {
+      exploredTiles = new Set<string>();
+      this.exploredTilesByFloor.set(floor, exploredTiles);
+    }
+    this.exploredTiles = exploredTiles;
+  }
+
+  /**
    * FOVシステムをリセット（リトライ時など）
    */
   reset(): void {
     console.log('FOVSystem: Resetting FOV state...');
     this.visibleTiles.clear();
     this.exploredTiles.clear();
+    this.exploredTilesByFloor.clear();
+    this.activeFloor = null;
     this.previousVisibleTiles.clear();
     this.previousEntityVisibility.clear();
     console.log('FOVSystem: Reset complete');
+  }
+
+  /** イベント購読と保持状態を破棄する */
+  destroy(): void {
+    if (this.eventSystem) {
+      if (this.moveCompletedListener) {
+        this.eventSystem.off('move_completed', this.moveCompletedListener);
+      }
+      if (this.fovUpdateRequestedListener) {
+        this.eventSystem.off('fov_update_requested', this.fovUpdateRequestedListener);
+      }
+      if (this.floorChangedListener) {
+        this.eventSystem.off('floor_changed', this.floorChangedListener);
+      }
+    }
+
+    this.moveCompletedListener = null;
+    this.fovUpdateRequestedListener = null;
+    this.floorChangedListener = null;
+    this.reset();
+    this.engine = null;
+    this.eventSystem = null;
+    this.worldSystem = null;
+    this.entitySystem = null;
   }
 
   /**

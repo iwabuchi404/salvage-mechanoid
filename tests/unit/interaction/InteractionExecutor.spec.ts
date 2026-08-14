@@ -104,6 +104,16 @@ describe('InteractionExecutor', () => {
       };
       expect(executor.execute(candidate, 'player')).toBe(false);
     });
+
+    it('候補抽出後に Entity が非 active になった場合は実行しない', () => {
+      const onInteract = jest.fn();
+      const entity = makeEventObject('inactive', 2, 3, onInteract);
+      const [candidate] = findInteractionCandidates([entity], { x: 2, y: 3, z: 0 });
+      entity.active = false;
+
+      expect(executor.execute(candidate, 'player')).toBe(false);
+      expect(onInteract).not.toHaveBeenCalled();
+    });
   });
 
   describe('executeAll', () => {
@@ -183,6 +193,15 @@ describe('InteractionExecutor', () => {
 
     it('存在しない ID は false を返す', () => {
       expect(executor.executeById('missing', 'player')).toBe(false);
+    });
+
+    it('非 active の ID は直接指定でも実行しない', () => {
+      const onInteract = jest.fn();
+      const entity = makeEventObject('inactive', 2, 3, onInteract);
+      entity.active = false;
+
+      expect(executor.executeById('inactive', 'player')).toBe(false);
+      expect(onInteract).not.toHaveBeenCalled();
     });
 
     it('使用済み oneTimeUse は false を返す', () => {

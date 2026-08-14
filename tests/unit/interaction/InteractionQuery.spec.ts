@@ -92,6 +92,36 @@ describe('InteractionQuery', () => {
 
       expect(findInteractionCandidates([e1, e2], pos(2, 3))).toHaveLength(2);
     });
+
+    it('非 active の Entity は候補に入れない', () => {
+      const entity = makeEventObject('inactive', 2, 3, 0, new InteractableComponent(jest.fn()));
+      entity.active = false;
+
+      expect(findInteractionCandidates([entity], pos(2, 3))).toEqual([]);
+    });
+
+    it('maxRange=1 で上下左右の隣接候補を取得できる', () => {
+      const adjacent = makeEventObject('adjacent', 3, 3, 0, new InteractableComponent(jest.fn()));
+      const diagonal = makeEventObject('diagonal', 3, 4, 0, new InteractableComponent(jest.fn()));
+
+      const candidates = findInteractionCandidates([adjacent, diagonal], pos(2, 3), {
+        maxRange: 1,
+      });
+
+      expect(candidates.map((candidate) => candidate.entityId)).toEqual(['adjacent']);
+    });
+
+    it('minRange=1 と maxRange=1 で同一マスを除外して隣接だけを取得できる', () => {
+      const sameTile = makeEventObject('same', 2, 3, 0, new InteractableComponent(jest.fn()));
+      const adjacent = makeEventObject('adjacent', 2, 4, 0, new InteractableComponent(jest.fn()));
+
+      const candidates = findInteractionCandidates([sameTile, adjacent], pos(2, 3), {
+        minRange: 1,
+        maxRange: 1,
+      });
+
+      expect(candidates.map((candidate) => candidate.entityId)).toEqual(['adjacent']);
+    });
   });
 
   describe('findEntityAtTilePosition', () => {

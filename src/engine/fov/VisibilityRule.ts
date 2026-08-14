@@ -33,10 +33,9 @@ export function getEntityTilePosition(entity: Entity): { x: number; y: number } 
 /**
  * Entity が可視タイル集合に入っているかを判定する。
  *
- * 現行仕様（FOVSystem.updateVisibility と同等）:
- * - Entity の現在位置、および上下左右1マスの隣接タイルのいずれかが
- *   可視タイル集合に含まれていれば可視とみなす。
- * - 隣接マス考慮は移動中の位置ずれ許容のため残す。
+ * Entity の現在タイルが可視タイル集合に含まれている場合だけ可視とみなす。
+ * 隣接タイルを代理に使うと、壁自体が可視なときに壁の背後にいる Entity まで
+ * 可視になるため、移動補間中も丸めた現在位置だけを判定する。
  *
  * この規則は Enemy / Item / EventObject すべてに共通して適用する。
  */
@@ -50,20 +49,7 @@ export function isEntityVisible(
   const pos = getEntityTilePosition(entity);
   if (!pos) return false;
 
-  const checkPositions = [
-    { x: pos.x, y: pos.y },
-    { x: pos.x - 1, y: pos.y },
-    { x: pos.x + 1, y: pos.y },
-    { x: pos.x, y: pos.y - 1 },
-    { x: pos.x, y: pos.y + 1 },
-  ];
-
-  for (const p of checkPositions) {
-    if (visibleTiles.has(keyFn(p.x, p.y))) {
-      return true;
-    }
-  }
-  return false;
+  return visibleTiles.has(keyFn(pos.x, pos.y));
 }
 
 function defaultTileKey(x: number, y: number): string {

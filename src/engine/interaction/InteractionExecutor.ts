@@ -39,7 +39,7 @@ export class InteractionExecutor {
     if (!candidate.canInteract) return false;
 
     const entity = this.entitySystem.getEntity(candidate.entityId);
-    if (!entity) return false;
+    if (!entity || !entity.active) return false;
 
     const interactable = entity.getComponent<InteractableComponent>('interactable');
     if (!interactable || !interactable.canInteract()) return false;
@@ -102,7 +102,7 @@ export class InteractionExecutor {
    */
   executeById(objectId: string, playerId: string): boolean {
     const entity = this.entitySystem.getEntity(objectId);
-    if (!entity) return false;
+    if (!entity || !entity.active) return false;
 
     const interactable = entity.getComponent<InteractableComponent>('interactable');
     if (!interactable || !interactable.canInteract()) return false;

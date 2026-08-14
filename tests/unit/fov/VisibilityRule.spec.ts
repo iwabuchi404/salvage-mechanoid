@@ -53,12 +53,12 @@ describe('VisibilityRule', () => {
       expect(isEntityVisible(enemy, visible)).toBe(true);
     });
 
-    it('位置の隣接マスが可視タイルなら可視', () => {
+    it('位置の隣接マスだけが可視でも Entity 自身のタイルが不可視なら不可視', () => {
       const enemy = makeEntity('enemy', 2, 3, 'enemy');
-      expect(isEntityVisible(enemy, new Set(['1,3']))).toBe(true);
-      expect(isEntityVisible(enemy, new Set(['3,3']))).toBe(true);
-      expect(isEntityVisible(enemy, new Set(['2,2']))).toBe(true);
-      expect(isEntityVisible(enemy, new Set(['2,4']))).toBe(true);
+      expect(isEntityVisible(enemy, new Set(['1,3']))).toBe(false);
+      expect(isEntityVisible(enemy, new Set(['3,3']))).toBe(false);
+      expect(isEntityVisible(enemy, new Set(['2,2']))).toBe(false);
+      expect(isEntityVisible(enemy, new Set(['2,4']))).toBe(false);
     });
 
     it('位置も隣接マスも不可視なら不可視', () => {
