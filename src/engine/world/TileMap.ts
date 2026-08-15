@@ -4,6 +4,34 @@ import { Engine } from '../Engine';
 import { EventSystem } from '../events/EventSystem';
 
 /**
+ * タイルタイプが「床」（歩行可能なタイル）かを判定する純粋述語。
+ *
+ * TileMap.isTypeWalkable() と同じ判定を共有し、
+ * getRandomFloorTile / buildEventObjects など「床タイル」の定義を
+ * 1 箇所に集約する。
+ *
+ * PORTAL / HEAL / DAMAGE は歩行可能な特殊床として含む。
+ */
+export function isFloorTileType(type: TileType): boolean {
+  switch (type) {
+    case TileType.GRASS: // 1 - 草地（床）
+    case TileType.TILE: // 4 - タイル（床）
+    case TileType.PORTAL: // 5 - ポータル（通行可能）
+    case TileType.HEAL: // 7 - 回復床（通行可能）
+    case TileType.DAMAGE: // 6 - ダメージ床（通行可能だがダメージを受ける）
+      return true;
+
+    case TileType.EMPTY: // 0 - 空（通行不可）
+    case TileType.WATER: // 2 - 水（通行不可）
+    case TileType.MOUNTAIN: // 3 - 山・壁（通行不可）
+      return false;
+
+    default:
+      return false;
+  }
+}
+
+/**
  * タイルマップクラス - ゲーム世界の地形を管理
  */
 export class TileMap {
@@ -219,24 +247,7 @@ export class TileMap {
    * @returns 通行可能な場合はtrue
    */
   private isTypeWalkable(type: TileType): boolean {
-    // タイルタイプに応じて通行可能かどうかを判定
-    // 実装に応じてカスタマイズ可能
-    switch (type) {
-      case TileType.GRASS: // 1 - 草地（床）
-      case TileType.TILE: // 4 - タイル（床）
-      case TileType.PORTAL: // 5 - ポータル（通行可能）
-      case TileType.HEAL: // 7 - 回復床（通行可能）
-      case TileType.DAMAGE: // 6 - ダメージ床（通行可能だがダメージを受ける）
-        return true;
-
-      case TileType.EMPTY: // 0 - 空（通行不可）
-      case TileType.WATER: // 2 - 水（通行不可）
-      case TileType.MOUNTAIN: // 3 - 山・壁（通行不可）
-        return false;
-
-      default:
-        return false;
-    }
+    return isFloorTileType(type);
   }
 
   /**
@@ -270,7 +281,7 @@ export class TileMap {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const tile = this.getTile(x, y);
-        if (tile && (tile.type as any) === 'floor') {
+        if (tile && isFloorTileType(tile.type)) {
           floorTiles.push({ x, y });
         }
       }

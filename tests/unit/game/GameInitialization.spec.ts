@@ -425,4 +425,23 @@ describe('Game initialization and shutdown', () => {
     // initialize() を呼ばずにプレイヤーがいない状態
     expect(game.useSkill('test-skill')).toBe(false);
   });
+
+  it('initialize() で event_object タグを持つ Entity が 1 体以上生成される（ポータル・チャージャー）', async () => {
+    await game.initialize(mockCanvas);
+
+    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity')!;
+    const eventObjects = entitySystem.getEntitiesByTag('event_object');
+
+    // ポータル1つ + チャージャー2-3個 が生成されるはず
+    expect(eventObjects.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('initialize() で portal タグを持つ Entity が生成される', async () => {
+    await game.initialize(mockCanvas);
+
+    const entitySystem = Engine.instance.getSystem<EntitySystem>('entity')!;
+    const portals = entitySystem.getEntitiesByTag('portal');
+
+    expect(portals.length).toBeGreaterThanOrEqual(1);
+  });
 });

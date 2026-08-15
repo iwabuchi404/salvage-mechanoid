@@ -69,4 +69,51 @@ describe('TileMap', () => {
     expect(map.getTile(0, 0)).toBeUndefined();
     expect(map.active).toBe(false);
   });
+
+  it('getRandomFloorTile() が歩行可能な床タイルを含むマップで非 null を返す', () => {
+    const map = new TileMap(3, 3);
+    // 中央を床（TILE）に設定
+    map.setTileAt(1, 1, 0, TileType.TILE, true);
+
+    const result = map.getRandomFloorTile();
+
+    expect(result).not.toBeNull();
+    expect(result).toEqual({ x: 1, y: 1 });
+  });
+
+  it('getRandomFloorTile() が GRASS も床として扱う', () => {
+    const map = new TileMap(3, 3);
+    map.setTileAt(0, 0, 0, TileType.GRASS, true);
+
+    const result = map.getRandomFloorTile();
+
+    expect(result).not.toBeNull();
+    expect(result).toEqual({ x: 0, y: 0 });
+  });
+
+  it('getRandomFloorTile() が床タイルのないマップで null を返す', () => {
+    const map = new TileMap(2, 2);
+    // 壁のみ（MOUNTAIN は歩行不可）
+    map.setTileAt(0, 0, 0, TileType.MOUNTAIN, false);
+    map.setTileAt(1, 1, 0, TileType.WATER, false);
+
+    expect(map.getRandomFloorTile()).toBeNull();
+  });
+
+  it('getRandomFloorTile() が importMapData で取り込んだ床タイルを認識する', () => {
+    const map = new TileMap(3, 2);
+    map.importMapData([
+      [TileType.MOUNTAIN, TileType.TILE, TileType.MOUNTAIN],
+      [TileType.MOUNTAIN, TileType.GRASS, TileType.MOUNTAIN],
+    ]);
+
+    const result = map.getRandomFloorTile();
+
+    expect(result).not.toBeNull();
+    // 床タイルは (1,0) と (1,1) のいずれか
+    expect([
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+    ]).toContainEqual(result);
+  });
 });

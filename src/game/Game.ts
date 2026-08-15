@@ -2,6 +2,7 @@ import { Engine } from '../engine/Engine';
 import { RendererSystem } from '../engine/graphics/RendererSystem';
 import { EntitySystem } from '../engine/entity/EntitySystem';
 import { Entity } from '../engine/entity/Entity';
+import { TransformComponent } from '../engine/entity/components/Transform';
 import { EventSystem } from '../engine/events/EventSystem';
 import { AudioSystem } from '../engine/audio/AudioSystem';
 import { TurnSystem } from '../engine/turn/TurnSystem';
@@ -15,7 +16,7 @@ import { SkillSystem } from '../engine/skill/SkillSystem';
 import { PartsSystem } from '../engine/parts/PartsSystem';
 import { initialPartSet } from '../data/parts/initialParts';
 import { initialWeaponSet } from '../data/weapons/initialWeapons';
-import { TileMap } from '../engine/world/TileMap';
+import { TileMap, isFloorTileType } from '../engine/world/TileMap';
 import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
 import { FloorManager } from '../engine/world/FloorManager';
@@ -435,7 +436,7 @@ export class Game {
       mapData[y] = [];
       for (let x = 0; x < width; x++) {
         const tile = this.tileMap.getTile(x, y);
-        mapData[y][x] = tile ? (tile.type as any) : 0; // TileTypeをnumberにキャスト
+        mapData[y][x] = tile ? tile.type : 0; // TileType は数値 enum なのでそのまま代入
       }
     }
 
@@ -740,7 +741,7 @@ export class Game {
     for (let y = 0; y < tileMap.getHeight(); y++) {
       for (let x = 0; x < tileMap.getWidth(); x++) {
         const tile = tileMap.getTile(x, y);
-        if (tile && (tile.type as any) === 'floor') {
+        if (tile && isFloorTileType(tile.type)) {
           if (!occupiedPositions.has(`${x},${y}`)) {
             floorTiles.push({ x, y, z: 0 });
           }
@@ -1162,13 +1163,9 @@ export class Game {
     );
 
     if (this.player && startPos) {
-      const transform = this.player.getComponent('transform');
-      if (transform && 'position' in transform) {
-        (transform as { position: { x: number; y: number; z: number } }).position = {
-          x: startPos.x,
-          y: startPos.y,
-          z: 0,
-        };
+      const transform = this.player.getComponent<TransformComponent>('transform');
+      if (transform) {
+        transform.setPosition(startPos.x, startPos.y, 0);
       }
     }
   }

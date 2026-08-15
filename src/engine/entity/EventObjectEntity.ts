@@ -70,7 +70,7 @@ export function createPortal(
   position: Vector3,
   onActivate: (playerId: string) => void
 ): EventObjectEntity {
-  return new EventObjectEntity(
+  const portal = new EventObjectEntity(
     id,
     position,
     './obj02.png',
@@ -79,6 +79,8 @@ export function createPortal(
     false, // 何度でも使用可能
     Infinity
   );
+  portal.addTag('portal');
+  return portal;
 }
 
 /**
@@ -97,7 +99,7 @@ export function createEnergyCharger(
   maxUses: number,
   onCharge: (playerId: string) => void
 ): EventObjectEntity {
-  return new EventObjectEntity(
+  const charger = new EventObjectEntity(
     id,
     position,
     './obj01.png',
@@ -106,4 +108,6 @@ export function createEnergyCharger(
     false, // 複数回使用可能
     maxUses
   );
+  charger.addTag('charger');
+  return charger;
 }
