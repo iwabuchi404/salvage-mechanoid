@@ -80,15 +80,18 @@ export class FloorStore {
 
   /**
    * 現在のフロアを切り替える。
-   * 対象フロアが未登録の場合は何もしない。
-   * @returns 切り替えに成功した場合 true
+   * 対象フロアが未登録の場合でも currentFloor は更新するが、
+   * currentTileMap は既存のまま維持する（ロールバック安全性のため）。
+   * @returns 対象フロアが登録済みの場合 true
    */
   setCurrentFloor(floor: number): boolean {
-    const tileMap = this.floorMaps.get(floor);
-    if (!tileMap) return false;
     this.currentFloor = floor;
-    this.currentTileMap = tileMap;
-    return true;
+    const tileMap = this.floorMaps.get(floor);
+    if (tileMap) {
+      this.currentTileMap = tileMap;
+      return true;
+    }
+    return false;
   }
 
   // ===== Room =====

@@ -29,9 +29,6 @@ export class FloorManager {
   // エンジンへの参照
   private engine: Engine;
 
-  // 現在のフロア番号（1から始まる）
-  private currentFloor = 1;
-
   // 最大フロア数
   private maxFloors = 10;
 
@@ -52,10 +49,12 @@ export class FloorManager {
 
   /**
    * 現在のフロア番号を取得
+   * FloorStore を正本とする（B2: 現在フロアの正本を 1 つにする）
    * @returns フロア番号
    */
   getCurrentFloor(): number {
-    return this.currentFloor;
+    const worldSystem = this.engine.getSystem<WorldSystem>('world');
+    return worldSystem ? worldSystem.getCurrentFloor() : 1;
   }
 
   /**
@@ -79,11 +78,12 @@ export class FloorManager {
    * @returns 移動に成功したらtrue
    */
   async moveToNextFloor(): Promise<boolean> {
-    if (this.currentFloor >= this.maxFloors) {
+    const current = this.getCurrentFloor();
+    if (current >= this.maxFloors) {
       console.log('Already at the last floor!');
       return false;
     }
-    return await this.transitionToFloor(this.currentFloor + 1);
+    return await this.transitionToFloor(current + 1);
   }
 
   /**
@@ -91,11 +91,12 @@ export class FloorManager {
    * @returns 移動に成功したらtrue
    */
   async moveToPreviousFloor(): Promise<boolean> {
-    if (this.currentFloor <= 1) {
+    const current = this.getCurrentFloor();
+    if (current <= 1) {
       console.log('Already at the first floor!');
       return false;
     }
-    return await this.transitionToFloor(this.currentFloor - 1);
+    return await this.transitionToFloor(current - 1);
   }
 
   /**
@@ -108,7 +109,7 @@ export class FloorManager {
       console.error(`Invalid floor number: ${floor}`);
       return false;
     }
-    if (floor === this.currentFloor) {
+    if (floor === this.getCurrentFloor()) {
       console.log('Already at this floor');
       return false;
     }
@@ -122,7 +123,7 @@ export class FloorManager {
    * @returns 移動に成功したらtrue
    */
   private async transitionToFloor(targetFloor: number): Promise<boolean> {
-    const oldFloor = this.currentFloor;
+    const oldFloor = this.getCurrentFloor();
     console.log(`Moving from floor ${oldFloor} to ${targetFloor}`);
 
     // プレイヤーの状態を保存（HP、エネルギー、位置）
@@ -133,12 +134,13 @@ export class FloorManager {
     }
 
     try {
-      // 新しいフロアを生成する。生成中は currentFloor を切り替えず、
+      // 新しいフロアを生成する。生成中は FloorStore が新フロアへ切り替わるが、
       // ハンドラーには request.floor で移動先を明示する。
+      // 失敗時は catch ブロックで oldFloor へロールバックする。
       await this.generateFloor(targetFloor);
     } catch (error) {
       console.error(`Failed to generate floor ${targetFloor}:`, error);
-      // ロールバック: WorldSystem の現在階を元に戻す
+      // ロールバック: FloorStore の現在階を元に戻す
       const worldSystem = this.engine.getSystem<WorldSystem>('world');
       if (worldSystem) {
         worldSystem.setCurrentFloor(oldFloor);
@@ -148,20 +150,27 @@ export class FloorManager {
       return false;
     }
 
-    // 生成が完了してから FloorManager の現在階をコミットする
-    this.currentFloor = targetFloor;
+    // 生成成功後、FloorStore の現在階を targetFloor へ確定する。
+    // ハンドラーが registerFloorSnapshot() を呼んでいれば既に切り替わっているが、
+    // 呼んでいない場合（テストの no-op ハンドラー等）はここで明示的に切り替える。
+    // FloorStore を正本とする（B2: 現在フロアの正本を 1 つにする）
+    const worldSystem = this.engine.getSystem<WorldSystem>('world');
+    if (worldSystem && this.getCurrentFloor() !== targetFloor) {
+      worldSystem.setCurrentFloor(targetFloor);
+    }
 
     // 成功: プレイヤーの状態を復元（エネルギー +20 ボーナス付き）
     this.restorePlayerState(playerState);
 
     // フロア移動イベントを発行
+    // FloorStore は生成ハンドラー内で既に targetFloor へ切り替わっている
     const eventSystem = this.engine.getSystem<EventSystem>('event');
     eventSystem?.emit('floor_changed', {
-      floor: this.currentFloor,
+      floor: this.getCurrentFloor(),
       maxFloors: this.maxFloors,
     });
 
-    console.log(`Successfully moved to floor ${this.currentFloor}`);
+    console.log(`Successfully moved to floor ${this.getCurrentFloor()}`);
     return true;
   }
 
@@ -170,7 +179,7 @@ export class FloorManager {
    * ハンドラー成功後に旧エンティティを削除し、floor_generated を発行する。
    * ハンドラーが例外を投げた場合はそのまま例外を伝播する（呼び出し元でロールバック）。
    */
-  private async generateFloor(floor = this.currentFloor): Promise<void> {
+  private async generateFloor(floor = this.getCurrentFloor()): Promise<void> {
     console.log(`Generating floor ${floor}...`);
 
     // フロアの難易度を計算（フロアが進むほど難しくなる）
@@ -348,8 +357,12 @@ export class FloorManager {
    */
   async reset(): Promise<void> {
     console.log('Resetting floor manager...');
-    this.currentFloor = 1;
-    await this.generateFloor();
+    // FloorStore の現在階を 1 へ戻す
+    const worldSystem = this.engine.getSystem<WorldSystem>('world');
+    if (worldSystem) {
+      worldSystem.setCurrentFloor(1);
+    }
+    await this.generateFloor(1);
   }
 }
 

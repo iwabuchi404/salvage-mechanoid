@@ -46,6 +46,17 @@ describe('FloorManager', () => {
     await player.initialize();
     entities.registerEntity(player);
 
+    // WorldSystem を登録（FloorManager は FloorStore を正本とするため）
+    const map = new TileMap(10, 10);
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 10; x++) {
+        map.setTileAt(x, y, 0, TileType.TILE, true);
+      }
+    }
+    const worldSystem = new WorldSystem(map);
+    Engine.instance.registerSystem('world', worldSystem);
+    await worldSystem.initialize(engine);
+
     floorManager = new FloorManager(engine, 10);
   });
 
