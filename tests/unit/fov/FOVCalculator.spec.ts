@@ -7,6 +7,8 @@ import {
   hasLineOfSight,
   FOVBoundsQuery,
   FOVObstacleQuery,
+  ViewProfile,
+  DEFAULT_VIEW_PROFILE,
 } from '@/engine/fov/FOVCalculator';
 import { TileMap } from '@/engine/world/TileMap';
 import { TileType } from '@/engine/types';
@@ -281,6 +283,82 @@ describe('FOVCalculator', () => {
       // down 向きでは (10,14) が可視
       expect(down.visibleTiles.has(tileKey(10, 14))).toBe(true);
       expect(up.visibleTiles.has(tileKey(10, 14))).toBe(false);
+    });
+
+    it('viewProfile を省略すると DEFAULT_VIEW_PROFILE（正面4 / 側面3）が使われる', () => {
+      const map = makeFilledMap(20, 20);
+      const result = computeFOV({
+        cx: 10,
+        cy: 10,
+        direction: 'up',
+        bounds: makeBounds(map),
+        obstacle: makeObstacleFromMap(map),
+      });
+
+      // DEFAULT_VIEW_PROFILE と同じ挙動
+      expect(DEFAULT_VIEW_PROFILE.frontRadius).toBe(4);
+      expect(DEFAULT_VIEW_PROFILE.sideRadius).toBe(3);
+      // 正面 (10,6) は距離4で可視
+      expect(result.visibleTiles.has(tileKey(10, 6))).toBe(true);
+      // 側面 (13,10) は距離3で可視
+      expect(result.visibleTiles.has(tileKey(13, 10))).toBe(true);
+    });
+
+    it('viewProfile で半径を広げると可視タイル集合が広がる（スキャン拡張の契約）', () => {
+      const map = makeFilledMap(30, 30);
+      const bounds = makeBounds(map);
+      const obstacle = makeObstacleFromMap(map);
+
+      const baseProfile: ViewProfile = { frontRadius: 4, sideRadius: 3 };
+      const extendedProfile: ViewProfile = { frontRadius: 6, sideRadius: 5 };
+
+      const base = computeFOV({
+        cx: 15,
+        cy: 15,
+        direction: 'up',
+        bounds,
+        obstacle,
+        viewProfile: baseProfile,
+      });
+      const extended = computeFOV({
+        cx: 15,
+        cy: 15,
+        direction: 'up',
+        bounds,
+        obstacle,
+        viewProfile: extendedProfile,
+      });
+
+      // 拡張時の方が可視タイル数が多い
+      expect(extended.visibleTiles.size).toBeGreaterThan(base.visibleTiles.size);
+      // base では不可視な (15,10)（距離5）が extended では可視
+      expect(base.visibleTiles.has(tileKey(15, 10))).toBe(false);
+      expect(extended.visibleTiles.has(tileKey(15, 10))).toBe(true);
+    });
+
+    it('viewProfile で半径を狭めると可視タイル集合が縮む', () => {
+      const map = makeFilledMap(20, 20);
+      const bounds = makeBounds(map);
+      const obstacle = makeObstacleFromMap(map);
+
+      const narrow: ViewProfile = { frontRadius: 2, sideRadius: 1 };
+      const result = computeFOV({
+        cx: 10,
+        cy: 10,
+        direction: 'up',
+        bounds,
+        obstacle,
+        viewProfile: narrow,
+      });
+
+      // 正面 (10,8) は距離2で可視
+      expect(result.visibleTiles.has(tileKey(10, 8))).toBe(true);
+      // 正面 (10,7) は距離3で不可視
+      expect(result.visibleTiles.has(tileKey(10, 7))).toBe(false);
+      // 側面 (11,10) は距離1で可視
+      expect(result.visibleTiles.has(tileKey(11, 10))).toBe(true);
+      // 側面 (12,10) は距離2で不可視
+      expect(result.visibleTiles.has(tileKey(12, 10))).toBe(false);
     });
   });
 });

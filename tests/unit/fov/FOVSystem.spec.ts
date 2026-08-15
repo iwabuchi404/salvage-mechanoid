@@ -45,7 +45,7 @@ describe('FOVSystem', () => {
     await engine.initialize();
 
     const player = new Entity('player', 'player') as Entity & { viewRadius: number };
-    Object.defineProperty(player, 'viewRadius', { value: 4 });
+    Object.defineProperty(player, 'viewRadius', { value: 4, configurable: true });
     player.addTag('player');
     playerTransform = new TransformComponent(5, 5, 0);
     player.addComponent(playerTransform);
@@ -99,5 +99,39 @@ describe('FOVSystem', () => {
     expect(events.getListenerCount('floor_changed')).toBe(0);
     expect(events.getListenerCount('move_completed')).toBe(0);
     expect(events.getListenerCount('fov_update_requested')).toBe(0);
+  });
+
+  it('viewRadius が FOV 計算へ接続されており、半径を広げると可視タイルが増える', () => {
+    fov.calculateInitialFOV();
+    const baseVisibleCount = fov.isTileVisible(5, 9) ? 1 : 0; // (5,9) は距離4
+
+    // viewRadius=4 では (5,9) は正面距離4で可視
+    expect(fov.isTileVisible(5, 9)).toBe(true);
+    // (5,10) は距離5で不可視
+    expect(fov.isTileVisible(5, 10)).toBe(false);
+
+    // viewRadius を 6 へ広げる（setViewRadius 相当の操作をモック経由で再現）
+    const player = entities.getEntitiesByTag('player')[0] as Entity & { viewRadius: number };
+    Object.defineProperty(player, 'viewRadius', { value: 6, configurable: true });
+
+    // fov_update_requested イベントを発行して再計算をトリガー
+    events.emit('fov_update_requested', { entityId: 'player' });
+
+    // 拡張後は (5,10)（距離5）も可視になる
+    expect(fov.isTileVisible(5, 10)).toBe(true);
+    // baseVisibleCount は参照用（現在の実装では常に1）
+    expect(baseVisibleCount).toBe(1);
+  });
+
+  it('fov_update_requested イベントが FOV 再計算を引き起こす', () => {
+    fov.calculateInitialFOV();
+    const initialExplored = fov.isTileExplored(5, 9);
+    expect(initialExplored).toBe(true);
+
+    // プレイヤー位置を動かさずに fov_update_requested を発行
+    events.emit('fov_update_requested', { entityId: 'player' });
+
+    // 再計算後も探索済み状態は維持される
+    expect(fov.isTileExplored(5, 9)).toBe(true);
   });
 });

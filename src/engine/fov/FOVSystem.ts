@@ -7,7 +7,7 @@ import { Player } from '../entity/Player';
 import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
 import { TileType, Direction, Room } from '../types';
-import { computeFOV, tileKey, FOVBoundsQuery, FOVObstacleQuery } from './FOVCalculator';
+import { computeFOV, tileKey, FOVBoundsQuery, FOVObstacleQuery, ViewProfile } from './FOVCalculator';
 import {
   diffEntityVisibility,
   diffTileVisibility,
@@ -159,6 +159,14 @@ export class FOVSystem implements System {
     const movement = player.getComponent<MovementComponent>('movement');
     const playerDirection: Direction = movement ? movement.direction : 'down';
 
+    // viewRadius から視野形状へ変換する。
+    // 案1: viewRadius を front とし、side は front - 1 とする。
+    // これにより、スキャン拡張で viewRadius を増やすと視野が広がる。
+    const viewProfile: ViewProfile = {
+      frontRadius: baseViewRadius,
+      sideRadius: Math.max(1, baseViewRadius - 1),
+    };
+
     console.log(
       `FOVSystem: Updating FOV for player at (${playerX}, ${playerY}) with base radius ${baseViewRadius}, direction: ${playerDirection}`
     );
@@ -178,6 +186,7 @@ export class FOVSystem implements System {
       direction: playerDirection,
       bounds,
       obstacle,
+      viewProfile,
     });
 
     // 計算結果を状態へ反映

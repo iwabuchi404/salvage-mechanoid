@@ -22,7 +22,7 @@ export class Player extends Entity {
   private camera: Camera | null = null;
 
   // 視野半径（何マス先まで見えるか）
-  private _viewRadius = 8;
+  private _viewRadius = 4;
 
   // ゲームストア
   private gameStore = useGameStore();
@@ -48,7 +48,7 @@ export class Player extends Entity {
 
     // 視野半径設定
     const storeViewRadius = this.gameStore.player.status.viewRadius;
-    this._viewRadius = storeViewRadius !== undefined ? storeViewRadius : 8;
+    this._viewRadius = storeViewRadius !== undefined ? storeViewRadius : 4;
     console.log(
       `Player: Initialized with viewRadius: ${this._viewRadius} (from store: ${storeViewRadius})`
     );

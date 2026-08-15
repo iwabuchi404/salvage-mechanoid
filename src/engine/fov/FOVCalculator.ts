@@ -31,7 +31,31 @@ export interface FOVCalcInput {
   bounds: FOVBoundsQuery;
   /** 遮蔽判定 */
   obstacle: FOVObstacleQuery;
+  /**
+   * 視野形状（省略時は既定の DEFAULT_VIEW_PROFILE）。
+   * R7-2 スキャン拡張時に半径だけ差し替えられる。
+   */
+  viewProfile?: ViewProfile;
 }
+
+/**
+ * 視野形状を表す純粋な値。
+ * frontRadius はプレイヤーの向いている方向の視野半径、
+ * sideRadius はそれ以外の方向の視野半径。
+ */
+export interface ViewProfile {
+  frontRadius: number;
+  sideRadius: number;
+}
+
+/**
+ * 既定の視野形状。
+ * 現行の固定値（正面4 / 側面3）と同じ値。
+ */
+export const DEFAULT_VIEW_PROFILE: ViewProfile = {
+  frontRadius: 4,
+  sideRadius: 3,
+};
 
 /** FOV 計算の結果 */
 export interface FOVCalcResult {
@@ -58,30 +82,25 @@ export function keyToTile(key: string): { x: number; y: number } | null {
 }
 
 /**
- * 指定方向の視野半径。
- * 正面方向（真っ直ぐ前 + 左右1つずつ）は4マス、それ以外は3マス。
- *
- * 元の FOVSystem.calculateFOV と同じ値を固定値として持つ。
- */
-const FRONT_RADIUS = 4;
-const SIDE_RADIUS = 3;
-
-/**
  * プレイヤーの視野を計算する。
  *
  * 方向に応じた視野範囲と Bresenham ベースの視線判定を組み合わせ、
  * 最終的に可視となるタイルの座標キー集合を返す。
  *
+ * 視野半径は `input.viewProfile` で外部から与えられ、
+ * 省略時は `DEFAULT_VIEW_PROFILE`（正面4 / 側面3）を使用する。
+ *
  * 副作用を持たず、入力と出力だけから成る。
  */
 export function computeFOV(input: FOVCalcInput): FOVCalcResult {
   const { cx, cy, direction, bounds, obstacle } = input;
+  const { frontRadius, sideRadius } = input.viewProfile ?? DEFAULT_VIEW_PROFILE;
   const visibleTiles = new Set<string>();
 
   // プレイヤー位置は常に可視
   visibleTiles.add(tileKey(cx, cy));
 
-  const maxRadius = Math.max(FRONT_RADIUS, SIDE_RADIUS);
+  const maxRadius = Math.max(frontRadius, sideRadius);
 
   for (let dy = -maxRadius; dy <= maxRadius; dy++) {
     for (let dx = -maxRadius; dx <= maxRadius; dx++) {
@@ -90,7 +109,7 @@ export function computeFOV(input: FOVCalcInput): FOVCalcResult {
 
       const tileDirection = getDirectionFromDelta(dx, dy);
       const isFront = isFrontDirection(direction, tileDirection);
-      const effectiveRadius = isFront ? FRONT_RADIUS : SIDE_RADIUS;
+      const effectiveRadius = isFront ? frontRadius : sideRadius;
 
       const distance = Math.sqrt(dx * dx + dy * dy);
       if (distance > effectiveRadius) continue;
