@@ -298,7 +298,7 @@ export interface MapGenerationResult {
  * 部屋の定義
  */
 export interface Room {
-  id?: string; // 部屋の一意識別子（"x,y" 形式、WorldSystem 登録時に付与）
+  id: string; // 部屋の一意識別子（生成時に採番される不透明 ID）
   x: number; // 部屋の左上X座標
   y: number; // 部屋の左上Y座標
   width: number; // 部屋の幅

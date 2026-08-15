@@ -4,7 +4,7 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
-import { createRoomId, roomToId } from '@/engine/world/RoomId';
+import { RoomIdGenerator, roomToId } from '@/engine/world/RoomId';
 import {
   corridorToDoorways,
   corridorsToDoorways,
@@ -33,8 +33,26 @@ import {
  * Doorway 型と Corridor からの変換・整合性検証の境界テスト
  */
 describe('Doorway', () => {
+  /** テスト用 Room を作成するヘルパ（ID を自動採番） */
+  const makeRoom = (
+    gen: RoomIdGenerator,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    type: RoomType = RoomType.NORMAL
+  ): Room => ({
+    id: gen.next() as string,
+    x,
+    y,
+    width,
+    height,
+    type,
+  });
+
   describe('detectDirection / isOnRoomBoundary', () => {
-    const room: Room = { x: 5, y: 5, width: 4, height: 4, type: RoomType.NORMAL };
+    const gen = new RoomIdGenerator();
+    const room = makeRoom(gen, 5, 5, 4, 4);
 
     it('上境界を up と判定する', () => {
       expect(detectDirection(room, 6, 5)).toBe('up');
@@ -63,9 +81,10 @@ describe('Doorway', () => {
   });
 
   describe('corridorToDoorways', () => {
+    const gen = new RoomIdGenerator();
     const rooms: Room[] = [
-      { x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE },
-      { x: 10, y: 10, width: 4, height: 4, type: RoomType.EXIT },
+      makeRoom(gen, 1, 1, 4, 4, RoomType.ENTRANCE),
+      makeRoom(gen, 10, 10, 4, 4, RoomType.EXIT),
     ];
 
     it('Corridor から両端の Doorway を生成する', () => {
@@ -77,7 +96,7 @@ describe('Doorway', () => {
         endY: 12,
         width: 1,
         method: CorridorGenerationMethod.ASTAR,
-        connectedRooms: [`${rooms[0].x},${rooms[0].y}`, `${rooms[1].x},${rooms[1].y}`],
+        connectedRooms: [rooms[0].id, rooms[1].id],
       };
 
       const doorways = corridorToDoorways(corridor, rooms, 0);
@@ -118,7 +137,7 @@ describe('Doorway', () => {
         endY: 12,
         width: 1,
         method: CorridorGenerationMethod.ASTAR,
-        connectedRooms: [`${rooms[0].x},${rooms[0].y}`, `${rooms[1].x},${rooms[1].y}`],
+        connectedRooms: [rooms[0].id, rooms[1].id],
       };
 
       const doorways = corridorToDoorways(corridor, rooms);
@@ -135,7 +154,7 @@ describe('Doorway', () => {
         endY: 12,
         width: 1,
         method: CorridorGenerationMethod.ASTAR,
-        connectedRooms: [`${rooms[0].x},${rooms[0].y}`, `${rooms[1].x},${rooms[1].y}`],
+        connectedRooms: [rooms[0].id, rooms[1].id],
       };
       const corridor2: Corridor = {
         startX: 4,
@@ -144,7 +163,7 @@ describe('Doorway', () => {
         endY: 10,
         width: 1,
         method: CorridorGenerationMethod.ASTAR,
-        connectedRooms: [`${rooms[0].x},${rooms[0].y}`, `${rooms[1].x},${rooms[1].y}`],
+        connectedRooms: [rooms[0].id, rooms[1].id],
       };
 
       const doorways = corridorsToDoorways([corridor1, corridor2], rooms);
@@ -155,23 +174,24 @@ describe('Doorway', () => {
   });
 
   describe('validateDoorways', () => {
+    const gen = new RoomIdGenerator();
     const rooms: Room[] = [
-      { x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE },
-      { x: 10, y: 10, width: 4, height: 4, type: RoomType.EXIT },
+      makeRoom(gen, 1, 1, 4, 4, RoomType.ENTRANCE),
+      makeRoom(gen, 10, 10, 4, 4, RoomType.EXIT),
     ];
 
     const validDoorways: Doorway[] = [
       {
         position: { x: 4, y: 2 },
         direction: 'right',
-        fromRoom: createRoomId(1, 1),
-        toRoom: createRoomId(10, 10),
+        fromRoom: rooms[0].id as any,
+        toRoom: rooms[1].id as any,
       },
       {
         position: { x: 10, y: 12 },
         direction: 'left',
-        fromRoom: createRoomId(10, 10),
-        toRoom: createRoomId(1, 1),
+        fromRoom: rooms[1].id as any,
+        toRoom: rooms[0].id as any,
       },
     ];
 
@@ -186,8 +206,8 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(99, 99),
-          toRoom: createRoomId(10, 10),
+          fromRoom: 'room:999' as any,
+          toRoom: rooms[1].id as any,
         },
       ];
 
@@ -201,8 +221,8 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(99, 99),
+          fromRoom: rooms[0].id as any,
+          toRoom: 'room:999' as any,
         },
       ];
 
@@ -216,8 +236,8 @@ describe('Doorway', () => {
         {
           position: { x: 2, y: 2 }, // room1 の内部
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
       ];
 
@@ -244,10 +264,11 @@ describe('Doorway', () => {
   });
 
   describe('Room connectivity', () => {
+    const gen = new RoomIdGenerator();
     const rooms: Room[] = [
-      { x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL },
-      { x: 10, y: 10, width: 4, height: 4, type: RoomType.NORMAL },
-      { x: 20, y: 20, width: 4, height: 4, type: RoomType.NORMAL },
+      makeRoom(gen, 1, 1, 4, 4),
+      makeRoom(gen, 10, 10, 4, 4),
+      makeRoom(gen, 20, 20, 4, 4),
     ];
 
     it('areAllRoomsConnected は全 Room が Doorway に接続されている場合 true', () => {
@@ -255,26 +276,26 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
         {
           position: { x: 10, y: 12 },
           direction: 'left',
-          fromRoom: createRoomId(10, 10),
-          toRoom: createRoomId(1, 1),
+          fromRoom: rooms[1].id as any,
+          toRoom: rooms[0].id as any,
         },
         {
           position: { x: 13, y: 12 },
           direction: 'right',
-          fromRoom: createRoomId(10, 10),
-          toRoom: createRoomId(20, 20),
+          fromRoom: rooms[1].id as any,
+          toRoom: rooms[2].id as any,
         },
         {
           position: { x: 20, y: 22 },
           direction: 'left',
-          fromRoom: createRoomId(20, 20),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[2].id as any,
+          toRoom: rooms[1].id as any,
         },
       ];
 
@@ -286,11 +307,11 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
       ];
-      // room3 (20,20) が未接続
+      // room3 が未接続
 
       expect(areAllRoomsConnected(rooms, doorways)).toBe(false);
     });
@@ -300,14 +321,14 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
         {
           position: { x: 13, y: 12 },
           direction: 'right',
-          fromRoom: createRoomId(10, 10),
-          toRoom: createRoomId(20, 20),
+          fromRoom: rooms[1].id as any,
+          toRoom: rooms[2].id as any,
         },
       ];
 
@@ -319,10 +340,10 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
-        // room3 (20,20) への経路がない
+        // room3 への経路がない
       ];
 
       expect(isRoomGraphConnected(rooms, doorways)).toBe(false);
@@ -333,21 +354,21 @@ describe('Doorway', () => {
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(10, 10),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[1].id as any,
         },
         {
           position: { x: 13, y: 12 },
           direction: 'right',
-          fromRoom: createRoomId(10, 10),
-          toRoom: createRoomId(20, 20),
+          fromRoom: rooms[1].id as any,
+          toRoom: rooms[2].id as any,
         },
       ];
 
       const graph = buildRoomGraph(rooms, doorways);
-      expect(graph.get(createRoomId(1, 1))).toEqual([createRoomId(10, 10)]);
-      expect(graph.get(createRoomId(10, 10))).toEqual([createRoomId(20, 20)]);
-      expect(graph.get(createRoomId(20, 20))).toEqual([]);
+      expect(graph.get(rooms[0].id as any)).toEqual([rooms[1].id as any]);
+      expect(graph.get(rooms[1].id as any)).toEqual([rooms[2].id as any]);
+      expect(graph.get(rooms[2].id as any)).toEqual([]);
     });
   });
 
@@ -384,10 +405,11 @@ describe('Doorway', () => {
     });
 
     it('registerFloorSnapshot は corridors から Doorway を自動導出する', () => {
+      const gen = new RoomIdGenerator();
       const map = new TileMap(30, 30);
       const rooms: Room[] = [
-        { x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE },
-        { x: 10, y: 10, width: 4, height: 4, type: RoomType.EXIT },
+        makeRoom(gen, 1, 1, 4, 4, RoomType.ENTRANCE),
+        makeRoom(gen, 10, 10, 4, 4, RoomType.EXIT),
       ];
       const corridors: Corridor[] = [
         {
@@ -397,7 +419,7 @@ describe('Doorway', () => {
           endY: 12,
           width: 1,
           method: CorridorGenerationMethod.ASTAR,
-          connectedRooms: ['1,1', '10,10'],
+          connectedRooms: [rooms[0].id, rooms[1].id],
         },
       ];
 
@@ -405,21 +427,20 @@ describe('Doorway', () => {
 
       const doorways = world.getDoorways();
       expect(doorways).toHaveLength(2);
-      expect(doorways[0].fromRoom).toBe('1,1');
-      expect(doorways[0].toRoom).toBe('10,10');
+      expect(doorways[0].fromRoom).toBe(rooms[0].id);
+      expect(doorways[0].toRoom).toBe(rooms[1].id);
     });
 
     it('明示的に doorways を渡した場合はそちらを優先する', () => {
+      const gen = new RoomIdGenerator();
       const map = new TileMap(30, 30);
-      const rooms: Room[] = [
-        { x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL },
-      ];
+      const rooms: Room[] = [makeRoom(gen, 1, 1, 4, 4)];
       const explicitDoorways: Doorway[] = [
         {
           position: { x: 4, y: 2 },
           direction: 'right',
-          fromRoom: createRoomId(1, 1),
-          toRoom: createRoomId(1, 1),
+          fromRoom: rooms[0].id as any,
+          toRoom: rooms[0].id as any,
         },
       ];
 
@@ -428,15 +449,17 @@ describe('Doorway', () => {
       );
 
       expect(world.getDoorways()).toHaveLength(1);
-      expect(world.getDoorways()[0].fromRoom).toBe('1,1');
+      expect(world.getDoorways()[0].fromRoom).toBe(rooms[0].id);
     });
 
     it('フロア切替後も各階の Doorway が独立して保持される', () => {
+      const gen = new RoomIdGenerator();
       const map1 = new TileMap(30, 30);
       const map2 = new TileMap(30, 30);
+      const room = makeRoom(gen, 1, 1, 4, 4);
       world.registerFloorSnapshot(
         createFloorSnapshot(1, map1, {
-          rooms: [{ x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL }],
+          rooms: [room],
           corridors: [
             {
               startX: 4,
@@ -445,7 +468,7 @@ describe('Doorway', () => {
               endY: 4,
               width: 1,
               method: CorridorGenerationMethod.ASTAR,
-              connectedRooms: ['1,1', '1,1'],
+              connectedRooms: [room.id, room.id],
             },
           ],
         })
@@ -463,13 +486,12 @@ describe('Doorway', () => {
     });
 
     it('getDoorwaysByFloor は指定フロアの Doorway を返す', () => {
+      const gen = new RoomIdGenerator();
       const map = new TileMap(30, 30);
+      const rooms = [makeRoom(gen, 1, 1, 4, 4), makeRoom(gen, 10, 10, 4, 4)];
       world.registerFloorSnapshot(
         createFloorSnapshot(3, map, {
-          rooms: [
-            { x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL },
-            { x: 10, y: 10, width: 4, height: 4, type: RoomType.NORMAL },
-          ],
+          rooms,
           corridors: [
             {
               startX: 4,
@@ -478,7 +500,7 @@ describe('Doorway', () => {
               endY: 12,
               width: 1,
               method: CorridorGenerationMethod.ASTAR,
-              connectedRooms: ['1,1', '10,10'],
+              connectedRooms: [rooms[0].id, rooms[1].id],
             },
           ],
         })

@@ -374,7 +374,7 @@ export class AStarCorridorGenerator implements CorridorGeneratorInterface {
       endY: connectionB.y,
       width: corridorWidth,
       method: CorridorGenerationMethod.ASTAR,
-      connectedRooms: [`${roomA.x},${roomA.y}`, `${roomB.x},${roomB.y}`],
+      connectedRooms: [roomA.id!, roomB.id!],
     };
 
     return { corridor, path };

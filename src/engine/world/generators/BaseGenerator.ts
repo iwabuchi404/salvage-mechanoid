@@ -5,6 +5,7 @@ import {
   Room,
   RoomType,
 } from '../MapGeneratorInterface';
+import { RoomIdGenerator } from '../RoomId';
 
 /**
  * 部屋生成アルゴリズムの基底クラス
@@ -22,6 +23,9 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
 
   // 元のシード値（生成開始時の値、customData に記録するために使用）
   protected originalSeed: number;
+
+  // RoomId 採番器（生成ごとに1インスタンス）
+  protected roomIdGenerator: RoomIdGenerator = new RoomIdGenerator();
 
   /**
    * コンストラクタ
@@ -191,6 +195,7 @@ export abstract class BaseRoomGenerator implements RoomGeneratorInterface {
     type: RoomType = RoomType.NORMAL
   ): Room {
     return {
+      id: this.roomIdGenerator.next(),
       x: Math.floor(x),
       y: Math.floor(y),
       width: Math.floor(width),

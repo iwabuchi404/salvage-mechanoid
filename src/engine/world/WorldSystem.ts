@@ -443,7 +443,7 @@ export class WorldSystem implements System {
    *
    * TileMap・Room・Corridor・TacticalElement・Doorway は常に同じ世代で登録される。
    * 同一フロア番号へ再登録した場合は上書きされる。
-   * Room に id が未設定の場合は "x,y" 形式の RoomId を付与する。
+   * Room は生成時に不透明 RoomId が採番済みであることを前提とする。
    * snapshot.doorways が未指定の場合は corridors と rooms から Doorway を導出する。
    * @param snapshot フロアデータ
    */

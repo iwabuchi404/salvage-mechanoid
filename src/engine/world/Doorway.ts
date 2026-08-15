@@ -1,5 +1,5 @@
 import { Corridor, Direction, Room } from '../types';
-import { RoomId, roomToId, createRoomId } from './RoomId';
+import { RoomId, roomToId } from './RoomId';
 
 /**
  * Doorway - Room 間の接続を表現する値。
@@ -287,6 +287,3 @@ export function isRoomGraphConnected(
 
   return visited.size === rooms.length;
 }
-
-// createRoomId を再エクスポートして Doorway 構築の利便性を高める
-export { createRoomId };

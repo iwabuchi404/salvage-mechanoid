@@ -4,6 +4,7 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
+import { RoomIdGenerator } from '@/engine/world/RoomId';
 import { FlexibleMapGenerator } from '@/engine/world/FlexibleMapGenerator';
 import { BSPGenerator } from '@/engine/world/generators/BSPGenerator';
 import {
@@ -513,35 +514,43 @@ describe('Room data and connections', () => {
     };
 
     /** テスト用の Room 配列を作成するヘルパ（フロアごとに異なる座標） */
-    const makeRooms = (offset: number): Room[] => [
-      {
-        x: offset,
-        y: offset,
-        width: 5,
-        height: 5,
-        type: RoomType.NORMAL,
-      },
-      {
-        x: offset + 10,
-        y: offset + 10,
-        width: 6,
-        height: 6,
-        type: RoomType.BOSS,
-      },
-    ];
+    const makeRooms = (offset: number): Room[] => {
+      const gen = new RoomIdGenerator();
+      return [
+        {
+          id: gen.next() as string,
+          x: offset,
+          y: offset,
+          width: 5,
+          height: 5,
+          type: RoomType.NORMAL,
+        },
+        {
+          id: gen.next() as string,
+          x: offset + 10,
+          y: offset + 10,
+          width: 6,
+          height: 6,
+          type: RoomType.BOSS,
+        },
+      ];
+    };
 
     /** テスト用の Corridor 配列を作成するヘルパ */
-    const makeCorridors = (offset: number): Corridor[] => [
-      {
-        startX: offset + 5,
-        startY: offset + 2,
-        endX: offset + 10,
-        endY: offset + 12,
-        width: 1,
-        method: 'astar' as CorridorGenerationMethod,
-        connectedRooms: [`${offset},${offset}`, `${offset + 10},${offset + 10}`],
-      },
-    ];
+    const makeCorridors = (offset: number): Corridor[] => {
+      const rooms = makeRooms(offset);
+      return [
+        {
+          startX: offset + 5,
+          startY: offset + 2,
+          endX: offset + 10,
+          endY: offset + 12,
+          width: 1,
+          method: 'astar' as CorridorGenerationMethod,
+          connectedRooms: [rooms[0].id, rooms[1].id],
+        },
+      ];
+    };
 
     it('フロア切替後に各階の TileMap を独立して保持する', async () => {
       const map1 = makeFilledMap(10, 10);
@@ -676,9 +685,10 @@ describe('Room data and connections', () => {
       const map = new TileMap(10, 10);
       world = new WorldSystem(map);
 
+      const gen = new RoomIdGenerator();
       const testRooms: Room[] = [
-        { x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
-        { x: 10, y: 10, width: 6, height: 6, type: RoomType.EXIT },
+        { id: gen.next() as string, x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
+        { id: gen.next() as string, x: 10, y: 10, width: 6, height: 6, type: RoomType.EXIT },
       ];
       const testCorridors: Corridor[] = [
         {
@@ -688,7 +698,7 @@ describe('Room data and connections', () => {
           endY: 13,
           width: 1,
           method: 'astar' as any,
-          connectedRooms: ['1,1', '10,10'],
+          connectedRooms: [testRooms[0].id, testRooms[1].id],
         },
       ];
 
@@ -706,12 +716,15 @@ describe('Room data and connections', () => {
       const map = new TileMap(10, 10);
       world = new WorldSystem(map);
 
-      const testRooms: Room[] = [{ x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE }];
+      const gen = new RoomIdGenerator();
+      const testRooms: Room[] = [
+        { id: gen.next() as string, x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
+      ];
       world.setRooms(1, testRooms);
 
       // getter の戻り値を変更しても内部配列に影響しない
       const rooms1 = world.getRooms();
-      rooms1.push({ x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
+      rooms1.push({ id: 'room:extra', x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
 
       const rooms2 = world.getRooms();
       expect(rooms2).toHaveLength(1);
@@ -722,7 +735,10 @@ describe('Room data and connections', () => {
       const map = new TileMap(10, 10);
       world = new WorldSystem(map);
 
-      const rooms: Room[] = [{ x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE }];
+      const gen = new RoomIdGenerator();
+      const rooms: Room[] = [
+        { id: gen.next() as string, x: 1, y: 1, width: 5, height: 5, type: RoomType.ENTRANCE },
+      ];
       const corridors: Corridor[] = [
         {
           startX: 5,
@@ -731,12 +747,12 @@ describe('Room data and connections', () => {
           endY: 3,
           width: 1,
           method: 'astar' as any,
-          connectedRooms: ['1,1', '8,1'],
+          connectedRooms: [rooms[0].id, rooms[0].id],
         },
       ];
 
       world.registerFloor(1, map, rooms, corridors);
-      rooms.push({ x: 8, y: 1, width: 2, height: 2, type: RoomType.EXIT });
+      rooms.push({ id: 'room:extra', x: 8, y: 1, width: 2, height: 2, type: RoomType.EXIT });
       corridors.length = 0;
 
       expect(world.getRooms()).toHaveLength(1);

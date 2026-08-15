@@ -4,6 +4,7 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
+import { RoomIdGenerator } from '@/engine/world/RoomId';
 import {
   Corridor,
   CorridorGenerationMethod,
@@ -53,22 +54,30 @@ describe('FloorSnapshot', () => {
     jest.restoreAllMocks();
   });
 
-  const sampleRooms = (): Room[] => [
-    { x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE },
-    { x: 6, y: 6, width: 3, height: 3, type: RoomType.EXIT },
-  ];
+  const sampleRooms = (): Room[] => {
+    const gen = new RoomIdGenerator();
+    const r0 = gen.next() as string;
+    const r1 = gen.next() as string;
+    return [
+      { id: r0, x: 1, y: 1, width: 4, height: 4, type: RoomType.ENTRANCE },
+      { id: r1, x: 6, y: 6, width: 3, height: 3, type: RoomType.EXIT },
+    ];
+  };
 
-  const sampleCorridors = (): Corridor[] => [
-    {
-      startX: 4,
-      startY: 3,
-      endX: 6,
-      endY: 7,
-      width: 1,
-      method: CorridorGenerationMethod.ASTAR,
-      connectedRooms: ['1,1', '6,6'],
-    },
-  ];
+  const sampleCorridors = (): Corridor[] => {
+    const rooms = sampleRooms();
+    return [
+      {
+        startX: 4,
+        startY: 3,
+        endX: 6,
+        endY: 7,
+        width: 1,
+        method: CorridorGenerationMethod.ASTAR,
+        connectedRooms: [rooms[0].id, rooms[1].id],
+      },
+    ];
+  };
 
   const sampleTacticalElements = (): TacticalElement[] => [
     {
@@ -100,7 +109,7 @@ describe('FloorSnapshot', () => {
     const snapshot = createFloorSnapshot(1, map, { rooms, corridors, tacticalElements: elements });
 
     // 入力配列を変更しても snapshot 内部に影響しない
-    rooms.push({ x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
+    rooms.push({ id: 'room:extra', x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
     corridors.length = 0;
     elements.length = 0;
 
@@ -165,7 +174,7 @@ describe('FloorSnapshot', () => {
     const rooms = world.getRooms();
     const corridors = world.getCorridors();
     const elements = world.getTacticalElements();
-    rooms.push({ x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
+    rooms.push({ id: 'room:extra', x: 99, y: 99, width: 1, height: 1, type: RoomType.NORMAL });
     corridors.length = 0;
     elements.length = 0;
 

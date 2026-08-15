@@ -3,47 +3,55 @@ import { Room } from '../types';
 /**
  * Room を一意に識別する ID の型。
  *
- * 現在の実装ではフロア内で一意な `"${x},${y}"` 形式の文字列。
- * Room の左上座標は生成後に不変のため、生成時固定 ID として安定する。
- * Room ロック状態など、Room に紐づく追加状態のキーとして使用できる。
+ * 不透明 ID（座標由来ではない）。`"room:<n>"` 形式の文字列で、
+ * 生成時に採番される。座標変更に強く、FOV の tileKey("x,y") との衝突がない。
  *
- * 将来的にフロア番号を含む永続 ID へ移行する場合でも、
- * この型を経由すれば呼び出し側の変更を局所化できる。
+ * 生成器が同じシードで同じ順序で Room を生成する限り、
+ * 同じシードでは同じ ID が採番される（決定論的）。
  */
 export type RoomId = string & { readonly __roomBrand: unique symbol };
 
 /**
- * Room の左上座標から RoomId を生成する。
- * 同一フロア内で座標が同じ Room は同じ ID になる。
+ * RoomId のプレフィックス。tileKey("x,y") との区別に使用する。
  */
-export function createRoomId(x: number, y: number): RoomId {
-  return `${x},${y}` as RoomId;
+const ROOM_ID_PREFIX = 'room:';
+
+/**
+ * RoomId を採番するジェネレータ。
+ * 生成器インスタンスごとに1つ作成し、Room 生成時に next() で採番する。
+ * 同じ生成順序なら同じ ID になるため、決定論的生成を維持する。
+ */
+export class RoomIdGenerator {
+  private counter = 0;
+
+  /** 次の RoomId を採番する */
+  next(): RoomId {
+    return `${ROOM_ID_PREFIX}${this.counter++}` as RoomId;
+  }
+
+  /** 現在の採番数を取得する（テスト用） */
+  get count(): number {
+    return this.counter;
+  }
 }
 
 /**
- * Room から RoomId を生成する。
+ * Room から RoomId を取得する。
+ * Room.id は生成時に採番済みであることを前提とする。
+ * 座標から ID を導出しない。
  */
-export function roomToId(room: Pick<Room, 'x' | 'y'>): RoomId {
-  return createRoomId(room.x, room.y);
+export function roomToId(room: Pick<Room, 'id'>): RoomId {
+  if (!room.id) {
+    throw new Error('Room has no id. RoomId must be assigned at generation time.');
+  }
+  return room.id as RoomId;
 }
 
 /**
- * 値が RoomId 形式（"x,y" 文字列）かを判定する。
- * 型ガードとして利用できる。
+ * 値が RoomId 形式（"room:<n>" 文字列）かを判定する。
+ * 型ガードとして利用できる。tileKey("x,y") とは区別される。
  */
 export function isRoomId(value: unknown): value is RoomId {
   if (typeof value !== 'string') return false;
-  const parts = value.split(',');
-  if (parts.length !== 2) return false;
-  const x = Number(parts[0]);
-  const y = Number(parts[1]);
-  return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0;
-}
-
-/**
- * RoomId を座標へ戻す。
- */
-export function roomIdToCoords(id: RoomId): { x: number; y: number } {
-  const [x, y] = id.split(',').map(Number);
-  return { x, y };
+  return value.startsWith(ROOM_ID_PREFIX);
 }

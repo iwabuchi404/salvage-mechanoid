@@ -188,7 +188,7 @@ export class LShapeCorridorGenerator implements CorridorGeneratorInterface {
       endY: connectionB.y,
       width: config.width,
       method: CorridorGenerationMethod.L_SHAPE,
-      connectedRooms: [`${roomA.x},${roomA.y}`, `${roomB.x},${roomB.y}`],
+      connectedRooms: [roomA.id!, roomB.id!],
     };
 
     return corridor;

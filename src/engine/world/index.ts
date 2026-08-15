@@ -36,7 +36,7 @@ export { TileMap } from './TileMap';
 export { WorldSystem } from './WorldSystem';
 export { createFloorSnapshot } from './FloorSnapshot';
 export type { FloorSnapshot, FloorNumber } from './FloorSnapshot';
-export { createRoomId, roomToId, isRoomId, roomIdToCoords } from './RoomId';
+export { RoomIdGenerator, roomToId, isRoomId } from './RoomId';
 export type { RoomId } from './RoomId';
 export {
   corridorToDoorways,

@@ -230,6 +230,7 @@ export class CaveGenerator extends BaseRoomGenerator {
     }
 
     return {
+      id: this.roomIdGenerator.next(),
       x: minX,
       y: minY,
       width: width,

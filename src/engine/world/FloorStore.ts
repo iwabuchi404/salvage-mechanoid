@@ -1,7 +1,7 @@
 import { Room, Corridor, TacticalElement } from '../types';
 import { TileMap } from './TileMap';
 import { Doorway, corridorsToDoorways } from './Doorway';
-import { RoomId, roomToId } from './RoomId';
+import { RoomId } from './RoomId';
 
 /**
  * FloorStore - WorldSystem 内部でフロアごとのデータを保持するモジュール。
@@ -55,7 +55,7 @@ export class FloorStore {
 
   /**
    * フロアデータを登録し、現在のフロアを切り替える。
-   * Room に id が未設定の場合は RoomId を付与する。
+   * Room は生成時に RoomId が採番済みであることを前提とする。
    * Doorway が未指定の場合は corridors から導出する。
    */
   register(
@@ -66,13 +66,10 @@ export class FloorStore {
     tacticalElements: readonly TacticalElement[],
     doorways?: readonly Doorway[]
   ): void {
-    const roomsWithId = rooms.map((room) =>
-      room.id ? room : { ...room, id: roomToId(room) as string }
-    );
-    const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, roomsWithId);
+    const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, rooms);
 
     this.floorMaps.set(floor, tileMap);
-    this.floorRooms.set(floor, roomsWithId);
+    this.floorRooms.set(floor, [...rooms]);
     this.floorCorridors.set(floor, [...corridors]);
     this.floorTacticalElements.set(floor, [...tacticalElements]);
     this.floorDoorways.set(floor, resolvedDoorways);
