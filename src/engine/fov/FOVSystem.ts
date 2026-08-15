@@ -7,7 +7,13 @@ import { Player } from '../entity/Player';
 import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
 import { TileType, Direction, Room } from '../types';
-import { computeFOV, tileKey, FOVBoundsQuery, FOVObstacleQuery, ViewProfile } from './FOVCalculator';
+import {
+  computeFOV,
+  tileKey,
+  FOVBoundsQuery,
+  FOVObstacleQuery,
+  ViewProfile,
+} from './FOVCalculator';
 import {
   diffEntityVisibility,
   diffTileVisibility,
