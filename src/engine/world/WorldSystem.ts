@@ -89,11 +89,6 @@ export class WorldSystem implements System {
       this.onEntityMoved(data);
     });
 
-    // ポータル使用イベント
-    this.eventSystem.on('portal_used', (data) => {
-      this.onPortalUsed(data);
-    });
-
     // タイル変更イベント
     this.eventSystem.on('tile_changed', (data) => {
       this.onTileChanged(data);
@@ -128,24 +123,6 @@ export class WorldSystem implements System {
         tileType: tile.type,
       });
     }
-  }
-
-  /**
-   * ポータル使用イベントハンドラ
-   * @param data イベントデータ
-   */
-  private onPortalUsed(data: { entityId: string; targetFloor?: number }): void {
-    // プレイヤーが対象の場合のみ処理（必要に応じて変更可能）
-    if (!this.entitySystem) return;
-
-    const entity = this.entitySystem.getEntity(data.entityId);
-    if (!entity || !entity.hasTag('player')) return;
-
-    // 目標フロアを決定
-    const targetFloor = data.targetFloor || this.floorStore.getCurrentFloor() + 1;
-
-    // 指定されたフロアに移動
-    this.changeFloor(targetFloor);
   }
 
   /**
@@ -375,79 +352,6 @@ export class WorldSystem implements System {
 
     // エンティティシステムからすべてのエンティティを取得
     return this.entitySystem.getEntities();
-  }
-
-  /**
-   * フロアを変更
-   * @param floorNumber 目標フロア番号
-   */
-  async changeFloor(floorNumber: number): Promise<void> {
-    // 既存のフロアマップがあれば使用、なければ新規生成
-    if (!this.floorStore.hasFloor(floorNumber)) {
-      // 新しいフロアのマップを生成
-      await this.generateNewFloor(floorNumber);
-    }
-
-    // フロアを切り替え
-    this.floorStore.setCurrentFloor(floorNumber);
-
-    // フロア変更イベントを発行
-    if (this.eventSystem) {
-      this.eventSystem.emit('floor_changed', {
-        floorNumber: floorNumber,
-      });
-    }
-
-    console.log(`Changed to floor ${floorNumber}`);
-  }
-
-  /**
-   * 新しいフロアを生成
-   * @param floorNumber フロア番号
-   */
-  private async generateNewFloor(floorNumber: number): Promise<void> {
-    // フロア番号に基づいて難易度を調整
-    const difficulty = Math.min(1 + (floorNumber - 1) * 0.1, 2);
-
-    // フロア番号に応じて戦術的ステージタイプを決定
-    const stageTypes = [
-      StageType.TACTICAL_COMBAT,
-      StageType.STEALTH_MISSION,
-      StageType.ENERGY_MANAGEMENT,
-      StageType.RESOURCE_CONTROL,
-      StageType.INFORMATION_WAR,
-      StageType.SURVIVAL_CHALLENGE,
-    ];
-    const stageType = stageTypes[(floorNumber - 1) % stageTypes.length];
-
-    // MapGeneratorFacadeを使用
-    const mapGenerator = new MapGeneratorFacade(50, 50);
-
-    // 戦術的マップを生成
-    const tacticalData = await mapGenerator.generateTacticalMap(stageType, {
-      minRoomSize: Math.max(3, Math.floor(4 / difficulty)),
-      maxRoomSize: Math.max(5, Math.floor(8 / difficulty)),
-      energyTightness: floorNumber <= 2 ? 'relaxed' : floorNumber <= 4 ? 'balanced' : 'tight',
-      playerLevel: floorNumber,
-    });
-
-    // 新しいタイルマップを作成
-    const newMap = new TileMap(50, 50);
-    newMap.importMapData(tacticalData.map);
-
-    // 部屋・通路・戦術的要素を FloorSnapshot として同一世代で保存
-    this.registerFloorSnapshot(
-      createFloorSnapshot(floorNumber, newMap, {
-        rooms: tacticalData.rooms,
-        corridors: tacticalData.corridors,
-        tacticalElements: tacticalData.tacticalElements,
-      })
-    );
-
-    console.log(`Generated new floor ${floorNumber} with stage type: ${stageType}`);
-    console.log(`  Rooms: ${tacticalData.rooms.length}`);
-    console.log(`  Energy points: ${tacticalData.energyPoints.length}`);
-    console.log(`  Tactical elements: ${tacticalData.tacticalElements.length}`);
   }
 
   /**
@@ -771,7 +675,3 @@ export class WorldSystem implements System {
     return this.floorStore.getCurrentTileMap().isInBounds(x, y, z);
   }
 }
-
-// 必要なインポート
-import { MapGeneratorFacade } from './MapGeneratorFacade';
-import { StageType } from '../types';

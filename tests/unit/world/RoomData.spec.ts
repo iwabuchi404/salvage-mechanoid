@@ -3,6 +3,7 @@ import { EventSystem } from '@/engine/events/EventSystem';
 import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
+import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
 import { FlexibleMapGenerator } from '@/engine/world/FlexibleMapGenerator';
 import { BSPGenerator } from '@/engine/world/generators/BSPGenerator';
 import {
@@ -500,111 +501,171 @@ describe('Room data and connections', () => {
   });
 
   describe('WorldSystem floor map storage', () => {
-    it('フロア切替後に各階の TileMap を独立して保持する', async () => {
-      const map = new TileMap(10, 10);
-      for (let y = 0; y < 10; y++) {
-        for (let x = 0; x < 10; x++) {
+    /** テスト用の単純なマップを作成するヘルパ */
+    const makeFilledMap = (w: number, h: number): TileMap => {
+      const map = new TileMap(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
           map.setTileAt(x, y, 0, TileType.TILE, true);
         }
       }
-      world = new WorldSystem(map);
+      return map;
+    };
+
+    /** テスト用の Room 配列を作成するヘルパ（フロアごとに異なる座標） */
+    const makeRooms = (offset: number): Room[] => [
+      {
+        x: offset,
+        y: offset,
+        width: 5,
+        height: 5,
+        type: RoomType.NORMAL,
+      },
+      {
+        x: offset + 10,
+        y: offset + 10,
+        width: 6,
+        height: 6,
+        type: RoomType.BOSS,
+      },
+    ];
+
+    /** テスト用の Corridor 配列を作成するヘルパ */
+    const makeCorridors = (offset: number): Corridor[] => [
+      {
+        startX: offset + 5,
+        startY: offset + 2,
+        endX: offset + 10,
+        endY: offset + 12,
+        width: 1,
+        method: 'astar' as CorridorGenerationMethod,
+        connectedRooms: [`${offset},${offset}`, `${offset + 10},${offset + 10}`],
+      },
+    ];
+
+    it('フロア切替後に各階の TileMap を独立して保持する', async () => {
+      const map1 = makeFilledMap(10, 10);
+      world = new WorldSystem(map1);
       Engine.instance.registerSystem('world', world);
       await world.initialize(Engine.instance);
 
-      // 新しいフロアを生成して切り替え
-      await world.changeFloor(2);
+      // フロア2と3を個別に登録して切り替える
+      const map2 = makeFilledMap(20, 20);
+      const map3 = makeFilledMap(30, 30);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(2, map2, { rooms: makeRooms(0), corridors: makeCorridors(0) })
+      );
+      world.registerFloorSnapshot(
+        createFloorSnapshot(3, map3, { rooms: makeRooms(100), corridors: makeCorridors(100) })
+      );
 
-      // フロア2は generateNewFloor で 50x50 のマップが生成される
+      // フロア2へ切替
+      world.setCurrentFloor(2);
       expect(world.getTileMap()).toBeDefined();
-      expect(world.getTileMap()!.getWidth()).toBe(50);
-      expect(world.getTileMap()!.getHeight()).toBe(50);
+      expect(world.getTileMap()!.getWidth()).toBe(20);
 
-      // フロア3も別途生成される
-      await world.changeFloor(3);
-      expect(world.getTileMap()!.getWidth()).toBe(50);
+      // フロア3へ切替
+      world.setCurrentFloor(3);
+      expect(world.getTileMap()!.getWidth()).toBe(30);
 
       // フロア2に戻ってから floor2 のマップ参照を記録
-      await world.changeFloor(2);
+      world.setCurrentFloor(2);
       const floor2MapBefore = world.getTileMap();
 
       // フロア3に移動してから再度フロア2に戻る
-      await world.changeFloor(3);
-      await world.changeFloor(2);
+      world.setCurrentFloor(3);
+      world.setCurrentFloor(2);
 
       // 同一参照が保持されている（再生成されていない）
       expect(world.getTileMap()).toBe(floor2MapBefore);
     });
 
     it('フロア切替後に各階の Room 情報を独立して保持する', async () => {
-      const map = new TileMap(10, 10);
-      for (let y = 0; y < 10; y++) {
-        for (let x = 0; x < 10; x++) {
-          map.setTileAt(x, y, 0, TileType.TILE, true);
-        }
-      }
-      world = new WorldSystem(map);
+      const map1 = makeFilledMap(10, 10);
+      world = new WorldSystem(map1);
       Engine.instance.registerSystem('world', world);
       await world.initialize(Engine.instance);
 
-      // フロア2を生成
-      await world.changeFloor(2);
-      const floor2Rooms = world.getRooms();
-      expect(floor2Rooms.length).toBeGreaterThan(0);
+      const floor2Rooms = makeRooms(0);
+      const floor3Rooms = makeRooms(100);
 
-      // 各 Room の ID（x,y 形式）を記録
-      const floor2RoomIds = floor2Rooms.map((r) => `${r.x},${r.y}`);
+      world.registerFloorSnapshot(
+        createFloorSnapshot(2, makeFilledMap(20, 20), {
+          rooms: floor2Rooms,
+          corridors: makeCorridors(0),
+        })
+      );
+      world.registerFloorSnapshot(
+        createFloorSnapshot(3, makeFilledMap(20, 20), {
+          rooms: floor3Rooms,
+          corridors: makeCorridors(100),
+        })
+      );
 
-      // フロア3を生成
-      await world.changeFloor(3);
-      const floor3Rooms = world.getRooms();
-      expect(floor3Rooms.length).toBeGreaterThan(0);
+      // フロア2へ切替
+      world.setCurrentFloor(2);
+      const floor2RoomIds = world.getRooms().map((r) => `${r.x},${r.y}`);
+      expect(world.getRooms().length).toBeGreaterThan(0);
 
-      // フロア2とフロア3で Room 構造が異なる（内容ベースで比較）
-      const floor3RoomIds = floor3Rooms.map((r) => `${r.x},${r.y}`);
+      // フロア3へ切替
+      world.setCurrentFloor(3);
+      const floor3RoomIds = world.getRooms().map((r) => `${r.x},${r.y}`);
+      expect(world.getRooms().length).toBeGreaterThan(0);
+
+      // フロア2とフロア3で Room 構造が異なる
       expect(floor3RoomIds).not.toEqual(floor2RoomIds);
 
       // 独立性検証: floor2 の Room 配列を変更しても floor3 に影響しない
+      world.setCurrentFloor(2);
       const floor2RoomsRef = world.getRooms();
-      // floor3 に切り替えてから floor3 の Room を取得
-      await world.changeFloor(3);
+      world.setCurrentFloor(3);
       const floor3RoomsRef = world.getRooms();
-      // floor2 の Room 配列を破壊的に変更
       floor2RoomsRef.push({ x: 999, y: 999, width: 1, height: 1 } as any);
-      // floor3 の Room 配列は影響を受けないことを検証
       expect(floor3RoomsRef.length).toBe(floor3Rooms.length);
       expect(floor3RoomsRef.some((r) => r.x === 999 && r.y === 999)).toBe(false);
 
-      // フロア2に戻っても元の Room 内容が保持されている（値で比較）
-      await world.changeFloor(2);
+      // フロア2に戻っても元の Room 内容が保持されている
+      world.setCurrentFloor(2);
       const floor2RoomIdsAfter = world.getRooms().map((r) => `${r.x},${r.y}`);
       expect(floor2RoomIdsAfter).toEqual(floor2RoomIds);
     });
 
     it('フロア切替後に各階の Corridor 情報を独立して保持する', async () => {
-      const map = new TileMap(10, 10);
-      for (let y = 0; y < 10; y++) {
-        for (let x = 0; x < 10; x++) {
-          map.setTileAt(x, y, 0, TileType.TILE, true);
-        }
-      }
-      world = new WorldSystem(map);
+      const map1 = makeFilledMap(10, 10);
+      world = new WorldSystem(map1);
       Engine.instance.registerSystem('world', world);
       await world.initialize(Engine.instance);
 
-      // フロア2を生成
-      await world.changeFloor(2);
+      const floor2Corridors = makeCorridors(0);
+      const floor3Corridors = makeCorridors(100);
+
+      world.registerFloorSnapshot(
+        createFloorSnapshot(2, makeFilledMap(20, 20), {
+          rooms: makeRooms(0),
+          corridors: floor2Corridors,
+        })
+      );
+      world.registerFloorSnapshot(
+        createFloorSnapshot(3, makeFilledMap(20, 20), {
+          rooms: makeRooms(100),
+          corridors: floor3Corridors,
+        })
+      );
+
+      // フロア2へ切替
+      world.setCurrentFloor(2);
       const floor2CorridorIds = world
         .getCorridors()
         .map((c) => `${c.startX},${c.startY}->${c.endX},${c.endY}`);
       expect(floor2CorridorIds.length).toBeGreaterThan(0);
 
-      // フロア3を生成
-      await world.changeFloor(3);
+      // フロア3へ切替
+      world.setCurrentFloor(3);
       expect(world.getCorridors().length).toBeGreaterThan(0);
 
-      // フロア2に戻っても同じ Corridor 内容が保持されている（値で比較）
-      await world.changeFloor(3);
-      await world.changeFloor(2);
+      // フロア2に戻っても同じ Corridor 内容が保持されている
+      world.setCurrentFloor(3);
+      world.setCurrentFloor(2);
       const floor2CorridorIdsAfter = world
         .getCorridors()
         .map((c) => `${c.startX},${c.startY}->${c.endX},${c.endY}`);
