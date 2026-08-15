@@ -509,6 +509,69 @@ describe('Doorway', () => {
       expect(world.getDoorwaysByFloor(3)).toHaveLength(2);
       expect(world.getDoorwaysByFloor(99)).toEqual([]);
     });
+
+    it('registerFloorSnapshot は不正な Doorway に対して警告を出力する（B3）', () => {
+      const gen = new RoomIdGenerator();
+      const map = new TileMap(30, 30);
+      const rooms = [makeRoom(gen, 1, 1, 4, 4), makeRoom(gen, 10, 10, 4, 4)];
+
+      // fromRoom が存在しない不正な Doorway を明示的に渡す
+      const invalidDoorways: Doorway[] = [
+        {
+          position: { x: 4, y: 2 },
+          direction: 'right',
+          fromRoom: 'room:999' as any,
+          toRoom: rooms[1].id as any,
+        },
+      ];
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      world.registerFloorSnapshot(
+        createFloorSnapshot(1, map, { rooms, doorways: invalidDoorways })
+      );
+
+      // 警告が出力される
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Doorway validation error'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown_from_room'));
+
+      warnSpy.mockRestore();
+    });
+
+    it('registerFloorSnapshot は有効な Doorway に対して警告を出力しない（B3）', () => {
+      const gen = new RoomIdGenerator();
+      const map = new TileMap(30, 30);
+      // 全タイルを通行可能に設定
+      for (let y = 0; y < 30; y++) {
+        for (let x = 0; x < 30; x++) {
+          map.setTileAt(x, y, 0, TileType.TILE, true);
+        }
+      }
+      const rooms = [makeRoom(gen, 1, 1, 4, 4), makeRoom(gen, 10, 10, 4, 4)];
+      const corridors: Corridor[] = [
+        {
+          startX: 4,
+          startY: 2,
+          endX: 10,
+          endY: 12,
+          width: 1,
+          method: CorridorGenerationMethod.ASTAR,
+          connectedRooms: [rooms[0].id, rooms[1].id],
+        },
+      ];
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      world.registerFloorSnapshot(createFloorSnapshot(1, map, { rooms, corridors }));
+
+      // Doorway 検証エラーの警告は出力されない
+      const validationWarnings = warnSpy.mock.calls.filter((call) =>
+        String(call[0]).includes('Doorway validation error')
+      );
+      expect(validationWarnings).toHaveLength(0);
+
+      warnSpy.mockRestore();
+    });
   });
 
   describe('generated map Doorway consistency', () => {

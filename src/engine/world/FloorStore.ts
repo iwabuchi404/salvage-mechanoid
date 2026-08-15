@@ -1,6 +1,6 @@
 import { Room, Corridor, TacticalElement } from '../types';
 import { TileMap } from './TileMap';
-import { Doorway, corridorsToDoorways } from './Doorway';
+import { Doorway, corridorsToDoorways, validateDoorways } from './Doorway';
 import { RoomId } from './RoomId';
 
 /**
@@ -57,6 +57,7 @@ export class FloorStore {
    * フロアデータを登録し、現在のフロアを切り替える。
    * Room は生成時に RoomId が採番済みであることを前提とする。
    * Doorway が未指定の場合は corridors から導出する。
+   * Doorway 検証を本番経路で実行し、不正な Doorway があれば警告を出力する（B3）。
    */
   register(
     floor: number,
@@ -67,6 +68,23 @@ export class FloorStore {
     doorways?: readonly Doorway[]
   ): void {
     const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, rooms);
+
+    // Doorway 検証を本番経路で実行（B3）
+    // 不正な Doorway があれば警告を出力するが、登録はブロックしない。
+    // 通行可能性判定は TileMap 経由で行う。
+    if (resolvedDoorways.length > 0 && rooms.length > 0) {
+      const validationResult = validateDoorways(resolvedDoorways, rooms, (x, y) =>
+        tileMap.isWalkable(x, y, 0)
+      );
+      if (!validationResult.valid) {
+        for (const error of validationResult.errors) {
+          console.warn(
+            `[FloorStore] Doorway validation error on floor ${floor}: ` +
+              `${error.kind} at doorway #${error.doorwayIndex}: ${error.message}`
+          );
+        }
+      }
+    }
 
     this.floorMaps.set(floor, tileMap);
     this.floorRooms.set(floor, [...rooms]);
