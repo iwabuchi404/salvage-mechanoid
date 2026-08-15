@@ -82,10 +82,8 @@ export class Game {
   private placedItems: PlacedItem[] = [];
   private placedEnemies: PlacedEnemy[] = [];
 
-  // マップ生成情報を保存
-  private currentRooms: Room[] = [];
-  private currentCorridors: Corridor[] = [];
-  private currentTacticalElements: TacticalElement[] = [];
+  // B4: フロアデータ（Room/Corridor/TacticalElement）は WorldSystem を正本とする。
+  // Game 側では重複して保持せず、必要時に WorldSystem から取得する。
 
   // ゲームが初期化済みかどうか
   private initialized = false;
@@ -183,10 +181,7 @@ export class Game {
     this.placedItems = [];
     this.placedEnemies = [];
 
-    // マップ情報をクリア
-    this.currentRooms = [];
-    this.currentCorridors = [];
-    this.currentTacticalElements = [];
+    // B4: フロアデータは WorldSystem が正本のため Game 側ではクリア不要
 
     // タイルマップをクリア
     this.tileMap = null;
@@ -375,9 +370,8 @@ export class Game {
    */
   private async commitMapState(state: GeneratedMapState, floorNumber: number): Promise<void> {
     this.tileMap = state.tileMap;
-    this.currentRooms = state.rooms;
-    this.currentCorridors = state.corridors;
-    this.currentTacticalElements = state.tacticalElements;
+    // B4: Room/Corridor/TacticalElement は WorldSystem へ登録のみ行い、
+    // Game 側には保持しない（WorldSystem を正本とする）
 
     // 既存の WorldSystem を再利用（単一インスタンス維持）
     // なければ新規作成してエンジンに登録
@@ -563,9 +557,10 @@ export class Game {
 
     const mapState: GeneratedMapState = {
       tileMap: this.tileMap,
-      rooms: this.currentRooms,
-      corridors: this.currentCorridors,
-      tacticalElements: this.currentTacticalElements,
+      // B4: WorldSystem から現在フロアのデータを取得（正本は FloorStore）
+      rooms: worldSystem.getRooms(),
+      corridors: worldSystem.getCorridors(),
+      tacticalElements: worldSystem.getTacticalElements(),
     };
     const playerStartPos = this.getPlayerGridPosition();
     const resourceState = await this.buildResourceState(
@@ -1143,9 +1138,8 @@ export class Game {
 
     // 以降は例外を投げない同期操作のみ。全生成完了後に一括で公開する。
     this.tileMap = mapState.tileMap;
-    this.currentRooms = mapState.rooms;
-    this.currentCorridors = mapState.corridors;
-    this.currentTacticalElements = mapState.tacticalElements;
+    // B4: Room/Corridor/TacticalElement は WorldSystem へ登録のみ行い、
+    // Game 側には保持しない（WorldSystem を正本とする）
     this.resourceSystem = resourceState.resourceSystem;
     this.placedObstacles = resourceState.obstacles;
     this.placedItems = resourceState.items;
