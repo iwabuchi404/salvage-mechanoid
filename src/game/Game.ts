@@ -7,6 +7,7 @@ import { EventSystem } from '../engine/events/EventSystem';
 import { AudioSystem } from '../engine/audio/AudioSystem';
 import { TurnSystem } from '../engine/turn/TurnSystem';
 import { ActionExecutor, createMoveAction, createTurnAction } from '../engine/turn/ActionExecutor';
+import { TurnScheduler } from '../engine/turn/TurnScheduler';
 import { EffectSystem } from '../engine/effects/EffectSystem';
 import { CombatSystem } from '../engine/combat/CombatSystem';
 import { InteractionSystem } from '../engine/interaction/InteractionSystem';
@@ -89,6 +90,9 @@ export class Game {
   // BU-3 段階3: ActionExecutor（UI からの行動委譲先）
   private actionExecutor: ActionExecutor | null = null;
 
+  // BU-3 段階5: TurnScheduler（エネルギー式スケジューラ）
+  private turnScheduler: TurnScheduler | null = null;
+
   // 生成されたリソースを保存
   private placedObstacles: PlacedObstacle[] = [];
   private placedItems: PlacedItem[] = [];
@@ -157,6 +161,11 @@ export class Game {
     // エンジンを開始
     this.engine.start();
 
+    // BU-3 段階5: TurnScheduler を開始（プレイヤー入力待ちへ）
+    if (this.turnScheduler) {
+      this.turnScheduler.start();
+    }
+
     this.initialized = true;
   }
 
@@ -191,6 +200,12 @@ export class Game {
 
     // BU-3 段階3: ActionExecutor もクリア
     this.actionExecutor = null;
+
+    // BU-3 段階5: TurnScheduler を停止・クリア
+    if (this.turnScheduler) {
+      this.turnScheduler.stop();
+      this.turnScheduler = null;
+    }
 
     // プレイヤーをクリア
     this.player = null;
@@ -529,6 +544,14 @@ export class Game {
     if (!this.actionExecutor) {
       this.actionExecutor = new ActionExecutor();
       this.actionExecutor.initialize();
+    }
+
+    // BU-3 段階5: TurnScheduler を初期化し InputSystem へ設定
+    if (!this.turnScheduler) {
+      this.turnScheduler = new TurnScheduler();
+      this.turnScheduler.initialize(this.engine);
+      const inputSystem = this.engine.getSystem<InputSystem>('input');
+      inputSystem?.setScheduler(this.turnScheduler);
     }
 
     // プレイヤーエンティティを作成（C1: PlayerFactory が Presentation も組み立てる）

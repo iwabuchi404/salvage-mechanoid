@@ -11,6 +11,7 @@ import {
   createAttackAction,
   createWaitAction,
 } from '../turn/ActionExecutor';
+import { TurnScheduler } from '../turn/TurnScheduler';
 
 /**
  * 入力システム - キーボード/マウス入力を管理
@@ -37,6 +38,14 @@ export class InputSystem implements System {
 
   // BU-3 段階3: ActionExecutor への参照
   private actionExecutor: ActionExecutor | null = null;
+
+  // BU-3 段階5: TurnScheduler への参照（設定されていればこちらを優先）
+  private scheduler: TurnScheduler | null = null;
+
+  /** TurnScheduler を設定する */
+  setScheduler(scheduler: TurnScheduler): void {
+    this.scheduler = scheduler;
+  }
 
   // キャンバス要素
   private canvas: HTMLCanvasElement | null = null;
@@ -293,11 +302,13 @@ export class InputSystem implements System {
   /**
    * プレイヤーの移動をリクエスト
    *
-   * BU-3 段階3: ActionExecutor 経由で行動を実行する。
-   * エネルギー消費は ActionExecutor が行う。
+   * BU-3 段階5: TurnScheduler が設定されていれば submitPlayerAction で行動を投入する。
+   * なければ ActionExecutor へフォールバック（段階3の挙動）。
    */
   private requestPlayerMove(player: Player, direction: Direction): void {
-    if (this.actionExecutor) {
+    if (this.scheduler && this.scheduler.isWaitingForPlayerInput()) {
+      this.scheduler.submitPlayerAction(createMoveAction(player.id, direction));
+    } else if (this.actionExecutor) {
       this.actionExecutor.execute(createMoveAction(player.id, direction));
     } else {
       player.move(direction);
@@ -310,10 +321,12 @@ export class InputSystem implements System {
   /**
    * プレイヤーの攻撃をリクエスト
    *
-   * BU-3 段階3: ActionExecutor 経由で行動を実行する。
+   * BU-3 段階5: TurnScheduler が設定されていれば submitPlayerAction で行動を投入する。
    */
   private requestPlayerAttack(player: Player): void {
-    if (this.actionExecutor) {
+    if (this.scheduler && this.scheduler.isWaitingForPlayerInput()) {
+      this.scheduler.submitPlayerAction(createAttackAction(player.id));
+    } else if (this.actionExecutor) {
       this.actionExecutor.execute(createAttackAction(player.id));
     } else {
       player.attack();
