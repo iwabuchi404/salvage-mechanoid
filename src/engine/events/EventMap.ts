@@ -83,6 +83,12 @@ export interface EventMap {
   player_turn_ended: { playerId: string };
   enemy_turn_started: Record<string, never>;
   enemy_action_started: { enemyId: string };
+  /**
+   * BU-3 段階1: ターン番号が進んだ（プレイヤー行動完了時）。
+   * 継続効果・クールダウンはこの turn を参照して失効を判定する。
+   * 既存の player_turn_started / enemy_turn_started は併存させる（UI・InputSystem が購読中）。
+   */
+  turn_started: { turn: number };
 
   // ===== フロア =====
   floor_changed: { floor: number; maxFloors: number };

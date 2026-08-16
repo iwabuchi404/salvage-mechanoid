@@ -15,6 +15,9 @@ export enum TurnPhase {
 /**
  * ターン管理システム - ECS版
  * プレイヤーと敵のターン制御、フェーズ管理を行う
+ *
+ * BU-3 段階1: turnNumber を導入し、startNewTurn() でインクリメントして
+ * turn_started イベントを発行する。継続効果・クールダウンはこの turn を参照する。
  */
 export class TurnSystem implements System {
   // エンジンへの参照
@@ -34,6 +37,9 @@ export class TurnSystem implements System {
 
   // 現在処理中の敵のインデックス
   private currentEnemyIndex = 0;
+
+  // BU-3 段階1: ターン番号（プレイヤー行動完了ごとに +1、単調増加）
+  private turnNumber = 0;
 
   /**
    * コンストラクタ
@@ -103,12 +109,26 @@ export class TurnSystem implements System {
 
   /**
    * 新しいターンを開始
+   *
+   * BU-3 段階1: ターン番号をインクリメントし turn_started を発行する。
+   * 既存の player_turn_started は併存させる（UI・InputSystem・SkillSystem が購読中）。
    */
   startNewTurn(): void {
     this.currentPhase = TurnPhase.PLAYER;
+    this.turnNumber += 1;
 
-    // プレイヤーターン開始イベントを発行
+    // ターン番号の進行を通知（継続効果・クールダウンの基準）
+    this.eventSystem?.emit('turn_started', { turn: this.turnNumber });
+
+    // プレイヤーターン開始イベントを発行（既存リスナー互換）
     this.eventSystem?.emit('player_turn_started', {});
+  }
+
+  /**
+   * BU-3 段階1: 現在のターン番号を取得する
+   */
+  getTurnNumber(): number {
+    return this.turnNumber;
   }
 
   /**

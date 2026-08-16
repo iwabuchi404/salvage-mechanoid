@@ -20,8 +20,15 @@ export class SkillSystem implements System {
   // プレイヤーが習得しているスキルID一覧
   private learnedSkills: Set<string> = new Set();
 
-  // スキルのクールダウン状態（スキルID -> 残りターン数）
-  private cooldowns: Map<string, number> = new Map();
+  // BU-3 段階1: クールダウンを「失効ターン番号」で保持する。
+  // 旧実装は「残りターン数」を player_turn_started で減らしていたが、
+  // これはターン番号がない時代の代替手段。turn_started が導入されたので
+  // 「使用時の turnNumber + cooldown + 1」を失効ターンとする。
+  // getCooldownRemaining は現在ターンとの差で算出する。
+  private cooldownUntilTurn: Map<string, number> = new Map();
+
+  // 現在のターン番号（turn_started で更新）
+  private currentTurn = 0;
 
   /**
    * システムを初期化
@@ -50,29 +57,19 @@ export class SkillSystem implements System {
 
   /**
    * イベントリスナーを設定
+   *
+   * BU-3 段階1: クールダウン更新を player_turn_started から turn_started へ変更。
+   * ターン番号ベースで失効を判定するため、毎ターンの減算処理は不要。
    */
   private setupEventListeners(): void {
     if (!this.eventSystem) {
       return;
     }
 
-    // プレイヤーターン開始時にクールダウンを更新
-    this.eventSystem.on('player_turn_started', () => {
-      this.updateCooldowns();
+    // ターン番号が進んだら現在ターンを更新
+    this.eventSystem.on('turn_started', (data) => {
+      this.currentTurn = data.turn;
     });
-  }
-
-  /**
-   * クールダウンを更新（1ターン経過）
-   */
-  private updateCooldowns(): void {
-    for (const [skillId, remainingTurns] of this.cooldowns.entries()) {
-      if (remainingTurns > 0) {
-        this.cooldowns.set(skillId, remainingTurns - 1);
-      } else {
-        this.cooldowns.delete(skillId);
-      }
-    }
   }
 
   /**
@@ -141,9 +138,10 @@ export class SkillSystem implements System {
     // スキルを使用
     console.log(`Using skill: ${skill.name} (${skillId})`);
 
-    // クールダウンを設定
+    // BU-3 段階1: クールダウンを失効ターン番号で設定
+    // 現在ターン + cooldown + 1 が失効ターン（cooldown=3 なら3ターン後の同じターンで使用可能）
     if (skill.cooldown > 0) {
-      this.cooldowns.set(skillId, skill.cooldown);
+      this.cooldownUntilTurn.set(skillId, this.currentTurn + skill.cooldown + 1);
     }
 
     // スキル使用イベントを発行
@@ -160,19 +158,26 @@ export class SkillSystem implements System {
    * スキルがクールダウン中かチェック
    * @param skillId スキルID
    * @returns クールダウン中ならtrue
+   *
+   * BU-3 段階1: 現在ターンが失効ターン未満ならクールダウン中。
    */
   isOnCooldown(skillId: string): boolean {
-    const remaining = this.cooldowns.get(skillId);
-    return remaining !== undefined && remaining > 0;
+    const untilTurn = this.cooldownUntilTurn.get(skillId);
+    if (untilTurn === undefined) return false;
+    return this.currentTurn < untilTurn;
   }
 
   /**
    * スキルの残りクールダウンを取得
    * @param skillId スキルID
    * @returns 残りターン数（0ならクールダウン完了）
+   *
+   * BU-3 段階1: 失効ターン - 現在ターン で算出。
    */
   getCooldownRemaining(skillId: string): number {
-    return this.cooldowns.get(skillId) || 0;
+    const untilTurn = this.cooldownUntilTurn.get(skillId);
+    if (untilTurn === undefined) return 0;
+    return Math.max(0, untilTurn - this.currentTurn);
   }
 
   /**
