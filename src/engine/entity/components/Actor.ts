@@ -91,16 +91,16 @@ export class ActorComponent implements Component {
   /**
    * StatsComponent の moveSpeed から speed を同期する。
    * 装備変更で moveSpeed が変わった場合に呼ぶ。
+   *
+   * BU-3 段階7: 速度差を有効化する。
+   * StatsComponent があれば moveSpeed を speed へ反映する。
+   * StatsComponent が無い場合は既定値を維持する。
    */
   syncSpeedFromStats(): void {
     if (!this.entity) return;
     const stats = this.entity.getComponent<StatsComponent>('stats');
     if (stats) {
-      // 段階4時点では全員同じ既定値を維持するため、
-      // StatsComponent の moveSpeed は参照するが、
-      // 段階7で有効化するまでは既定値を優先する
-      // （moveSpeed はアニメーション速度と混同されるため）
-      // TODO 段階7: this._speed = stats.getValue('moveSpeed');
+      this._speed = stats.getValue('moveSpeed');
     }
   }
 }

@@ -202,8 +202,15 @@ export class TurnScheduler {
 
   /**
    * 敵ターンを処理する。
-   * 同速時は登録順、速度差は段階7で有効化する。
-   * この段階では従来通り1回ずつ順番に実行する。
+   *
+   * BU-3 段階7: 速度差を有効化する。
+   * 各アクターの speed を ACTION_THRESHOLD(100) で割った回数だけ行動する。
+   * speed 100 なら1回、speed 200 なら2回、speed 50 なら0回（偶数ターンのみ1回）。
+   * 同速時は登録順。
+   *
+   * BU-3 段階6: 敵の decideAction() が Action を返した場合は
+   * ActionExecutor 経由で実行する。null を返した場合は
+   * decideAction() 内で既に副作用を実行したものとして扱う（従来互換）。
    */
   private async runEnemyTurns(): Promise<void> {
     if (this.stopping || !this.running) return;
@@ -228,14 +235,30 @@ export class TurnScheduler {
       const health = enemy.getComponent<HealthComponent>('health');
       if (health && health.currentHp <= 0) continue;
 
-      this.eventSystem?.emit('enemy_action_started', { enemyId: enemy.id });
-
       const actor = enemy.getComponent<ActorComponent>('actor');
-      if (actor) {
+      if (!actor) continue;
+
+      // BU-3 段階7: speed に応じた行動回数を計算
+      const actionCount = Math.max(1, Math.floor(actor.speed / ACTION_THRESHOLD));
+
+      for (let i = 0; i < actionCount; i++) {
+        if (this.stopping || !this.running) return;
+
+        // 行動前に生存確認
+        const currentHealth = enemy.getComponent<HealthComponent>('health');
+        if (currentHealth && currentHealth.currentHp <= 0) break;
+
+        this.eventSystem?.emit('enemy_action_started', { enemyId: enemy.id });
+
         try {
-          await actor.decideAction();
+          const action = await actor.decideAction();
+          // BU-3 段階6: Action が返された場合は ActionExecutor 経由で実行
+          if (action && this.executor) {
+            await this.executor.execute(action);
+          }
         } catch (error) {
           console.error(`TurnScheduler: enemy ${enemy.id} action error`, error);
+          break;
         }
       }
     }

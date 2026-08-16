@@ -41,6 +41,16 @@ export class WorldSystem implements System {
   // 経路探索（内部モジュール）
   private pathfinding: PathfindingService;
 
+  // BU-3 段階8: タイル効果のターンベース管理
+  // setTimeout で時間経過後に解除していた一時効果を、
+  // ターン番号ベースの失効管理へ置き換える。
+  // 各エントリは { entityId, originalSpeed, expireTurn } を持つ。
+  private temporarySpeedEffects: Map<string, { originalSpeed: number; expireTurn: number }> =
+    new Map();
+
+  // 現在のターン番号（turn_started で更新）
+  private currentTurn = 0;
+
   /**
    * コンストラクタ
    * @param tileMap 初期タイルマップ
@@ -94,6 +104,33 @@ export class WorldSystem implements System {
     this.eventSystem.on('tile_changed', (data) => {
       this.onTileChanged(data);
     });
+
+    // BU-3 段階8: ターン番号が進んだら一時効果の失効をチェックする
+    this.eventSystem.on('turn_started', (data) => {
+      this.currentTurn = data.turn;
+      this.expireSpeedEffects();
+    });
+  }
+
+  /**
+   * BU-3 段階8: 失効ターンに達した速度効果を解除する
+   */
+  private expireSpeedEffects(): void {
+    if (!this.entitySystem) return;
+
+    for (const [entityId, effect] of this.temporarySpeedEffects.entries()) {
+      if (this.currentTurn >= effect.expireTurn) {
+        // 元の速度へ戻す
+        const entity = this.entitySystem.getEntity(entityId);
+        if (entity) {
+          const movement = entity.getComponent<any>('movement');
+          if (movement) {
+            movement.speed = effect.originalSpeed;
+          }
+        }
+        this.temporarySpeedEffects.delete(entityId);
+      }
+    }
   }
 
   /**
@@ -183,14 +220,16 @@ export class WorldSystem implements System {
       if (tile.properties.speed) {
         const movement = entity.getComponent<any>('movement');
         if (movement) {
-          // 一時的な速度変更
-          const originalSpeed = movement.speed;
-          movement.speed += tile.properties.speed;
-
-          // 数秒後に元に戻す
-          setTimeout(() => {
-            movement.speed = originalSpeed;
-          }, 3000);
+          // BU-3 段階8: setTimeout をターンベースの失効管理へ置き換える
+          // 既存の効果があれば元に戻してから再適用
+          const existing = this.temporarySpeedEffects.get(entity.id);
+          const originalSpeed = existing ? existing.originalSpeed : movement.speed;
+          movement.speed = originalSpeed + tile.properties.speed;
+          // 3ターン後に失効（旧 setTimeout 3000ms 相当）
+          this.temporarySpeedEffects.set(entity.id, {
+            originalSpeed,
+            expireTurn: this.currentTurn + 3,
+          });
         }
       }
     }
@@ -199,19 +238,24 @@ export class WorldSystem implements System {
   /**
    * 減速効果を適用
    * @param entity 対象エンティティ
+   *
+   * BU-3 段階8: setTimeout をターンベースの失効管理へ置き換える。
+   * 1ターン後に失効（旧 setTimeout 1000ms 相当）。
    */
   private applySlowEffect(entity: Entity): void {
     // 移動コンポーネントがあれば処理
     const movement = entity.getComponent<any>('movement');
     if (movement) {
-      // 一時的な速度低下
-      const originalSpeed = movement.speed;
-      movement.speed *= 0.7; // 30%減速
-
-      // 数秒後に元に戻す
-      setTimeout(() => {
-        movement.speed = originalSpeed;
-      }, 1000);
+      // 既存の効果があれば元に戻してから再適用
+      const existing = this.temporarySpeedEffects.get(entity.id);
+      const originalSpeed = existing ? existing.originalSpeed : movement.speed;
+      // 30%減速
+      movement.speed = originalSpeed * 0.7;
+      // 1ターン後に失効
+      this.temporarySpeedEffects.set(entity.id, {
+        originalSpeed,
+        expireTurn: this.currentTurn + 1,
+      });
     }
   }
 

@@ -86,9 +86,11 @@ export class Enemy extends Entity {
 
     // BU-3 段階4: ActorComponent を付与（敵は AI 制御）
     // decideAction は当面 Enemy.act() をラップし、従来の副作用実行を行う（段階6で Action へ移す）
+    // BU-3 段階7: speed に EnemyStatProfile.moveSpeed を設定する
     this.addComponent(
       new ActorComponent({
         inputControlled: false,
+        speed: stats.moveSpeed,
         decideAction: async () => {
           await this.act();
           return null; // 段階6で Action を返すよう変更

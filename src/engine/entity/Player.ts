@@ -64,7 +64,10 @@ export class Player extends Entity {
     // Enemy 側は AttackPowerComponent を使うため、コンポーネント自体は残す。
     this.addComponent(new EnergyComponent(config.maxEnergy, config.energy));
     // BU-3 段階4: ActorComponent を付与（プレイヤーは入力制御）
-    this.addComponent(new ActorComponent({ inputControlled: true }));
+    const actor = new ActorComponent({ inputControlled: true });
+    this.addComponent(actor);
+    // BU-3 段階7: StatsComponent.moveSpeed から speed を同期
+    actor.syncSpeedFromStats();
   }
 
   /**
