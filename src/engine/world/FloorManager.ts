@@ -151,8 +151,11 @@ export class FloorManager {
     }
 
     // 生成成功後、FloorStore の現在階を targetFloor へ確定する。
-    // ハンドラーが registerFloorSnapshot() を呼んでいれば既に切り替わっているが、
+    // P1-fix: register() が副作用として切替を行うため、ハンドラーが
+    // registerFloorSnapshot() を呼んでいれば既に切り替わっている。
     // 呼んでいない場合（テストの no-op ハンドラー等）はここで明示的に切り替える。
+    // setCurrentFloor() は未登録フロアを拒否するため、targetFloor が
+    // 登録済みであることが前提（generateFloor 成功＝登録済み）。
     // FloorStore を正本とする（B2: 現在フロアの正本を 1 つにする）
     const worldSystem = this.engine.getSystem<WorldSystem>('world');
     if (worldSystem && this.getCurrentFloor() !== targetFloor) {

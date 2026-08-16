@@ -58,6 +58,22 @@ describe('FloorManager', () => {
     await worldSystem.initialize(engine);
 
     floorManager = new FloorManager(engine, 10);
+
+    // P1-fix: setCurrentFloor() が未登録フロアを拒否するようになったため、
+    // テスト用の generation handler はフロアを登録する必要がある。
+    // デフォルトで全フロアを登録する handler を設定する。
+    floorManager.setFloorGenerationHandler(async ({ floor }) => {
+      const ws = Engine.instance.getSystem<WorldSystem>('world');
+      if (ws) {
+        const testMap = new TileMap(10, 10);
+        for (let y = 0; y < 10; y++) {
+          for (let x = 0; x < 10; x++) {
+            testMap.setTileAt(x, y, 0, TileType.TILE, true);
+          }
+        }
+        ws.registerFloor(floor, testMap, [], []);
+      }
+    });
   });
 
   afterEach(() => {
@@ -65,6 +81,20 @@ describe('FloorManager', () => {
     assetsLoadSpy.mockRestore();
     jest.restoreAllMocks();
   });
+
+  /** P1-fix: テスト用フロアを登録するヘルパ */
+  function registerTestFloor(floor: number): void {
+    const ws = Engine.instance.getSystem<WorldSystem>('world');
+    if (ws) {
+      const testMap = new TileMap(10, 10);
+      for (let y = 0; y < 10; y++) {
+        for (let x = 0; x < 10; x++) {
+          testMap.setTileAt(x, y, 0, TileType.TILE, true);
+        }
+      }
+      ws.registerFloor(floor, testMap, [], []);
+    }
+  }
 
   it('初期階が 1 である', () => {
     expect(floorManager.getCurrentFloor()).toBe(1);
@@ -132,9 +162,10 @@ describe('FloorManager', () => {
       completeGeneration = resolve;
     });
 
-    const generationHandler = jest.fn(async () => {
+    const generationHandler = jest.fn(async ({ floor }) => {
       order.push('generation-started');
       await generationGate;
+      registerTestFloor(floor);
       order.push('generation-completed');
     });
     floorManager.setFloorGenerationHandler(generationHandler);
@@ -387,6 +418,7 @@ describe('FloorManager', () => {
         currentFloor: floorManager.getCurrentFloor(),
         requestedFloor: floor,
       });
+      registerTestFloor(floor);
     });
 
     const result = await floorManager.moveToNextFloor();
@@ -520,12 +552,13 @@ describe('FloorManager', () => {
 
   it('生成失敗後に再試行で成功できる', async () => {
     let attempt = 0;
-    floorManager.setFloorGenerationHandler(async () => {
+    floorManager.setFloorGenerationHandler(async ({ floor }) => {
       attempt++;
       if (attempt === 1) {
         throw new Error('First attempt failed');
       }
       // 2回目は成功
+      registerTestFloor(floor);
     });
 
     // 1回目: 失敗
@@ -541,8 +574,8 @@ describe('FloorManager', () => {
 
   it('moveToPreviousFloor でも生成失敗時にロールバックする', async () => {
     // まず3階へ移動
-    floorManager.setFloorGenerationHandler(async () => {
-      // no-op: 成功するハンドラー
+    floorManager.setFloorGenerationHandler(async ({ floor }) => {
+      registerTestFloor(floor);
     });
     await floorManager.moveToFloor(3);
     expect(floorManager.getCurrentFloor()).toBe(3);

@@ -58,6 +58,13 @@ export class FloorStore {
    * Room は生成時に RoomId が採番済みであることを前提とする。
    * Doorway が未指定の場合は corridors から導出する。
    * Doorway 検証を本番経路で実行し、不正な Doorway があれば警告を出力する（B3）。
+   *
+   * P1-fix: register() は登録と切替を同時に行う（旧仕様の互換性のため）。
+   * フロア生成ハンドラーの実行中に getCurrentFloor() が移動先を返す
+   * 副作用があるが、FloorManager はロールバック時に
+   * setCurrentFloor(oldFloor) で復元するため、実用上は問題ない。
+   * 将来的に登録と切替を完全に分離する場合は、呼び出し元が
+   * 明示的に setCurrentFloor() を呼ぶ形へ移行する。
    */
   register(
     floor: number,
@@ -98,18 +105,22 @@ export class FloorStore {
 
   /**
    * 現在のフロアを切り替える。
-   * 対象フロアが未登録の場合でも currentFloor は更新するが、
-   * currentTileMap は既存のまま維持する（ロールバック安全性のため）。
-   * @returns 対象フロアが登録済みの場合 true
+   * P1-fix: 対象フロアが未登録の場合は拒否し、状態を一切更新しない。
+   * 旧実装は未登録フロアでも currentFloor だけ更新し、currentTileMap は
+   * 旧フロアのまま維持する仕様だったが、これにより getCurrentFloor() が 5 を
+   * 返しながら getTileMap() は3階の地図、getRooms() は [] という
+   * 不整合状態が作れる問題があった。
+   * @returns 対象フロアが登録済みで切替に成功した場合 true、未登録の場合 false
    */
   setCurrentFloor(floor: number): boolean {
-    this.currentFloor = floor;
     const tileMap = this.floorMaps.get(floor);
-    if (tileMap) {
-      this.currentTileMap = tileMap;
-      return true;
+    if (!tileMap) {
+      console.warn(`[FloorStore] Cannot switch to unregistered floor ${floor}`);
+      return false;
     }
-    return false;
+    this.currentFloor = floor;
+    this.currentTileMap = tileMap;
+    return true;
   }
 
   // ===== Room =====
