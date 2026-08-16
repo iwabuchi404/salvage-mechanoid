@@ -4,6 +4,13 @@ import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Player } from '../entity/Player';
 import { Direction } from '../types';
+import {
+  ActionExecutor,
+  createMoveAction,
+  createTurnAction,
+  createAttackAction,
+  createWaitAction,
+} from '../turn/ActionExecutor';
 
 /**
  * 入力システム - キーボード/マウス入力を管理
@@ -28,6 +35,9 @@ export class InputSystem implements System {
   // 入力待機中フラグ
   private waitingForInput = false;
 
+  // BU-3 段階3: ActionExecutor への参照
+  private actionExecutor: ActionExecutor | null = null;
+
   // キャンバス要素
   private canvas: HTMLCanvasElement | null = null;
 
@@ -45,6 +55,10 @@ export class InputSystem implements System {
     this.engine = engine;
     this.eventSystem = engine.getSystem<EventSystem>('event') || null;
     this.entitySystem = engine.getSystem<EntitySystem>('entity') || null;
+
+    // BU-3 段階3: ActionExecutor を初期化
+    this.actionExecutor = new ActionExecutor();
+    this.actionExecutor.initialize();
 
     // キーボードイベントリスナーを設定
     this.setupKeyboardListeners();
@@ -278,12 +292,16 @@ export class InputSystem implements System {
 
   /**
    * プレイヤーの移動をリクエスト
-   * @param player プレイヤー
-   * @param direction 移動方向
+   *
+   * BU-3 段階3: ActionExecutor 経由で行動を実行する。
+   * エネルギー消費は ActionExecutor が行う。
    */
   private requestPlayerMove(player: Player, direction: Direction): void {
-    // プレイヤーの移動メソッドを呼び出す
-    player.move(direction);
+    if (this.actionExecutor) {
+      this.actionExecutor.execute(createMoveAction(player.id, direction));
+    } else {
+      player.move(direction);
+    }
 
     // 入力を一時的に無効化（移動完了まで）
     this.waitingForInput = false;
@@ -291,11 +309,15 @@ export class InputSystem implements System {
 
   /**
    * プレイヤーの攻撃をリクエスト
-   * @param player プレイヤー
+   *
+   * BU-3 段階3: ActionExecutor 経由で行動を実行する。
    */
   private requestPlayerAttack(player: Player): void {
-    // プレイヤーの攻撃メソッドを呼び出す
-    player.attack();
+    if (this.actionExecutor) {
+      this.actionExecutor.execute(createAttackAction(player.id));
+    } else {
+      player.attack();
+    }
 
     // 入力を一時的に無効化（攻撃完了まで）
     this.waitingForInput = false;

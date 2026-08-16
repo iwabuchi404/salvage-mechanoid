@@ -6,6 +6,7 @@ import { TransformComponent } from '../engine/entity/components/Transform';
 import { EventSystem } from '../engine/events/EventSystem';
 import { AudioSystem } from '../engine/audio/AudioSystem';
 import { TurnSystem } from '../engine/turn/TurnSystem';
+import { ActionExecutor, createMoveAction, createTurnAction } from '../engine/turn/ActionExecutor';
 import { EffectSystem } from '../engine/effects/EffectSystem';
 import { CombatSystem } from '../engine/combat/CombatSystem';
 import { InteractionSystem } from '../engine/interaction/InteractionSystem';
@@ -84,6 +85,9 @@ export class Game {
 
   // BU-2: ドメイン状態から gameStore への投影
   private statsProjection: StatsProjection | null = null;
+
+  // BU-3 段階3: ActionExecutor（UI からの行動委譲先）
+  private actionExecutor: ActionExecutor | null = null;
 
   // 生成されたリソースを保存
   private placedObstacles: PlacedObstacle[] = [];
@@ -184,6 +188,9 @@ export class Game {
     // BU-2 P1: StatsProjection をクリア（リスナーは Engine.reset() で消える）
     // createPlayer() の if (!this.statsProjection) で再初期化される
     this.statsProjection = null;
+
+    // BU-3 段階3: ActionExecutor もクリア
+    this.actionExecutor = null;
 
     // プレイヤーをクリア
     this.player = null;
@@ -516,6 +523,12 @@ export class Game {
     if (!this.statsProjection) {
       this.statsProjection = new StatsProjection();
       this.statsProjection.initialize();
+    }
+
+    // BU-3 段階3: ActionExecutor を初期化
+    if (!this.actionExecutor) {
+      this.actionExecutor = new ActionExecutor();
+      this.actionExecutor.initialize();
     }
 
     // プレイヤーエンティティを作成（C1: PlayerFactory が Presentation も組み立てる）
@@ -1050,7 +1063,12 @@ export class Game {
       return;
     }
 
-    this.player.move(direction);
+    // BU-3 段階3: ActionExecutor 経由で行動を実行（エネルギー消費を集約）
+    if (this.actionExecutor) {
+      this.actionExecutor.execute(createMoveAction(this.player.id, direction));
+    } else {
+      this.player.move(direction);
+    }
   }
 
   /**
@@ -1062,7 +1080,12 @@ export class Game {
       return;
     }
 
-    this.player.turn(direction);
+    // BU-3 段階3: ActionExecutor 経由で行動を実行
+    if (this.actionExecutor) {
+      this.actionExecutor.execute(createTurnAction(this.player.id, direction));
+    } else {
+      this.player.turn(direction);
+    }
   }
 
   /**

@@ -106,8 +106,7 @@ export class Player extends Entity {
       if (data.entityId === this.id) {
         // BU-2: gameStore への位置書き込みは StatsProjection が行う
 
-        // 移動時のエネルギー消費
-        this.consumeEnergy(1);
+        // BU-3 段階3: エネルギー消費は ActionExecutor へ移した。
 
         // 現在のタイルのイベントをチェック
         this.checkTileEvent(data.position);
@@ -157,11 +156,8 @@ export class Player extends Entity {
    * @returns 移動が成功したかどうか
    */
   move(direction: Direction): boolean {
-    // エネルギーチェック
-    if (this.getEnergy() <= 0) {
-      this.handleEmergencyShutdown();
-      return false;
-    }
+    // BU-3 段階3: エネルギーチェック・消費は ActionExecutor へ移した。
+    // このメソッドは移動の内部実装として残り、ActionExecutor から呼ばれる。
 
     // 移動コンポーネントを取得
     const movement = this.getComponent<MovementComponent>('movement');
@@ -227,13 +223,11 @@ export class Player extends Entity {
 
   /**
    * 攻撃
+   *
+   * BU-3 段階3: エネルギーチェック・消費は ActionExecutor へ移した。
+   * このメソッドは攻撃の内部実装として残り、ActionExecutor から呼ばれる。
    */
   async attack(): Promise<number> {
-    // エネルギーチェック
-    if (!this.consumeEnergy(2)) {
-      return 0;
-    }
-
     // C1: 攻撃アニメーション（tint）は PlayerPresentation が
     // 既存の player_attacked イベント経由で処理する
 
