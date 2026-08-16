@@ -1,4 +1,5 @@
 import { Item } from '../entity/Item';
+import { ItemPresentationFactory } from '../presentation/item/ItemPresentationFactory';
 import { ItemType, InventoryItemType, PlacedItem } from '../types';
 
 /**
@@ -50,6 +51,8 @@ export class ItemFactory {
 
     try {
       await item.initialize();
+      // C1: 描画ライフサイクルを Presentation へ移譲
+      await ItemPresentationFactory.create(item, placedItem.type, inventoryType);
       return item;
     } catch (error) {
       try {

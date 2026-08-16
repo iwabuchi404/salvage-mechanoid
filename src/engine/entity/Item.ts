@@ -8,10 +8,6 @@ import {
   InventoryItemType,
   InventoryItem,
 } from '../types';
-import { Engine } from '../Engine';
-import { RendererSystem } from '../graphics/RendererSystem';
-import { EventSystem } from '../events/EventSystem';
-import * as PIXI from 'pixi.js';
 
 /**
  * アイテムエンティティクラス
@@ -22,12 +18,8 @@ export class Item extends Entity {
   private rarity: ItemRarity;
   private properties: Record<string, any>;
   private collected = false;
-  private graphics: PIXI.Graphics | null = null;
   private inventoryItemType: InventoryItemType | null = null;
   private itemData: Omit<InventoryItem, 'id'> | null = null;
-  private inPlayerFOV = false;
-  private visibilityChangedListener: ((data: { entityId: string; inFOV: boolean }) => void) | null =
-    null;
 
   /**
    * コンストラクタ
@@ -51,128 +43,11 @@ export class Item extends Entity {
 
   /**
    * 初期化
+   * C1: 描画ライフサイクルは ItemPresentation が担当するため、
+   * ドメイン初期化のみを行う
    */
   async initialize(): Promise<void> {
-    // 親クラスの initialize() を呼び出してコンポーネントを初期化
     await super.initialize();
-
-    // アイテムは画像がないため、PIXI.Graphics で円を描画
-    this.createItemGraphics();
-
-    // FOV変更イベントをリッスン
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
-      this.visibilityChangedListener = (data: { entityId: string; inFOV: boolean }) => {
-        if (data.entityId === this.id) {
-          this.inPlayerFOV = data.inFOV;
-          this.updateGraphicsVisibility();
-        }
-      };
-      eventSystem.on('entity_visibility_changed', this.visibilityChangedListener);
-    }
-  }
-
-  /**
-   * アイテムのグラフィックスを作成してレンダラーに登録
-   */
-  private createItemGraphics(): void {
-    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-    if (!rendererSystem) return;
-
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (!transform) return;
-
-    // アイテムタイプに応じた色を取得
-    const color = this.getItemColor();
-
-    // PIXI.Graphics で円を描画
-    const graphics = new PIXI.Graphics();
-    graphics.circle(0, 0, 8);
-    graphics.fill(color);
-    graphics.stroke({ width: 2, color: 0x000000 });
-
-    // 座標変換（ワールド座標で配置、カメラオフセットはworldContainerが適用）
-    const coordSystem = rendererSystem.getCoordinateSystem();
-    const pos = transform.position;
-    const screenPos = coordSystem.isometricToScreen(pos.x, pos.y, pos.z);
-
-    // ワールド座標で配置（Y座標は少し上にオフセット）
-    graphics.x = screenPos.x;
-    graphics.y = screenPos.y - 16;
-
-    // 深度ソート用のzIndex（SpriteComponentと同じ計算式）
-    const baseZIndex = (pos.y + pos.x) * 1000;
-    graphics.zIndex = baseZIndex + pos.z * 100;
-
-    // グラフィックスを保存
-    this.graphics = graphics;
-
-    // オブジェクトレイヤーに追加（アイテムはキャラクターより奥に描画されるべき）
-    const layer = rendererSystem.getLayer('objects');
-    if (layer) {
-      layer.addChild(graphics);
-    }
-  }
-
-  /**
-   * アイテムタイプに応じた色を取得
-   */
-  private getItemColor(): number {
-    // インベントリアイテムタイプがある場合はそちらを優先
-    if (this.inventoryItemType) {
-      switch (this.inventoryItemType) {
-        case InventoryItemType.HEALTH_PACK:
-          return 0x00ff00; // 緑
-        case InventoryItemType.ENERGY_CELL:
-          return 0x00ffff; // シアン
-        case InventoryItemType.WEAPON_UPGRADE:
-          return 0xff9900; // オレンジ
-        case InventoryItemType.ARMOR_UPGRADE:
-          return 0x0099ff; // 青
-        case InventoryItemType.KEY_ITEM:
-          return 0xffff00; // 黄色
-        default:
-          break;
-      }
-    }
-
-    // ItemTypeに応じた色
-    switch (this.itemType) {
-      case ItemType.HEALTH:
-        return 0x00ff00; // 緑
-      case ItemType.ENERGY:
-        return 0x00ffff; // シアン
-      case ItemType.WEAPON:
-        return 0xff9900; // オレンジ
-      case ItemType.ARMOR:
-        return 0x0099ff; // 青
-      case ItemType.KEY:
-        return 0xffff00; // 黄色
-      case ItemType.UPGRADE:
-        return 0xff00ff; // マゼンタ
-      case ItemType.CONSUMABLE:
-        return 0xffffff; // 白
-      default:
-        return 0xffffff;
-    }
-  }
-
-  /**
-   * レアリティに応じた色を取得（将来的な拡張用）
-   */
-  private getRarityColor(): number {
-    switch (this.rarity) {
-      case ItemRarity.COMMON:
-        return 0xffffff; // 白
-      case ItemRarity.UNCOMMON:
-        return 0x00ff00; // 緑
-      case ItemRarity.RARE:
-        return 0x0080ff; // 青
-      case ItemRarity.LEGENDARY:
-        return 0xff8000; // 橙
-      default:
-        return 0xffffff;
-    }
   }
 
   /**
@@ -187,6 +62,14 @@ export class Item extends Entity {
    */
   getRarity(): ItemRarity {
     return this.rarity;
+  }
+
+  /**
+   * インベントリアイテムタイプを取得
+   * C1: Presentation 側が表示色を決定するために使用する
+   */
+  getInventoryItemType(): InventoryItemType | null {
+    return this.inventoryItemType;
   }
 
   /**
@@ -378,68 +261,5 @@ export class Item extends Entity {
   getPosition(): Vector3 {
     const transform = this.getComponent<TransformComponent>('transform');
     return transform ? transform.position : { x: 0, y: 0, z: 0 };
-  }
-
-  /**
-   * アイテムを削除（取得時）
-   */
-  override destroy(): void {
-    if (this.visibilityChangedListener) {
-      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-      eventSystem?.off('entity_visibility_changed', this.visibilityChangedListener);
-      this.visibilityChangedListener = null;
-    }
-
-    // グラフィックを削除
-    if (this.graphics && this.graphics.parent) {
-      this.graphics.parent.removeChild(this.graphics);
-      this.graphics.destroy();
-      this.graphics = null;
-    }
-
-    // エンティティ削除
-    super.destroy();
-  }
-
-  /**
-   * 更新処理
-   * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
-   */
-  update(deltaTime: number): void {
-    // 親クラスのupdate()を呼び出してコンポーネントを更新
-    super.update(deltaTime);
-
-    this.updateGraphicsPosition();
-    this.updateGraphicsVisibility();
-  }
-
-  /**
-   * グラフィックスの位置をTransformComponentに同期
-   */
-  private updateGraphicsPosition(): void {
-    if (!this.graphics) return;
-
-    const transform = this.getComponent<TransformComponent>('transform');
-    if (!transform) return;
-
-    const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-    if (!rendererSystem) return;
-
-    const pos = transform.position;
-    const screenPos = rendererSystem.getCoordinateSystem().isometricToScreen(pos.x, pos.y, pos.z);
-    this.graphics.x = screenPos.x;
-    this.graphics.y = screenPos.y - 16;
-
-    const baseZIndex = (pos.y + pos.x) * 1000;
-    this.graphics.zIndex = baseZIndex + pos.z * 100;
-  }
-
-  /**
-   * グラフィックスの可視性を更新（FOV + アクティブ状態）
-   */
-  private updateGraphicsVisibility(): void {
-    if (this.graphics) {
-      this.graphics.visible = this.active && !this.collected && this.inPlayerFOV;
-    }
   }
 }

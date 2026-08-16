@@ -21,6 +21,8 @@ import { MapGeneratorFacade } from '../engine/world/MapGeneratorFacade';
 import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSystem';
 import { FloorManager } from '../engine/world/FloorManager';
 import { Player } from '../engine/entity/Player';
+import { PlayerFactory } from '../engine/factory/PlayerFactory';
+import { PlayerPresentation } from '../engine/presentation/player/PlayerPresentation';
 import { Item } from '../engine/entity/Item';
 import { EnemyFactory } from '../engine/factory/EnemyFactory';
 import { ItemFactory } from '../engine/factory/ItemFactory';
@@ -486,9 +488,8 @@ export class Game {
     this.gameStore.player.status.hp = this.gameStore.player.status.maxHp;
     this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
 
-    // プレイヤーエンティティを作成
-    this.player = new Player('player', startPosition);
-    await this.player.initialize();
+    // プレイヤーエンティティを作成（C1: PlayerFactory が Presentation も組み立てる）
+    this.player = await PlayerFactory.create('player', startPosition);
 
     // エンティティシステムに登録
     const entitySystem = this.engine.getSystem<EntitySystem>('entity');
@@ -496,11 +497,14 @@ export class Game {
       entitySystem.registerEntity(this.player);
     }
 
-    // カメラでプレイヤーを追跡
+    // カメラでプレイヤーを追跡（C1: カメラ追従は PlayerPresentation 経由）
     const rendererSystem = this.engine.getSystem<RendererSystem>('renderer');
     if (rendererSystem) {
       const camera = rendererSystem.getCamera();
-      this.player.setCameraTarget(camera);
+      const presentation = this.player.getComponent<PlayerPresentation>('player-presentation');
+      if (presentation) {
+        presentation.setCameraTarget(camera);
+      }
 
       // カメラの初期位置をプレイヤーの位置に設定
       const coordinateSystem = rendererSystem.getCoordinateSystem();

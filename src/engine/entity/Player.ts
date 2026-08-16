@@ -1,39 +1,24 @@
 import { Entity } from '../../engine/entity/Entity';
 import { TransformComponent } from '../../engine/entity/components/Transform';
-import { SpriteComponent } from '../../engine/entity/components/Sprite';
 import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
-import { Camera } from '../../engine/graphics/Camera';
 import { Engine } from '../../engine/Engine';
 import { EventSystem } from '../../engine/events/EventSystem';
 import { EntitySystem } from '../../engine/entity/EntitySystem';
 import { useGameStore } from '../../stores/gameStore';
-import { RENDER_CONFIG } from '../../engine/graphics/RenderConfig';
-import { RendererSystem } from '../../engine/graphics/RendererSystem';
 import { WorldSystem } from '../../engine/world/WorldSystem';
 
 /**
  * プレイヤークラス - プレイヤーのエンティティ
  */
 export class Player extends Entity {
-  // カメラ参照
-  private camera: Camera | null = null;
-
   // 視野半径（何マス先まで見えるか）
   private _viewRadius = 4;
 
   // ゲームストア
   private gameStore = useGameStore();
-
-  // 方向別テクスチャパス
-  private static readonly TEXTURE_PATHS: Record<Direction, string> = {
-    up: './robo01bk_r.png',
-    down: './robo01_l.png',
-    left: './robo01bk_l.png',
-    right: './robo01_r.png',
-  };
 
   /**
    * コンストラクタ
@@ -66,15 +51,10 @@ export class Player extends Entity {
 
   /**
    * 初期化
+   * C1: 描画ライフサイクルは PlayerPresentation が担当するため、
+   * ドメインコンポーネントの初期化のみを行う
    */
   async initialize(): Promise<void> {
-    // テクスチャの読み込み
-    const direction: Direction = 'down'; // デフォルト方向
-    const texturePath = Player.TEXTURE_PATHS[direction];
-
-    const spriteComponent = new SpriteComponent(texturePath, 'characters', { x: 0.5, y: 1.0 });
-    this.addComponent(spriteComponent);
-
     // 移動コンポーネントを追加
     const movementComponent = new MovementComponent(4, 250);
     this.addComponent(movementComponent);
@@ -123,12 +103,7 @@ export class Player extends Entity {
       }
     });
 
-    // 方向変更イベント - テクスチャを変更
-    eventSystem.on('direction_changed', (data) => {
-      if (data.entityId === this.id) {
-        this.updateDirectionTexture(data.direction as Direction);
-      }
-    });
+    // C1: 方向変更時のテクスチャ切替は PlayerPresentation が行う
 
     // 体力変更イベント
     eventSystem.on('health_changed', (data) => {
@@ -142,20 +117,6 @@ export class Player extends Entity {
         }
       }
     });
-  }
-
-  /**
-   * 方向に応じてテクスチャを更新
-   * @param direction 新しい方向
-   */
-  private updateDirectionTexture(direction: Direction): void {
-    const sprite = this.getComponent<SpriteComponent>('sprite');
-    if (!sprite) return;
-
-    const texturePath = Player.TEXTURE_PATHS[direction];
-    if (texturePath) {
-      sprite.changeTexture(texturePath);
-    }
   }
 
   /**
@@ -229,13 +190,8 @@ export class Player extends Entity {
       return 0;
     }
 
-    // 攻撃アニメーション
-    const sprite = this.getComponent<SpriteComponent>('sprite');
-    if (sprite) {
-      sprite.setTint(0xff0000);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      sprite.setTint(0xffffff);
-    }
+    // C1: 攻撃アニメーション（tint）は PlayerPresentation が
+    // 既存の player_attacked イベント経由で処理する
 
     // 攻撃方向の敵を検索
     const transform = this.getComponent<TransformComponent>('transform');
@@ -366,59 +322,7 @@ export class Player extends Entity {
     }
   }
 
-  /**
-   * カメラの追跡対象に設定
-   * @param camera 追跡するカメラ
-   */
-  setCameraTarget(camera: Camera): void {
-    this.camera = camera;
-
-    // カメラのスムージング係数を設定（0.15 = 適度なスムーズさ）
-    camera.setSmoothingFactor(0.15);
-
-    // プレイヤーが移動したときにカメラを更新
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem && camera) {
-      eventSystem.on('move_completed', (data) => {
-        if (data.entityId === this.id && this.camera) {
-          // 座標変換システムを使用してスクリーン座標を取得
-          const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-          if (rendererSystem) {
-            const coordSystem = rendererSystem.getCoordinateSystem();
-            const screenPos = coordSystem.isometricToScreen(
-              data.position.x,
-              data.position.y,
-              data.position.z
-            );
-
-            // カメラをスムーズに移動（setTargetPositionを使用）
-            // これにより、カメラがプレイヤーに滑らかに追従する
-            this.camera.setTargetPosition(
-              screenPos.x - RENDER_CONFIG.SCREEN_WIDTH / 2,
-              screenPos.y - RENDER_CONFIG.SCREEN_HEIGHT / 2
-            );
-          }
-        }
-      });
-
-      // 移動中もカメラを追従させる（アニメーション中のスムーズな追従）
-      eventSystem.on('move_started', (data) => {
-        if (data.entityId === this.id && this.camera) {
-          const rendererSystem = Engine.instance.getSystem<RendererSystem>('renderer');
-          if (rendererSystem) {
-            const coordSystem = rendererSystem.getCoordinateSystem();
-            const screenPos = coordSystem.isometricToScreen(data.to.x, data.to.y, data.to.z);
-
-            // 移動先に向かってカメラをスムーズに移動開始
-            this.camera.setTargetPosition(
-              screenPos.x - RENDER_CONFIG.SCREEN_WIDTH / 2,
-              screenPos.y - RENDER_CONFIG.SCREEN_HEIGHT / 2
-            );
-          }
-        }
-      });
-    }
-  }
+  // C1: カメラ追従は PlayerPresentation が担当する
 
   /**
    * 現在地のタイルイベントをチェック
