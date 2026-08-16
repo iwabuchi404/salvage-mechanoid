@@ -7,6 +7,7 @@ import { TransformComponent } from '../entity/components/Transform';
 import { HealthComponent } from '../entity/components/Health';
 import { MovementComponent } from '../entity/components/Movement';
 import { AttackPowerComponent } from '../entity/components/AttackPower';
+import { StatsComponent } from '../entity/components/Stats';
 import { isPlayerEntityId } from '../entity/EntityKind';
 import { Direction } from '../types';
 
@@ -209,12 +210,17 @@ export class CombatSystem implements System {
       return 0;
     }
 
-    // P1-fix: AttackPowerComponent 経由で攻撃力を取得する（instanceof を廃止）
-    // Player は strength + 5 = 15、Enemy は EnemyStatProfile.attackPower
-    // Component がない場合はタグでフォールバック（テスト用 Entity 互換）
+    // BU-2: StatsComponent を優先して攻撃力を取得する。
+    // Player は StatsComponent.getValue('attackPower') を使用し、
+    // 装備・アイテムによる変動が反映される。
+    // Enemy はまだ StatsComponent を持たないため AttackPowerComponent へフォールバックする。
+    // どちらも無い場合はタグでフォールバック（テスト用 Entity 互換）
+    const statsComponent = attacker.getComponent<StatsComponent>('stats');
     const attackPower = attacker.getComponent<AttackPowerComponent>('attack_power');
     let baseDamage: number;
-    if (attackPower) {
+    if (statsComponent) {
+      baseDamage = statsComponent.getValue('attackPower');
+    } else if (attackPower) {
       baseDamage = attackPower.baseAttackPower;
     } else if (attacker.hasTag('player')) {
       baseDamage = 15; // Player のデフォルト（strength 10 + bonus 5）

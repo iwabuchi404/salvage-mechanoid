@@ -8,6 +8,7 @@ import { isPlayerEntityId } from '../entity/EntityKind';
 import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
 import { VisionBlockingComponent } from '../entity/components/VisionBlocking';
+import { StatsComponent } from '../entity/components/Stats';
 import { TileType, Direction, Room } from '../types';
 import {
   computeFOV,
@@ -162,7 +163,12 @@ export class FOVSystem implements System {
     const pos = transform.position;
     const playerX = Math.round(pos.x);
     const playerY = Math.round(pos.y);
-    const baseViewRadius = player.viewRadius;
+    // BU-2: StatsComponent から視野半径を取得する（装備・アイテムによる変動が反映される）。
+    // StatsComponent がない場合は player.viewRadius へフォールバックする。
+    const statsComponent = player.getComponent<StatsComponent>('stats');
+    const baseViewRadius = statsComponent
+      ? statsComponent.getValue('viewRadius')
+      : player.viewRadius;
 
     // プレイヤーの向きを取得
     const movement = player.getComponent<MovementComponent>('movement');
