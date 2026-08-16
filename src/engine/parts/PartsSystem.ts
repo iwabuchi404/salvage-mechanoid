@@ -3,13 +3,42 @@
 import { System } from '../System';
 import type { RobotPart, Weapon, RobotLoadout, RobotStats, PassiveEffect, Skill } from '../types';
 import { PartSlot, ArmType } from '../types';
+import { StatSource, StatModifier } from '../entity/stats/StatTypes';
 
 /**
  * パーツシステム
  * プレイヤーのパーツ構成を管理し、総合ステータスを計算する
+ *
+ * BU-2: StatSource を実装し、StatsComponent へ修飾子を提供する。
+ * setLoadout / resetLoadout / equipPart / unequipPart で
+ * StatsComponent.invalidate() が呼ばれる必要があるが、
+ * このクラス自体は StatsComponent への参照を持たない。
+ * 呼び出し元（Game）が addSource 後に invalidate() を呼ぶか、
+ * setLoadout 等の後に invalidate() を呼ぶ責務を持つ。
  */
-export class PartsSystem implements System {
+export class PartsSystem implements System, StatSource {
   name = 'parts';
+
+  // StatSource の実装
+  readonly sourceId = 'parts';
+
+  /**
+   * 現在の装備から StatsComponent へ提供する修飾子一覧を返す。
+   * パーツのステータスは add 修飾子として表現する。
+   * carryCapacity は脚部の値が上書き方式だが、ここでは add で表現する
+   * （複数脚部の装備は想定外のため、最後の値が優先される現行挙動と
+   *  実質的に同じになる）。
+   */
+  getModifiers(): readonly StatModifier[] {
+    const stats = this.getStats();
+    const modifiers: StatModifier[] = [
+      { stat: 'maxHp', op: 'add', value: stats.maxHp, sourceId: this.sourceId },
+      { stat: 'maxEnergy', op: 'add', value: stats.maxEnergy, sourceId: this.sourceId },
+      { stat: 'defense', op: 'add', value: stats.defense, sourceId: this.sourceId },
+      { stat: 'carryCapacity', op: 'add', value: stats.carryCapacity, sourceId: this.sourceId },
+    ];
+    return modifiers;
+  }
 
   // 現在のパーツ構成
   private loadout: RobotLoadout = {

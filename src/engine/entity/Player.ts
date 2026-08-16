@@ -46,16 +46,18 @@ export class Player extends Entity {
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
     // C3: 衝突判定を Entity 側で宣言する
     this.addComponent(new BlockingComponent());
-    // BU-2: 実効ステータスの正本。基礎値は gameStore 初期値と同じ。
-    // 段階3以降で PartsSystem が StatSource として登録される。
+    // BU-2: 実効ステータスの正本。
+    // parts 由来の値（maxHp/maxEnergy/defense/carryCapacity）は基礎値 0 とし、
+    // PartsSystem が StatSource として add 修飾子で提供する。
+    // それ以外の値は gameStore 初期値を基礎値とする。
     const baseStats: EffectiveStats = {
-      maxHp: this.gameStore.player.status.maxHp,
-      maxEnergy: this.gameStore.player.status.maxEnergy,
-      defense: this.gameStore.player.status.defense,
+      maxHp: 0,
+      maxEnergy: 0,
+      defense: 0,
       attackPower: this.gameStore.player.status.strength + 5,
       viewRadius: this._viewRadius,
       moveSpeed: 4,
-      carryCapacity: 10,
+      carryCapacity: 0,
       strength: this.gameStore.player.status.strength,
       level: this.gameStore.player.status.level,
     };

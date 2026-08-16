@@ -14,6 +14,7 @@ import { FOVSystem } from '../engine/fov/FOVSystem';
 import { LootSystem } from '../engine/loot/LootSystem';
 import { SkillSystem } from '../engine/skill/SkillSystem';
 import { PartsSystem } from '../engine/parts/PartsSystem';
+import { StatsComponent } from '../engine/entity/components/Stats';
 import { initialPartSet } from '../data/parts/initialParts';
 import { initialWeaponSet } from '../data/weapons/initialWeapons';
 import { TileMap, isFloorTileType } from '../engine/world/TileMap';
@@ -528,6 +529,16 @@ export class Game {
     if (fovSystem) {
       fovSystem.calculateInitialFOV();
       console.log('Initial FOV calculated');
+    }
+
+    // BU-2: PartsSystem を StatsComponent の StatSource として登録する。
+    // これにより装備変更が実効ステータスへ伝播するようになる。
+    const partsSystem = this.engine.getSystem<PartsSystem>('parts');
+    if (partsSystem) {
+      const statsComponent = this.player.getComponent<StatsComponent>('stats');
+      if (statsComponent) {
+        statsComponent.addSource(partsSystem);
+      }
     }
   }
 
