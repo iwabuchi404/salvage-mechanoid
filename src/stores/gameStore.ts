@@ -6,6 +6,10 @@ import type { InventoryItem, RobotPart, Weapon } from '../engine/types';
 export interface ItemEffectHandlers {
   restoreEnergy?: (amount: number) => number;
   increaseMaxEnergy?: (amount: number) => boolean;
+  /** HP 回復をドメイン層へ委譲 */
+  heal?: (amount: number) => number;
+  /** ステータスブーストをドメイン層へ委譲 */
+  statBoost?: (statType: 'strength' | 'defense' | 'maxHp' | 'maxEnergy', value: number) => boolean;
 }
 
 export const useGameStore = defineStore('game', () => {
@@ -51,10 +55,7 @@ export const useGameStore = defineStore('game', () => {
     player.value.position = { x, y, z };
   }
 
-  // プレイヤーにダメージを与える関数
-  function damagePlayer(amount: number) {
-    player.value.status.hp = Math.max(0, player.value.status.hp - amount);
-  }
+  // BU-2: damagePlayer は削除済み。ダメージ経路は HealthComponent.takeDamage() に一本化。
 
   // スコアを追加する関数
   function addScore(points: number) {
@@ -153,11 +154,15 @@ export const useGameStore = defineStore('game', () => {
 
     switch (effect.type) {
       case 'heal':
-        // HP回復
+        // BU-2: HP 回復はドメイン層（HealthComponent）へ委譲する。
+        // gameStore の直接書き換えは廃止。
         if (effect.value) {
-          const newHp = Math.min(player.value.status.hp + effect.value, player.value.status.maxHp);
-          player.value.status.hp = newHp;
-          console.log(`Healed ${effect.value} HP (current: ${newHp})`);
+          if (!handlers.heal) {
+            console.warn('heal handler not provided, cannot heal');
+            return false;
+          }
+          const healed = handlers.heal(effect.value);
+          console.log(`Healed ${healed} HP`);
         }
         return true;
 
@@ -168,31 +173,14 @@ export const useGameStore = defineStore('game', () => {
         return true;
 
       case 'stat_boost':
-        // ステータスブースト
+        // BU-2: ステータスブーストはドメイン層（StatsComponent）へ委譲する。
+        // gameStore の直接書き換えは廃止。
         if (effect.statType && effect.value) {
-          switch (effect.statType) {
-            case 'strength':
-              player.value.status.strength += effect.value;
-              console.log(
-                `Strength increased by ${effect.value} (current: ${player.value.status.strength})`
-              );
-              break;
-            case 'defense':
-              player.value.status.defense += effect.value;
-              console.log(
-                `Defense increased by ${effect.value} (current: ${player.value.status.defense})`
-              );
-              break;
-            case 'maxHp':
-              player.value.status.maxHp += effect.value;
-              console.log(
-                `Max HP increased by ${effect.value} (current: ${player.value.status.maxHp})`
-              );
-              break;
-            case 'maxEnergy':
-              if (!handlers.increaseMaxEnergy) return false;
-              return handlers.increaseMaxEnergy(effect.value);
+          if (!handlers.statBoost) {
+            console.warn('statBoost handler not provided, cannot boost stat');
+            return false;
           }
+          return handlers.statBoost(effect.statType, effect.value);
         }
         return true;
 
@@ -334,7 +322,6 @@ export const useGameStore = defineStore('game', () => {
     isPlayerAlive,
     playerEnergyPercentage,
     updatePlayerPosition,
-    damagePlayer,
     addScore,
     setPortalActive,
     isPortalActive,

@@ -1205,6 +1205,9 @@ export class Game {
     return this.gameStore.useItem(itemId, {
       restoreEnergy: (amount) => this.player?.restoreEnergy(amount) ?? 0,
       increaseMaxEnergy: (amount) => this.player?.increaseMaxEnergy(amount) ?? false,
+      // BU-2: heal と stat_boost をドメイン層へ委譲する
+      heal: (amount) => this.player?.heal(amount) ?? 0,
+      statBoost: (statType, value) => this.player?.applyStatBoost(statType, value) ?? false,
     });
   }
 

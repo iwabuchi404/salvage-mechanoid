@@ -519,6 +519,49 @@ export class Player extends Entity {
   }
 
   /**
+   * BU-2: HP 回復（HealthComponent 経由）
+   * アイテム効果の heal をドメイン層へ委譲するためのメソッド。
+   * @param amount 回復量
+   * @returns 実際に回復した量
+   */
+  heal(amount: number): number {
+    const health = this.getComponent<HealthComponent>('health');
+    if (!health) return 0;
+    return health.heal(amount);
+  }
+
+  /**
+   * BU-2: ステータスブースト（StatsComponent 経由）
+   * アイテム効果の stat_boost をドメイン層へ委譲するためのメソッド。
+   * 永続的な修飾子として StatsComponent へ追加する。
+   * @param statType ステータスの種類
+   * @param value 増加量
+   * @returns 成功したかどうか
+   */
+  applyStatBoost(statType: 'strength' | 'defense' | 'maxHp' | 'maxEnergy', value: number): boolean {
+    const stats = this.getComponent<StatsComponent>('stats');
+    if (!stats) return false;
+
+    // StatKey へマッピング
+    const statKeyMap: Record<string, string> = {
+      strength: 'strength',
+      defense: 'defense',
+      maxHp: 'maxHp',
+      maxEnergy: 'maxEnergy',
+    };
+
+    const statKey = statKeyMap[statType];
+    if (!statKey) return false;
+
+    // 永続修飾子として基礎値を直接増やす
+    // （永続強化はセーブ対象になるため、修飾子リストではなく基礎値へ反映する）
+    const currentValue = stats.getValue(statKey as any);
+    stats.setBaseValue(statKey as any, currentValue + value);
+
+    return true;
+  }
+
+  /**
    * EnergyComponentの状態をUI表示用ストアへ投影する。
    */
   private syncEnergyState(
