@@ -199,7 +199,7 @@ export class Item extends Entity {
           description: '攻撃力を永続的に5上昇させる',
           effect: {
             type: 'stat_boost',
-            statType: 'strength',
+            statType: 'attackPower',
             value: 5,
           },
           stackable: false,

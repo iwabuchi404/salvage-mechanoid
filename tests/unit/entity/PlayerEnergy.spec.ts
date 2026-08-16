@@ -15,7 +15,7 @@ const defaultConfig: PlayerInitialConfig = {
   maxEnergy: 100,
   energy: 80,
   defense: 5,
-  strength: 10,
+  attackPower: 15,
   viewRadius: 4,
   level: 1,
 };

@@ -848,7 +848,7 @@ export type ItemEffectType = 'heal' | 'energy' | 'stat_boost' | 'special';
 export interface ItemEffect {
   type: ItemEffectType;
   value?: number; // 回復量や上昇値
-  statType?: 'strength' | 'defense' | 'maxHp' | 'maxEnergy'; // ステータスブースト用
+  statType?: 'attackPower' | 'defense' | 'maxHp' | 'maxEnergy'; // ステータスブースト用
   duration?: number; // 一時効果の持続時間（ターン数）
 }
 

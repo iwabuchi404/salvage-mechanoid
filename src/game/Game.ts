@@ -181,6 +181,10 @@ export class Game {
     // フロアマネージャーをクリア
     this.floorManager = null;
 
+    // BU-2 P1: StatsProjection をクリア（リスナーは Engine.reset() で消える）
+    // createPlayer() の if (!this.statsProjection) で再初期化される
+    this.statsProjection = null;
+
     // プレイヤーをクリア
     this.player = null;
 
@@ -495,13 +499,15 @@ export class Game {
     this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
 
     // BU-2: Player は gameStore を直接参照しないため、初期値を config で渡す
+    // P0-2: strength を廃止し attackPower に一本化。
+    // gameStore.strength の初期値（10）+ 固定ボーナス（5）= 15 を attackPower として渡す
     const playerConfig: PlayerInitialConfig = {
       maxHp: this.gameStore.player.status.maxHp,
       hp: this.gameStore.player.status.hp,
       maxEnergy: this.gameStore.player.status.maxEnergy,
       energy: this.gameStore.player.status.energy,
       defense: this.gameStore.player.status.defense,
-      strength: this.gameStore.player.status.strength,
+      attackPower: this.gameStore.player.status.strength + 5,
       viewRadius: this.gameStore.player.status.viewRadius,
       level: this.gameStore.player.status.level,
     };

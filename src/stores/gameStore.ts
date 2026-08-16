@@ -9,7 +9,10 @@ export interface ItemEffectHandlers {
   /** HP 回復をドメイン層へ委譲 */
   heal?: (amount: number) => number;
   /** ステータスブーストをドメイン層へ委譲 */
-  statBoost?: (statType: 'strength' | 'defense' | 'maxHp' | 'maxEnergy', value: number) => boolean;
+  statBoost?: (
+    statType: 'attackPower' | 'defense' | 'maxHp' | 'maxEnergy',
+    value: number
+  ) => boolean;
 }
 
 export const useGameStore = defineStore('game', () => {

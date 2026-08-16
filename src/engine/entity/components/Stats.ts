@@ -30,6 +30,18 @@ export class StatsComponent implements Component {
   initialize(): void {
     // 初期化時に一度計算しておく
     this.recalculate();
+
+    // P2修正: loadout_changed イベントを購読し、装備変更時に再計算する。
+    // PartsSystem が loadout_changed を発行するため、
+    // StatsComponent 側で invalidate() を呼ぶ。
+    if (this.entity) {
+      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+      if (eventSystem) {
+        eventSystem.on('loadout_changed', () => {
+          this.invalidate();
+        });
+      }
+    }
   }
 
   update(_deltaTime: number): void {
@@ -87,7 +99,7 @@ export class StatsComponent implements Component {
     this.invalidate();
   }
 
-  /** 全供養元の修飾子を集めて実効ステータスを再計算する */
+  /** 全供給元の修飾子を集めて実効ステータスを再計算する */
   private recalculate(): void {
     const previous = this.cached;
     const modifiers: StatModifier[] = [];

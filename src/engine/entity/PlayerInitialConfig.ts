@@ -4,6 +4,8 @@
  * Player は gameStore を直接参照しないため、生成時に
  * 初期ステータスをこのインターフェースで受け取る。
  * Game が gameStore から値を読み取り、PlayerFactory へ渡す。
+ *
+ * P0-2修正: strength を廃止し attackPower に一本化した。
  */
 export interface PlayerInitialConfig {
   maxHp: number;
@@ -11,7 +13,7 @@ export interface PlayerInitialConfig {
   maxEnergy: number;
   energy: number;
   defense: number;
-  strength: number;
+  attackPower: number;
   viewRadius: number;
   level: number;
 }

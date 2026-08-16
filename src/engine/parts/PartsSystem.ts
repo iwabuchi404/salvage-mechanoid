@@ -1,6 +1,8 @@
 // パーツシステム - パーツ管理とステータス計算
 
 import { System } from '../System';
+import { Engine } from '../Engine';
+import { EventSystem } from '../events/EventSystem';
 import type { RobotPart, Weapon, RobotLoadout, RobotStats, PassiveEffect, Skill } from '../types';
 import { PartSlot, ArmType } from '../types';
 import { StatSource, StatModifier } from '../entity/stats/StatTypes';
@@ -10,17 +12,23 @@ import { StatSource, StatModifier } from '../entity/stats/StatTypes';
  * プレイヤーのパーツ構成を管理し、総合ステータスを計算する
  *
  * BU-2: StatSource を実装し、StatsComponent へ修飾子を提供する。
- * setLoadout / resetLoadout / equipPart / unequipPart で
- * StatsComponent.invalidate() が呼ばれる必要があるが、
- * このクラス自体は StatsComponent への参照を持たない。
- * 呼び出し元（Game）が addSource 後に invalidate() を呼ぶか、
- * setLoadout 等の後に invalidate() を呼ぶ責務を持つ。
+ * P2修正: setLoadout / resetLoadout / equipPart / unequipPart / equipWeapon /
+ * unequipWeapon で loadout_changed イベントを発行し、StatsComponent が
+ * invalidate() を呼ぶようにした。
  */
 export class PartsSystem implements System, StatSource {
   name = 'parts';
 
   // StatSource の実装
   readonly sourceId = 'parts';
+
+  /** loadout_changed イベントを発行する */
+  private notifyLoadoutChanged(): void {
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit('loadout_changed', { sourceId: this.sourceId });
+    }
+  }
 
   /**
    * 現在の装備から StatsComponent へ提供する修飾子一覧を返す。
@@ -112,6 +120,7 @@ export class PartsSystem implements System, StatSource {
     }
 
     console.log(`Equipped ${part.name} to ${part.slot}`);
+    this.notifyLoadoutChanged();
     return true;
   }
 
@@ -171,6 +180,7 @@ export class PartsSystem implements System, StatSource {
 
       this.loadout.weaponR = weapon;
       console.log(`Equipped ${weapon.name} to right hand`);
+      this.notifyLoadoutChanged();
       return true;
     } else {
       // 左腕がマニピュレーターか確認
@@ -189,6 +199,7 @@ export class PartsSystem implements System, StatSource {
 
       this.loadout.weaponL = weapon;
       console.log(`Equipped ${weapon.name} to left hand`);
+      this.notifyLoadoutChanged();
       return true;
     }
   }
@@ -202,6 +213,7 @@ export class PartsSystem implements System, StatSource {
     } else {
       this.loadout.weaponL = null;
     }
+    this.notifyLoadoutChanged();
   }
 
   /**
@@ -233,6 +245,7 @@ export class PartsSystem implements System, StatSource {
         this.loadout.core = null;
         break;
     }
+    this.notifyLoadoutChanged();
   }
 
   /**
@@ -340,6 +353,7 @@ export class PartsSystem implements System, StatSource {
       weaponR: null,
       weaponL: null,
     };
+    this.notifyLoadoutChanged();
   }
 
   /**
@@ -348,6 +362,7 @@ export class PartsSystem implements System, StatSource {
   setLoadout(loadout: RobotLoadout): void {
     this.loadout = { ...loadout };
     console.log('Loadout set');
+    this.notifyLoadoutChanged();
   }
 
   /**

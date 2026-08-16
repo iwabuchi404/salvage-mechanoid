@@ -25,7 +25,6 @@ const baseStats: EffectiveStats = {
   viewRadius: 4,
   moveSpeed: 4,
   carryCapacity: 10,
-  strength: 10,
   level: 1,
 };
 

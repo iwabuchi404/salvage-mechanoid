@@ -21,7 +21,6 @@ const baseStats: EffectiveStats = {
   viewRadius: 4,
   moveSpeed: 4,
   carryCapacity: 10,
-  strength: 10,
   level: 1,
 };
 
@@ -135,8 +134,8 @@ describe('BU-2 段階2: StatsComponent', () => {
   });
 
   it('setBaseValue で基礎値の単一キーを更新できる', () => {
-    stats.setBaseValue('strength', 20);
-    expect(stats.getValue('strength')).toBe(20);
+    stats.setBaseValue('attackPower', 20);
+    expect(stats.getValue('attackPower')).toBe(20);
     // 他の値は変わらない
     expect(stats.getValue('maxHp')).toBe(100);
   });

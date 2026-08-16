@@ -1,12 +1,16 @@
 /**
  * 実効ステータスとして管理する値のキー。
  *
- * ここに無い値（level、score など）は StatsComponent の管理対象外とし、
+ * ここに無い値（score など）は StatsComponent の管理対象外とし、
  * 進行状態として別に保持する。
  *
- * BU-2 設計決定: strength と level を StatKey に含める。
- * - strength: attackPower の基礎値として使われる。修飾子で増減できるようにする。
+ * BU-2 設計決定: level を StatKey に含める。
  * - level: レベルによるステータス成長を修飾子として表現するため。
+ *
+ * P0-2修正: strength を廃止し attackPower に一本化した。
+ * 旧設計では strength（生の筋力）と attackPower（実効攻撃力）が独立したキー
+ * だったが、strength をブーストしても attackPower に伝播しない問題があった。
+ * UI・CombatSystem・アイテム効果すべて attackPower を見るように統一した。
  */
 export type StatKey =
   | 'maxHp'
@@ -16,7 +20,6 @@ export type StatKey =
   | 'viewRadius'
   | 'moveSpeed'
   | 'carryCapacity'
-  | 'strength'
   | 'level';
 
 /** 修飾子の適用方法 */

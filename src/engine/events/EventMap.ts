@@ -169,6 +169,8 @@ export interface EventMap {
     maxEnergy: number;
     percentage: number;
   };
+  /** 装備構成が変更された（StatsComponent が invalidate するための通知） */
+  loadout_changed: { sourceId: string };
 
   // ===== ゲーム進行 =====
   game_over: { score: number };

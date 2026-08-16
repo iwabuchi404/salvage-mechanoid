@@ -3,7 +3,6 @@ import { TransformComponent } from '../../engine/entity/components/Transform';
 import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
 import { BlockingComponent } from '../../engine/entity/components/Blocking';
-import { AttackPowerComponent } from '../../engine/entity/components/AttackPower';
 import { StatsComponent } from '../../engine/entity/components/Stats';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
@@ -21,9 +20,6 @@ import { PlayerInitialConfig } from './PlayerInitialConfig';
  * gameStore への投影は StatsProjection が行う（イベント経由）。
  */
 export class Player extends Entity {
-  // 視野半径（何マス先まで見えるか）
-  private _viewRadius = 4;
-
   // 初期値設定
   private config: PlayerInitialConfig;
 
@@ -41,9 +37,7 @@ export class Player extends Entity {
 
     this.config = config;
 
-    // 視野半径設定
-    this._viewRadius = config.viewRadius;
-    console.log(`Player: Initialized with viewRadius: ${this._viewRadius}`);
+    console.log(`Player: Initialized with viewRadius: ${config.viewRadius}`);
 
     // コンポーネントを追加
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
@@ -57,16 +51,16 @@ export class Player extends Entity {
       maxHp: 0,
       maxEnergy: 0,
       defense: 0,
-      attackPower: config.strength + 5,
-      viewRadius: this._viewRadius,
+      attackPower: config.attackPower,
+      viewRadius: config.viewRadius,
       moveSpeed: 4,
       carryCapacity: 0,
-      strength: config.strength,
       level: config.level,
     };
     this.addComponent(new StatsComponent(baseStats));
-    // P1-fix: 攻撃力を Component として宣言する（CombatSystem が instanceof しない）
-    this.addComponent(new AttackPowerComponent(config.strength + 5));
+    // BU-2 P1: Player から AttackPowerComponent を削除。
+    // CombatSystem は StatsComponent.getValue('attackPower') を優先する。
+    // Enemy 側は AttackPowerComponent を使うため、コンポーネント自体は残す。
     this.addComponent(new EnergyComponent(config.maxEnergy, config.energy));
   }
 
@@ -225,11 +219,10 @@ export class Player extends Entity {
    * CombatSystem は Component 経由で参照するため、このメソッドはドメイン参照用
    */
   getAttackPower(): number {
-    // BU-2: StatsComponent を優先し、AttackPowerComponent へフォールバックする
+    // BU-2: StatsComponent から攻撃力を取得する
     const stats = this.getComponent<StatsComponent>('stats');
     if (stats) return stats.getValue('attackPower');
-    const attack = this.getComponent<AttackPowerComponent>('attack_power');
-    return attack ? attack.baseAttackPower : this.config.strength + 5;
+    return this.config.attackPower;
   }
 
   /**
@@ -274,7 +267,7 @@ export class Player extends Entity {
 
     // 攻撃力を計算（BU-2: StatsComponent から取得）
     const stats = this.getComponent<StatsComponent>('stats');
-    const attackPower = stats ? stats.getValue('attackPower') : this.config.strength + 5;
+    const attackPower = stats ? stats.getValue('attackPower') : this.config.attackPower;
 
     // 攻撃イベントを発行
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
@@ -469,7 +462,7 @@ export class Player extends Entity {
       maxHp: health?.maxHp ?? 0,
       energy: this.getEnergy(),
       maxEnergy: this.getMaxEnergy(),
-      strength: stats?.getValue('strength') ?? this.config.strength,
+      attackPower: stats?.getValue('attackPower') ?? this.config.attackPower,
       defense: stats?.getValue('defense') ?? this.config.defense,
       level: stats?.getValue('level') ?? this.config.level,
     };
@@ -537,30 +530,27 @@ export class Player extends Entity {
   /**
    * BU-2: ステータスブースト（StatsComponent 経由）
    * アイテム効果の stat_boost をドメイン層へ委譲するためのメソッド。
-   * 永続的な修飾子として StatsComponent へ追加する。
+   * 永続的な強化は基礎値へ反映する（セーブ対象になるため）。
+   *
+   * P0-1修正: 実効値（getValue）ではなく基礎値（getBase）に加算する。
+   * 実効値を使うと修飾子の分が基礎値に混入し、二重計上が起きる。
+   *
+   * P0-2修正: strength を廃止し attackPower に一本化した。
+   * statType 'strength' は attackPower へマップする（旧アイテムの互換性）。
    * @param statType ステータスの種類
    * @param value 増加量
    * @returns 成功したかどうか
    */
-  applyStatBoost(statType: 'strength' | 'defense' | 'maxHp' | 'maxEnergy', value: number): boolean {
+  applyStatBoost(
+    statType: 'attackPower' | 'defense' | 'maxHp' | 'maxEnergy',
+    value: number
+  ): boolean {
     const stats = this.getComponent<StatsComponent>('stats');
     if (!stats) return false;
 
-    // StatKey へマッピング
-    const statKeyMap: Record<string, string> = {
-      strength: 'strength',
-      defense: 'defense',
-      maxHp: 'maxHp',
-      maxEnergy: 'maxEnergy',
-    };
-
-    const statKey = statKeyMap[statType];
-    if (!statKey) return false;
-
-    // 永続修飾子として基礎値を直接増やす
-    // （永続強化はセーブ対象になるため、修飾子リストではなく基礎値へ反映する）
-    const currentValue = stats.getValue(statKey as any);
-    stats.setBaseValue(statKey as any, currentValue + value);
+    // P0-1: 基礎値に加算する（実効値ではない）
+    const currentBase = stats.getBase()[statType];
+    stats.setBaseValue(statType, currentBase + value);
 
     return true;
   }
@@ -591,18 +581,22 @@ export class Player extends Entity {
   }
 
   /**
-   * 視野半径を取得
+   * 視野半径を取得（StatsComponent から）
    */
   get viewRadius(): number {
-    return this._viewRadius;
+    const stats = this.getComponent<StatsComponent>('stats');
+    return stats ? stats.getValue('viewRadius') : this.config.viewRadius;
   }
 
   /**
-   * 視野半径を設定
+   * 視野半径を設定（StatsComponent の基礎値を更新）
    * @param radius 視野半径（マス数）
    */
   setViewRadius(radius: number): void {
-    this._viewRadius = Math.max(1, radius);
+    const stats = this.getComponent<StatsComponent>('stats');
+    if (stats) {
+      stats.setBaseValue('viewRadius', Math.max(1, radius));
+    }
 
     // 視野再計算イベントを発行
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');

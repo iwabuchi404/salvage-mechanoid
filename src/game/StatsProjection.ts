@@ -42,7 +42,10 @@ export class StatsProjection {
         gameStore.player.status.maxHp = data.stats.maxHp;
         gameStore.player.status.maxEnergy = data.stats.maxEnergy;
         gameStore.player.status.defense = data.stats.defense;
-        gameStore.player.status.strength = data.stats.strength;
+        // P0-2: strength を廃止し attackPower に一本化。
+        // gameStore のフィールド名は互換性のため strength のままだが、
+        // 値は attackPower を投影する。
+        gameStore.player.status.strength = data.stats.attackPower;
         gameStore.player.status.viewRadius = data.stats.viewRadius;
         // level は gameStore では別途管理される場合があるが、
         // StatsComponent の level と同期する
@@ -67,8 +70,10 @@ export class StatsProjection {
   }
 
   destroy(): void {
-    // EventSystem のリスナーは EntitySystem の destroy で一括解除されるため、
-    // ここでは何もしない
+    // P1修正: リスナーを明示的に解除する。
+    // Engine.reset() で EventSystem のリスナーが一括解除されるが、
+    // Game.reset() で statsProjection を null にしないと
+    // 再初期化時にリスナーが再登録されない問題があった。
     this.eventSystem = null;
   }
 }
