@@ -1,6 +1,7 @@
 import { Enemy } from '@/engine/entity/Enemy';
 import { MovementComponent } from '@/engine/entity/components/Movement';
 import { TransformComponent } from '@/engine/entity/components/Transform';
+import { resolveEnemyStats } from '@/engine/entity/enemy/EnemyStatProfile';
 import { EnemyBehavior, EnemyType, PlacedEnemy, Vector3 } from '@/engine/types';
 import { EnemyActionContext } from '@/engine/entity/ai/EnemyActionContext';
 import { EnemyBehaviorStrategy } from '@/engine/entity/ai/EnemyBehaviorStrategy';
@@ -67,7 +68,7 @@ describe('Enemy AI Strategy', () => {
 
   const createEnemy = (overrides: Partial<PlacedEnemy> = {}): Enemy => {
     const placedEnemy = createPlacedEnemy(overrides);
-    const enemy = new Enemy(placedEnemy);
+    const enemy = new Enemy(placedEnemy, resolveEnemyStats(placedEnemy.type, placedEnemy.level));
     strategies.set(
       enemy,
       EnemyBehaviorStrategyFactory.create(placedEnemy.behavior, placedEnemy.patrolRoute)

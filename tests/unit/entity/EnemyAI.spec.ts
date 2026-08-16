@@ -8,6 +8,7 @@ import { MovementComponent } from '@/engine/entity/components/Movement';
 import { TransformComponent } from '@/engine/entity/components/Transform';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
+import { resolveEnemyStats } from '@/engine/entity/enemy/EnemyStatProfile';
 import { EnemyBehavior, EnemyType, PlacedEnemy, TileType, Vector3 } from '@/engine/types';
 
 /**
@@ -72,7 +73,8 @@ describe('Enemy AI', () => {
   });
 
   const createHeadlessEnemy = (overrides: Partial<PlacedEnemy> = {}): Enemy => {
-    const enemy = new Enemy(createPlacedEnemy(overrides));
+    const placed = createPlacedEnemy(overrides);
+    const enemy = new Enemy(placed, resolveEnemyStats(placed.type, placed.level));
     entities.registerEntity(enemy);
     return enemy;
   };

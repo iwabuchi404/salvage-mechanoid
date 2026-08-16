@@ -182,6 +182,15 @@ export class Player extends Entity {
   }
 
   /**
+   * 攻撃力を取得
+   * C2: CombatSystem がステータスベースのダメージ計算に使用する
+   * @returns 攻撃力（gameStore の strength + 固定ボーナス）
+   */
+  getAttackPower(): number {
+    return this.gameStore.player.status.strength;
+  }
+
+  /**
    * 攻撃
    */
   async attack(): Promise<number> {

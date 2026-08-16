@@ -1,5 +1,6 @@
 import { Enemy } from '../entity/Enemy';
 import { EnemyPresentationFactory } from '../presentation/enemy/EnemyPresentationFactory';
+import { resolveEnemyStats } from '../entity/enemy/EnemyStatProfile';
 import { PlacedEnemy } from '../types';
 
 /**
@@ -17,7 +18,9 @@ export class EnemyFactory {
    * @throws 初期化失敗時に生成済みリソースを破棄して例外を再送
    */
   static async create(placedEnemy: PlacedEnemy): Promise<Enemy> {
-    const enemy = new Enemy(placedEnemy);
+    // C2: ステータスを純データプロファイルから解決して注入する
+    const stats = resolveEnemyStats(placedEnemy.type, placedEnemy.level);
+    const enemy = new Enemy(placedEnemy, stats);
 
     try {
       await enemy.initialize();

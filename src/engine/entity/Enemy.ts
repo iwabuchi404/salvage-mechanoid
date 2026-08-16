@@ -7,6 +7,7 @@ import { EnemyBehaviorStrategy } from './ai/EnemyBehaviorStrategy';
 import { EnemyBehaviorStrategyFactory } from './ai/EnemyBehaviorStrategyFactory';
 import { EnemyActionContext } from './ai/EnemyActionContext';
 import { EnemyActionContextImpl } from './ai/EnemyActionContextImpl';
+import { EnemyStats } from './enemy/EnemyStatProfile';
 
 /**
  * 敵エンティティクラス
@@ -21,15 +22,21 @@ export class Enemy extends Entity {
   private level: number;
   private patrolRoute: Vector3[] | undefined;
   private triggerCondition: string | undefined;
+  private stats: EnemyStats;
 
   private strategy: EnemyBehaviorStrategy;
   private actionContext: EnemyActionContext;
 
   /**
    * コンストラクタ
+   *
+   * C2: ステータスは外部から注入する（EnemyFactory が resolveEnemyStats で解決）。
+   * Enemy 本体は EnemyType ごとのステータス switch を持たない。
+   *
    * @param placedEnemy 配置された敵データ
+   * @param stats 実効ステータス（レベル倍率適用済み）
    */
-  constructor(placedEnemy: PlacedEnemy) {
+  constructor(placedEnemy: PlacedEnemy, stats: EnemyStats) {
     super(placedEnemy.id, 'enemy');
 
     // タグを追加
@@ -42,12 +49,10 @@ export class Enemy extends Entity {
     this.level = placedEnemy.level;
     this.patrolRoute = placedEnemy.patrolRoute;
     this.triggerCondition = placedEnemy.triggerCondition;
+    this.stats = stats;
 
     // Transform コンポーネントを追加
     this.addComponent(new TransformComponent(placedEnemy.x, placedEnemy.y, 0));
-
-    // 敵タイプに応じたステータスを設定
-    const stats = this.getEnemyStats();
 
     // Health コンポーネントを追加
     const healthComponent = new HealthComponent(
@@ -95,56 +100,18 @@ export class Enemy extends Entity {
   }
 
   /**
-   * 敵タイプに応じたステータスを取得
-   */
-  private getEnemyStats(): {
-    maxHealth: number;
-    defense: number;
-    moveSpeed: number;
-    attackPower: number;
-  } {
-    const levelMultiplier = 1 + (this.level - 1) * 0.2;
-
-    switch (this.enemyType) {
-      case EnemyType.SCOUT:
-        return {
-          maxHealth: Math.floor(30 * levelMultiplier),
-          defense: Math.floor(3 * levelMultiplier),
-          moveSpeed: 6,
-          attackPower: Math.floor(5 * levelMultiplier),
-        };
-
-      case EnemyType.SOLDIER:
-        return {
-          maxHealth: Math.floor(50 * levelMultiplier),
-          defense: Math.floor(5 * levelMultiplier),
-          moveSpeed: 4,
-          attackPower: Math.floor(10 * levelMultiplier),
-        };
-
-      case EnemyType.HEAVY:
-        return {
-          maxHealth: Math.floor(100 * levelMultiplier),
-          defense: Math.floor(10 * levelMultiplier),
-          moveSpeed: 2,
-          attackPower: Math.floor(15 * levelMultiplier),
-        };
-
-      default:
-        return {
-          maxHealth: 50,
-          defense: 5,
-          moveSpeed: 4,
-          attackPower: 10,
-        };
-    }
-  }
-
-  /**
    * 敵タイプを取得
    */
   getEnemyType(): EnemyType {
     return this.enemyType;
+  }
+
+  /**
+   * 実効ステータスを取得
+   * C2: EnemyStatProfile から注入されたステータスを返す
+   */
+  getStats(): EnemyStats {
+    return this.stats;
   }
 
   /**

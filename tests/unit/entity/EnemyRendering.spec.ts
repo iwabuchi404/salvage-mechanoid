@@ -8,6 +8,7 @@ import { SpriteComponent } from '@/engine/entity/components/Sprite';
 import { CoordinateSystem } from '@/engine/graphics/CoordinateSystem';
 import { RendererSystem } from '@/engine/graphics/RendererSystem';
 import { EnemyPresentationFactory } from '@/engine/presentation/enemy/EnemyPresentationFactory';
+import { resolveEnemyStats } from '@/engine/entity/enemy/EnemyStatProfile';
 import { EnemyBehavior, EnemyType, LayerName, PlacedEnemy } from '@/engine/types';
 
 /**
@@ -75,7 +76,7 @@ describe('Enemy rendering boundary', () => {
 
   const createAndInitEnemy = async (overrides: Partial<PlacedEnemy> = {}): Promise<Enemy> => {
     const enemyData = createPlacedEnemy(overrides);
-    const enemy = new Enemy(enemyData);
+    const enemy = new Enemy(enemyData, resolveEnemyStats(enemyData.type, enemyData.level));
     entities.registerEntity(enemy);
     await enemy.initialize();
     await EnemyPresentationFactory.create(enemy, enemyData.type);
