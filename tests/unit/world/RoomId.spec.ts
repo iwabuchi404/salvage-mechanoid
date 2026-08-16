@@ -4,7 +4,7 @@ import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { createFloorSnapshot } from '@/engine/world/FloorSnapshot';
-import { RoomIdGenerator, roomToId, isRoomId } from '@/engine/world/RoomId';
+import { RoomIdGenerator, roomToId, isRoomId, makeRoomKey, isRoomKey } from '@/engine/world/RoomId';
 import { Room, RoomType, TileType } from '@/engine/types';
 
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
@@ -62,6 +62,65 @@ describe('RoomId', () => {
       expect(gen1.next()).toBe('room:0');
       expect(gen2.next()).toBe('room:0');
       expect(gen1.next()).toBe('room:1');
+    });
+  });
+
+  describe('RoomKey (フロア跨ぎ複合キー)', () => {
+    it('makeRoomKey は "F<floor>:room:<n>" 形式のキーを生成する', () => {
+      const gen = new RoomIdGenerator();
+      const roomId = gen.next();
+      expect(makeRoomKey(1, roomId)).toBe('F1:room:0');
+      expect(makeRoomKey(2, roomId)).toBe('F2:room:0');
+    });
+
+    it('異なるフロアの同じ RoomId が異なる RoomKey になる', () => {
+      const gen1 = new RoomIdGenerator();
+      const gen2 = new RoomIdGenerator();
+      const roomId1 = gen1.next(); // room:0
+      const roomId2 = gen2.next(); // room:0（フロアローカルなので同じ）
+
+      const key1 = makeRoomKey(1, roomId1);
+      const key2 = makeRoomKey(2, roomId2);
+
+      expect(key1).not.toBe(key2);
+      expect(key1).toBe('F1:room:0');
+      expect(key2).toBe('F2:room:0');
+    });
+
+    it('同じフロアの同じ RoomId は同じ RoomKey になる', () => {
+      const gen = new RoomIdGenerator();
+      const roomId = gen.next();
+      expect(makeRoomKey(3, roomId)).toBe(makeRoomKey(3, roomId));
+    });
+
+    it('isRoomKey は "F<floor>:room:<n>" 形式を判定する', () => {
+      expect(isRoomKey('F1:room:0')).toBe(true);
+      expect(isRoomKey('F99:room:123')).toBe(true);
+    });
+
+    it('isRoomKey は RoomId 単体や tileKey と区別する', () => {
+      expect(isRoomKey('room:0')).toBe(false);
+      expect(isRoomKey('3,5')).toBe(false);
+      expect(isRoomKey('')).toBe(false);
+      expect(isRoomKey(123)).toBe(false);
+      expect(isRoomKey(null)).toBe(false);
+    });
+
+    it('RoomKey を Map のキーとして使用できる', () => {
+      const gen1 = new RoomIdGenerator();
+      const gen2 = new RoomIdGenerator();
+      const roomId1 = gen1.next();
+      const roomId2 = gen2.next();
+
+      const lockState = new Map<string, boolean>();
+      lockState.set(makeRoomKey(1, roomId1), true);
+      lockState.set(makeRoomKey(2, roomId2), false);
+
+      // フロア1の room:0 はロック、フロア2の room:0 はアンロック
+      expect(lockState.get(makeRoomKey(1, roomId1))).toBe(true);
+      expect(lockState.get(makeRoomKey(2, roomId2))).toBe(false);
+      // 同じ room:0 でもフロアが違えば別エントリ
+      expect(lockState.size).toBe(2);
     });
   });
 
