@@ -1,9 +1,16 @@
 import { System } from '../System';
 import { Engine } from '../Engine';
+import { EventKey, EventMap } from './EventMap';
 
 /**
  * イベントシステム - 観察者パターンを実装
  * コンポーネント間の疎結合通信を可能にする
+ *
+ * BU-1: on / off / emit に型付きオーバーロードを追加。
+ * EventMap に宣言済みのイベント名は型検査され、ペイロードの
+ * 不整合がコンパイル時に検出される。
+ * 未宣言のイベント名は後方互換シグネチャ（string）に流れるため、
+ * 段階的な移行が可能。
  */
 export class EventSystem implements System {
   // イベント名とリスナーのマップ
@@ -43,9 +50,12 @@ export class EventSystem implements System {
 
   /**
    * イベントリスナーを登録する
+   * BU-1: EventMap に宣言済みのイベント名は型検査される
    * @param eventName 監視するイベントの名前
    * @param callback イベント発生時に呼び出されるコールバック関数
    */
+  on<K extends EventKey>(eventName: K, callback: (data: EventMap[K]) => void): void;
+  on(eventName: string, callback: (data: any) => void): void;
   on(eventName: string, callback: (data: any) => void): void {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
@@ -55,9 +65,12 @@ export class EventSystem implements System {
 
   /**
    * イベントリスナーを削除する
+   * BU-1: EventMap に宣言済みのイベント名は型検査される
    * @param eventName 監視を解除するイベントの名前
    * @param callback 削除するコールバック関数
    */
+  off<K extends EventKey>(eventName: K, callback: (data: EventMap[K]) => void): void;
+  off(eventName: string, callback: (data: any) => void): void;
   off(eventName: string, callback: (data: any) => void): void {
     if (this.listeners.has(eventName)) {
       this.listeners.get(eventName)!.delete(callback);
@@ -71,9 +84,12 @@ export class EventSystem implements System {
 
   /**
    * イベントを発行する
+   * BU-1: EventMap に宣言済みのイベント名は型検査される
    * @param eventName 発行するイベントの名前
    * @param data イベントに付随するデータ
    */
+  emit<K extends EventKey>(eventName: K, data: EventMap[K]): void;
+  emit(eventName: string, data?: any): void;
   emit(eventName: string, data: any = {}): void {
     // バッファリングが有効な場合はイベントをバッファに追加
     if (this.bufferingEnabled) {

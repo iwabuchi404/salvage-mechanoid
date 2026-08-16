@@ -87,17 +87,13 @@ export interface EventMap {
   portal_discovered: { entityId: string; currentFloor: number };
 
   // ===== タイル =====
-  tile_entered:
-    | {
-        entityId: string;
-        tilePosition: Vector3;
-        tileType: TileType;
-      }
-    | {
-        entityId: string;
-        position: Vector3;
-        type: TileType;
-      };
+  tile_entered: {
+    entityId: string;
+    tilePosition?: Vector3;
+    tileType?: TileType;
+    position?: Vector3;
+    type?: TileType;
+  };
   tile_exited: { entityId: string; position: Vector3; type: TileType };
   tile_changed: { position: Vector3; type: TileType };
   tile_explored: { position: Vector3; type: TileType };
@@ -108,16 +104,12 @@ export interface EventMap {
     explored: boolean;
     roomId?: string;
   };
-  tile_selected:
-    | {
-        tile: unknown;
-        position: { x: number; y: number };
-      }
-    | {
-        position: Vector3;
-        type: TileType;
-        selected: boolean;
-      };
+  tile_selected: {
+    tile?: any;
+    position: { x: number; y: number } | Vector3;
+    type?: TileType;
+    selected?: boolean;
+  };
   tile_hovered: { position: { x: number; y: number } | null };
   fov_update_requested: { entityId: string };
   apply_tile_effect: {
