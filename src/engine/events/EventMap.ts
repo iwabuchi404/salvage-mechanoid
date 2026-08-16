@@ -2,6 +2,7 @@ import { Vector3, Direction, TileType, StageType } from '../types';
 import { Entity } from '../entity/Entity';
 import { FloorGenerationRequest } from '../world/FloorManager';
 import { Tile } from '../world/Tile';
+import { EffectiveStats } from '../entity/stats/StatTypes';
 
 /**
  * イベント名とペイロード型の対応表。
@@ -155,6 +156,13 @@ export interface EventMap {
     skill: unknown;
   };
   skill_learned: { skillId: string };
+
+  // ===== ステータス =====
+  stats_changed: {
+    entityId: string;
+    stats: EffectiveStats;
+    previous: EffectiveStats;
+  };
 
   // ===== ゲーム進行 =====
   game_over: { score: number };

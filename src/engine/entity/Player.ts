@@ -4,6 +4,7 @@ import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
 import { BlockingComponent } from '../../engine/entity/components/Blocking';
 import { AttackPowerComponent } from '../../engine/entity/components/AttackPower';
+import { StatsComponent } from '../../engine/entity/components/Stats';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
 import { Engine } from '../../engine/Engine';
@@ -11,6 +12,7 @@ import { EventSystem } from '../../engine/events/EventSystem';
 import { EntitySystem } from '../../engine/entity/EntitySystem';
 import { useGameStore } from '../../stores/gameStore';
 import { WorldSystem } from '../../engine/world/WorldSystem';
+import { EffectiveStats } from '../../engine/entity/stats/StatTypes';
 
 /**
  * プレイヤークラス - プレイヤーのエンティティ
@@ -44,6 +46,20 @@ export class Player extends Entity {
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
     // C3: 衝突判定を Entity 側で宣言する
     this.addComponent(new BlockingComponent());
+    // BU-2: 実効ステータスの正本。基礎値は gameStore 初期値と同じ。
+    // 段階3以降で PartsSystem が StatSource として登録される。
+    const baseStats: EffectiveStats = {
+      maxHp: this.gameStore.player.status.maxHp,
+      maxEnergy: this.gameStore.player.status.maxEnergy,
+      defense: this.gameStore.player.status.defense,
+      attackPower: this.gameStore.player.status.strength + 5,
+      viewRadius: this._viewRadius,
+      moveSpeed: 4,
+      carryCapacity: 10,
+      strength: this.gameStore.player.status.strength,
+      level: this.gameStore.player.status.level,
+    };
+    this.addComponent(new StatsComponent(baseStats));
     // P1-fix: 攻撃力を Component として宣言する（CombatSystem が instanceof しない）
     this.addComponent(new AttackPowerComponent(this.gameStore.player.status.strength + 5));
     this.addComponent(
