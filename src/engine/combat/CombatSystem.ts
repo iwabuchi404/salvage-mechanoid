@@ -8,6 +8,7 @@ import { HealthComponent } from '../entity/components/Health';
 import { MovementComponent } from '../entity/components/Movement';
 import { Enemy } from '../entity/Enemy';
 import { Player } from '../entity/Player';
+import { isPlayerEntityId } from '../entity/EntityKind';
 import { Direction } from '../types';
 
 /**
@@ -180,7 +181,8 @@ export class CombatSystem implements System {
     }
 
     // プレイヤーが攻撃者でない場合、プレイヤーもチェック
-    if (!attackerId.startsWith('player')) {
+    // C3: ID プレフィックス判定をタグベースへ統一
+    if (!isPlayerEntityId(attackerId, this.entitySystem)) {
       const players = this.entitySystem?.getEntitiesByTag('player') || [];
       for (const player of players) {
         const playerTransform = player.getComponent<TransformComponent>('transform');

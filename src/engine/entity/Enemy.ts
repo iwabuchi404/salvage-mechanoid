@@ -2,6 +2,7 @@ import { Entity } from './Entity';
 import { TransformComponent } from './components/Transform';
 import { HealthComponent } from './components/Health';
 import { MovementComponent } from './components/Movement';
+import { BlockingComponent } from './components/Blocking';
 import { Vector3, EnemyType, EnemyBehavior, PlacedEnemy, Direction } from '../types';
 import { EnemyBehaviorStrategy } from './ai/EnemyBehaviorStrategy';
 import { EnemyBehaviorStrategyFactory } from './ai/EnemyBehaviorStrategyFactory';
@@ -53,6 +54,8 @@ export class Enemy extends Entity {
 
     // Transform コンポーネントを追加
     this.addComponent(new TransformComponent(placedEnemy.x, placedEnemy.y, 0));
+    // C3: 衝突判定を Entity 側で宣言する
+    this.addComponent(new BlockingComponent());
 
     // Health コンポーネントを追加
     const healthComponent = new HealthComponent(

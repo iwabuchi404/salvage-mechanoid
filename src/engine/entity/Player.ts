@@ -2,6 +2,7 @@ import { Entity } from '../../engine/entity/Entity';
 import { TransformComponent } from '../../engine/entity/components/Transform';
 import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
+import { BlockingComponent } from '../../engine/entity/components/Blocking';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
 import { Engine } from '../../engine/Engine';
@@ -40,6 +41,8 @@ export class Player extends Entity {
 
     // コンポーネントを追加
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
+    // C3: 衝突判定を Entity 側で宣言する
+    this.addComponent(new BlockingComponent());
     this.addComponent(
       new EnergyComponent(
         this.gameStore.player.status.maxEnergy,

@@ -4,6 +4,7 @@ import { EventSystem } from '../events/EventSystem';
 import { WorldSystem } from '../world/WorldSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Player } from '../entity/Player';
+import { isPlayerEntityId } from '../entity/EntityKind';
 import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
 import { TileType, Direction, Room } from '../types';
@@ -77,7 +78,8 @@ export class FOVSystem implements System {
 
     // プレイヤー移動完了時に視野を再計算
     this.moveCompletedListener = (data) => {
-      if (data.entityId === 'player' || (data.entityId && data.entityId.startsWith('player'))) {
+      // C3: ID プレフィックス判定をタグベースへ統一
+      if (data.entityId && isPlayerEntityId(data.entityId, this.entitySystem)) {
         console.log(`FOVSystem: move_completed event received for ${data.entityId}`);
         this.updatePlayerFOV();
       }
@@ -86,7 +88,7 @@ export class FOVSystem implements System {
 
     // 視野更新リクエスト時（視野半径変更時など）
     this.fovUpdateRequestedListener = (data) => {
-      if (data.entityId && data.entityId.startsWith('player')) {
+      if (data.entityId && isPlayerEntityId(data.entityId, this.entitySystem)) {
         this.updatePlayerFOV();
       }
     };

@@ -7,6 +7,7 @@ import { EventSystem } from '../events/EventSystem';
 import { EntitySystem } from '../entity/EntitySystem';
 import { Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/Transform';
+import { BlockingComponent } from '../entity/components/Blocking';
 import { CoordinateSystem } from '../graphics/CoordinateSystem';
 import { FloorSnapshot, createFloorSnapshot } from './FloorSnapshot';
 import { RoomId } from './RoomId';
@@ -289,13 +290,10 @@ export class WorldSystem implements System {
         continue;
       }
 
-      // アイテムタグを持つエンティティは衝突判定しない
-      if (entity.hasTag('item')) {
-        continue;
-      }
-
-      // イベントオブジェクト（ポータル、チャージャー）は衝突判定しない
-      if (entity.hasTag('event_object') || entity.hasTag('portal') || entity.hasTag('charger')) {
+      // C3: 衝突判定は BlockingComponent の有無で宣言する
+      // 旧ロジックの item / event_object / portal / charger タグ除外は
+      // これらの Entity が BlockingComponent を持たないことで表現される
+      if (!entity.getComponent<BlockingComponent>('blocking')) {
         continue;
       }
 

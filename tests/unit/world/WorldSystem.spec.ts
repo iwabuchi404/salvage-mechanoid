@@ -1,6 +1,7 @@
 import { Engine } from '@/engine/Engine';
 import { HealthComponent } from '@/engine/entity/components/Health';
 import { TransformComponent } from '@/engine/entity/components/Transform';
+import { BlockingComponent } from '@/engine/entity/components/Blocking';
 import { Entity } from '@/engine/entity/Entity';
 import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { EventSystem } from '@/engine/events/EventSystem';
@@ -43,6 +44,13 @@ describe('WorldSystem', () => {
   const addEntity = (id: string, x: number, y: number, ...tags: string[]): Entity => {
     const entity = new Entity(id, 'test');
     entity.addComponent(new TransformComponent(x, y, 0));
+    // C3: 衝突判定は BlockingComponent の有無で宣言する
+    // item / event_object / portal / charger タグは BlockingComponent を持たない
+    const NON_BLOCKING_TAGS = new Set(['item', 'event_object', 'portal', 'charger']);
+    const isBlocking = !tags.every((tag) => NON_BLOCKING_TAGS.has(tag));
+    if (isBlocking) {
+      entity.addComponent(new BlockingComponent());
+    }
     tags.forEach((tag) => entity.addTag(tag));
     entities.registerEntity(entity);
     return entity;
@@ -108,5 +116,27 @@ describe('WorldSystem', () => {
       tilePosition: { x: 2, y: 2, z: 0 },
       tileType: TileType.DAMAGE,
     });
+  });
+
+  // C3: 新しい衝突 Entity の追加で WorldSystem を変更しなくてよい
+  it('BlockingComponent を持つカスタム Entity が衝突判定に参加する', () => {
+    // Room ロック用のドアなどを想定したカスタム Entity
+    const door = new Entity('door-1', 'door');
+    door.addTag('door');
+    door.addComponent(new TransformComponent(3, 3, 0));
+    door.addComponent(new BlockingComponent());
+    entities.registerEntity(door);
+
+    expect(world.isPositionOccupied(3, 3)).toBe(true);
+    expect(world.isWalkable(3, 3)).toBe(false);
+  });
+
+  it('BlockingComponent を持たないカスタム Entity は衝突判定に参加しない', () => {
+    const deco = new Entity('deco-1', 'decoration');
+    deco.addTag('decoration');
+    deco.addComponent(new TransformComponent(3, 3, 0));
+    entities.registerEntity(deco);
+
+    expect(world.isPositionOccupied(3, 3)).toBe(false);
   });
 });

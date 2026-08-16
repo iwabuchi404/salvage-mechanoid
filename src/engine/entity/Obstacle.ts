@@ -2,6 +2,7 @@ import { Entity } from './Entity';
 import { TransformComponent } from './components/Transform';
 import { SpriteComponent } from './components/Sprite';
 import { HealthComponent } from './components/Health';
+import { BlockingComponent } from './components/Blocking';
 import { ObstacleType, PlacedObstacle } from '../types';
 
 /**
@@ -30,6 +31,8 @@ export class Obstacle extends Entity {
 
     // Transform コンポーネントを追加
     this.addComponent(new TransformComponent(placedObstacle.x, placedObstacle.y, 0));
+    // C3: 衝突判定を Entity 側で宣言する
+    this.addComponent(new BlockingComponent());
 
     // 破壊可能な場合は Health コンポーネントを追加
     if (this.destructible && placedObstacle.health) {

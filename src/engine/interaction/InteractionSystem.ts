@@ -4,6 +4,7 @@ import { EntitySystem } from '../entity/EntitySystem';
 import { EventSystem } from '../events/EventSystem';
 import { TransformComponent } from '../entity/components/Transform';
 import { InteractableComponent } from '../entity/components/Interactable';
+import { isPlayerEntityId } from '../entity/EntityKind';
 import { RendererSystem } from '../graphics/RendererSystem';
 import { WorldSystem } from '../world/WorldSystem';
 import { findEntityAtTilePosition } from './InteractionQuery';
@@ -74,7 +75,8 @@ export class InteractionSystem implements System {
 
     // 移動完了時にインタラクションをチェック
     this.eventSystem.on('move_completed', (data) => {
-      if (data.entityId && data.entityId.startsWith('player')) {
+      // C3: ID プレフィックス判定をタグベースへ統一
+      if (data.entityId && isPlayerEntityId(data.entityId, this.entitySystem)) {
         this.checkInteractionAt(data.entityId, data.position);
       }
     });
