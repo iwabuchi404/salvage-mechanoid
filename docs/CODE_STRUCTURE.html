@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>salvage-mechanoid コード構造図</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --panel-2: #232735;
+    --border: #2e3346;
+    --text: #e6e8ee;
+    --muted: #8b91a7;
+    --accent: #6aa9ff;
+    --accent-2: #ff8a6a;
+    --ok: #5fcf80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    padding: 32px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #161924 0%, var(--bg) 100%);
+  }
+  header h1 { margin: 0 0 6px; font-size: 24px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--accent);
+    color: #0f1117;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  section .lead {
+    color: var(--muted);
+    margin: 0 0 20px;
+    font-size: 14px;
+  }
+  .mermaid {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h3 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--accent);
+  }
+  .card ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .card li { margin-bottom: 4px; }
+  .card li strong { color: var(--text); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--accent); font-weight: 600; }
+  td code, th code {
+    background: #0f1117;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--accent-2);
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>salvage-mechanoid コード構造図</h1>
+  <p>R0〜R6 リファクタリング完了後の現状（2026-08-15）</p>
+</header>
+<main>
+
+<!-- 1. 全体アーキテクチャ -->
+<section>
+  <h2><span class="num">1</span>全体アーキテクチャ</h2>
+  <p class="lead">Engine が全システムのライフサイクルを管理し、EventSystem でシステム間疎結合通信を行う。Game はユースケース調整役。</p>
+  <div class="mermaid">
+flowchart TB
+  subgraph UI["UI レイヤー (Vue + Pinia)"]
+    App[App.vue]
+    GameScreen[GameScreen.vue]
+    StartScreen[StartScreen.vue]
+    GameOver[GameOverScreen.vue]
+    Clear[ClearScreen.vue]
+    Store[gameStore / uiStore]
+  end
+
+  subgraph Game["ゲーム調整層"]
+    GameClass[Game.ts<br/>起動・ユースケース調整]
+    FloorMgr[FloorManager<br/>階層遷移]
+  end
+
+  subgraph EngineCore["Engine コア"]
+    Engine[Engine<br/>シングルトン<br/>システム登録・更新・破棄]
+    SysInt[System Interface<br/>initialize/update/destroy]
+  end
+
+  subgraph Systems["システム層 (Engine に登録)"]
+    Event[EventSystem<br/>観察者パターン]
+    Entity[EntitySystem]
+    World[WorldSystem]
+    FOV[FOVSystem]
+    Turn[TurnSystem]
+    Combat[CombatSystem]
+    Interaction[InteractionSystem]
+    Input[InputSystem]
+    Effect[EffectSystem]
+    Loot[LootSystem]
+    Skill[SkillSystem]
+    Parts[PartsSystem]
+    Audio[AudioSystem]
+    Renderer[RendererSystem<br/>PixiJS]
+  end
+
+  subgraph Domain["ドメインモデル"]
+    Player[Player]
+    Enemy[Enemy]
+    Item[Item]
+    Obstacle[Obstacle]
+    EventObj[EventObjectEntity]
+    Components[Components<br/>Health/Energy/Movement<br/>Transform/Sprite/Interactable]
+  end
+
+  subgraph Presentation["Presentation (R2分離)"]
+    EnemyPres[EnemyPresentation]
+    EnemyProfile[EnemyVisualProfile]
+    EnemyFactory[EnemyPresentationFactory]
+  end
+
+  subgraph WorldGen["ワールド生成 (R5分離)"]
+    MapGen[MapGeneratorFacade]
+    BSP[BSPGenerator]
+    Cave[CaveGenerator]
+    Corridor[Corridor Generators<br/>AStar / LShape]
+    Placement[Placement<br/>Enemy/Item/Obstacle/Special]
+    Tactical[Tactical<br/>Energy/Terrain/Element]
+    Resource[ResourceGenerationSystem]
+  end
+
+  subgraph Factory["Factory (R4分離)"]
+    EFactory[EnemyFactory]
+    IFactory[ItemFactory]
+    OFactory[ObstacleFactory]
+  end
+
+  subgraph AILayer["Enemy AI (R3分離)"]
+    Strategy[EnemyBehaviorStrategy]
+    Static[StaticBehavior]
+    Patrol[PatrolBehavior]
+    Guard[GuardBehavior]
+    Aggressive[AggressiveBehavior]
+    Context[EnemyActionContext]
+  end
+
+  App --> GameScreen
+  GameScreen --> GameClass
+  GameClass --> Engine
+  Engine --> SysInt
+  SysInt -.-> Systems
+  GameClass --> FloorMgr
+  GameClass --> WorldGen
+  GameClass --> Factory
+  Factory --> Domain
+  Domain --> Components
+  Enemy --> AILayer
+  Enemy --> Presentation
+  GameClass --> Store
+  GameScreen --> Store
+  </div>
+  <div class="legend">
+    <span><i style="background:#6aa9ff"></i>実線 = 直接参照</span>
+    <span><i style="background:#2e3346"></i>点線 = インターフェース経由</span>
+  </div>
+</section>
+
+<!-- 2. システム登録順序 -->
+<section>
+  <h2><span class="num">2</span>システム登録順序</h2>
+  <p class="lead">Game.initializeSystems() で Engine へ登録。更新ループは renderer 以外を先に処理し、renderer は最後に更新される。</p>
+  <div class="mermaid">
+flowchart LR
+  subgraph Register["登録順 (Game.initializeSystems)"]
+    R1[renderer] --> R2[entity] --> R3[event] --> R4[audio]
+    R4 --> R5[turn] --> R6[effect] --> R7[combat] --> R8[interaction]
+    R8 --> R9[input] --> R10[fov] --> R11[loot] --> R12[skill] --> R13[parts]
+  end
+  subgraph Loop["gameLoop 更新順"]
+    L1[非rendererシステム] --> L2[renderer 最後に更新]
+  end
+  Register -.-> Loop
+  </div>
+  <table>
+    <tr><th>システム名</th><th>クラス</th><th>主責務</th></tr>
+    <tr><td><code>renderer</code></td><td>RendererSystem</td><td>PixiJS 描画・カメラ・タイル描画</td></tr>
+    <tr><td><code>entity</code></td><td>EntitySystem</td><td>Entity/Component 登録・破棄・ライフサイクル</td></tr>
+    <tr><td><code>event</code></td><td>EventSystem</td><td>観察者パターン・イベントバッファリング</td></tr>
+    <tr><td><code>audio</code></td><td>AudioSystem</td><td>効果音・BGM 再生</td></tr>
+    <tr><td><code>turn</code></td><td>TurnSystem</td><td>プレイヤー/敵ターン切替</td></tr>
+    <tr><td><code>effect</code></td><td>EffectSystem</td><td>ダメージ/heal/攻撃エフェクト</td></tr>
+    <tr><td><code>combat</code></td><td>CombatSystem</td><td>攻撃要求処理・ダメージ計算</td></tr>
+    <tr><td><code>interaction</code></td><td>InteractionSystem</td><td>候補抽出・実行分離 (R6)</td></tr>
+    <tr><td><code>input</code></td><td>InputSystem</td><td>キーボード/クリック入力</td></tr>
+    <tr><td><code>fov</code></td><td>FOVSystem</td><td>視界計算・探索状態 (R6)</td></tr>
+    <tr><td><code>loot</code></td><td>LootSystem</td><td>アイテムドロップ</td></tr>
+    <tr><td><code>skill</code></td><td>SkillSystem</td><td>スキル使用・クールダウン</td></tr>
+    <tr><td><code>parts</code></td><td>PartsSystem</td><td>パーツ装備・ステータス計算</td></tr>
+    <tr><td><code>world</code></td><td>WorldSystem</td><td>タイルマップ・経路探索・Room (R5)</td></tr>
+  </table>
+</section>
+
+<!-- 3. イベントフロー -->
+<section>
+  <h2><span class="num">3</span>イベントフロー (EventSystem)</h2>
+  <p class="lead">システム間通信は EventSystem 経由。主要なイベントの発行→購読の流れを示す。</p>
+  <div class="mermaid">
+flowchart LR
+  subgraph Pub["発行元"]
+    Movement[Movement]
+    PlayerE[Player]
+    HealthC[Health]
+    FOVS[FOVSystem]
+    WorldS[WorldSystem]
+    TileC[Tile]
+    TileMapC[TileMap]
+    EntitySys[EntitySystem]
+    InteractionE[InteractionExecutor]
+  end
+  subgraph Sub["購読元"]
+    PlayerS[Player]
+    TurnS[TurnSystem]
+    FOVSub[FOVSystem]
+    InterSub[InteractionSystem]
+    WorldSub[WorldSystem]
+    RendererS[RendererSystem]
+    SpriteC[SpriteComponent]
+    ItemS[Item]
+    EnemyPresS[EnemyPresentation]
+    LootSub[LootSystem]
+    AudioSub[AudioSystem]
+    EffectSub[EffectSystem]
+    CombatSub[CombatSystem]
+    InputSub[InputSystem]
+    SkillSub[SkillSystem]
+  end
+
+  Movement -->|move_completed| PlayerS
+  Movement -->|move_completed| TurnS
+  Movement -->|move_completed| FOVSub
+  Movement -->|move_completed| InterSub
+  Movement -->|move_started| PlayerS
+  Movement -->|direction_changed| PlayerS
+  Movement -->|direction_changed| EnemyPresS
+
+  PlayerE -->|player_turn_ended| TurnS
+  PlayerE -->|player_attacked| TurnS
+  PlayerE -->|fov_update_requested| FOVSub
+  PlayerE -->|player_turn_ended| InputSub
+  PlayerE -->|player_turn_ended| SkillSub
+  PlayerE -->|game_over| AudioSub
+
+  HealthC -->|health_changed| PlayerS
+  HealthC -->|entity_died| LootSub
+  HealthC -->|entity_healed| EffectSub
+  HealthC -->|entity_damaged| EffectSub
+
+  FOVS -->|tile_visibility_changed| RendererS
+  FOVS -->|entity_visibility_changed| SpriteC
+  FOVS -->|entity_visibility_changed| ItemS
+  FOVS -->|entity_visibility_changed| EnemyPresS
+
+  WorldS -->|floor_changed| FOVSub
+  WorldS -->|tile_entered| PlayerS
+  TileC -->|tile_entered| PlayerS
+  TileMapC -->|tile_changed| WorldSub
+
+  EntitySys -->|entity_created| PlayerS
+  EntitySys -->|entity_destroyed| LootSub
+  InteractionE -->|interaction_completed| PlayerS
+  </div>
+</section>
+
+<!-- 4. ディレクトリ構造 -->
+<section>
+  <h2><span class="num">4</span>ディレクトリ構造</h2>
+  <p class="lead">src/ 配下の主要ディレクトリと、各ディレクトリの責務。</p>
+  <div class="mermaid">
+flowchart TB
+  root[src/]
+  root --> engine["engine/ (ゲームエンジン)"]
+  root --> game["game/ (ゲーム調整)"]
+  root --> components["components/ (Vue UI)"]
+  root --> stores["stores/ (Pinia)"]
+  root --> data["data/ (パーツ/武器データ)"]
+  root --> common["common/ (共通)"]
+  root --> tools["tools/ (マップ評価)"]
+
+  engine --> e_core["Engine.ts / System.ts / types.ts"]
+  engine --> e_audio["audio/"]
+  engine --> e_combat["combat/"]
+  engine --> e_effects["effects/"]
+  engine --> e_entity["entity/"]
+  engine --> e_events["events/"]
+  engine --> e_factory["factory/ (R4)"]
+  engine --> e_fov["fov/ (R6)"]
+  engine --> e_graphics["graphics/ (PixiJS)"]
+  engine --> e_input["input/"]
+  engine --> e_interaction["interaction/ (R6)"]
+  engine --> e_loot["loot/"]
+  engine --> e_parts["parts/"]
+  engine --> e_presentation["presentation/ (R2)"]
+  engine --> e_skill["skill/"]
+  engine --> e_turn["turn/"]
+  engine --> e_world["world/ (R5)"]
+
+  e_entity --> en_core["Entity/Enemy/Player/Item/Obstacle"]
+  e_entity --> en_comp["components/ Health/Energy/Movement/Transform/Sprite/Interactable"]
+  e_entity --> en_ai["ai/ (R3) Strategy群"]
+
+  e_world --> w_core["WorldSystem/FloorManager/FloorSnapshot"]
+  e_world --> w_gen["generators/ BSP/Cave"]
+  e_world --> w_corr["corridors/ AStar/LShape"]
+  e_world --> w_place["placement/ Enemy/Item/Obstacle/Special"]
+  e_world --> w_tac["tactical/ Energy/Terrain/Element"]
+  e_world --> w_pf["pathfinding/ AStar"]
+  e_world --> w_feat["features/ FeaturePlacer群"]
+
+  e_fov --> fov_files["FOVSystem/FOVCalculator/VisibilityRule"]
+  e_presentation --> pres_files["enemy/ EnemyPresentation/VisualProfile/Factory"]
+  e_factory --> fac_files["EnemyFactory/ItemFactory/ObstacleFactory"]
+  </div>
+</section>
+
+<!-- 5. リファクタリングフェーズ成果 -->
+<section>
+  <h2><span class="num">5</span>リファクタリングフェーズ成果</h2>
+  <p class="lead">R0〜R6 で分離された責務境界。各フェーズが次のフェーズの前提となっている。</p>
+  <div class="mermaid">
+flowchart LR
+  R0[R0: フロア遷移失敗契約<br/>FloorManager原子化] --> R1
+  R1[R1: Enemy描画デッドコード除去<br/>EnemyVisualProfile] --> R2
+  R2[R2: Enemy描画ライフサイクル分離<br/>EnemyPresentation] --> R3
+  R3[R3: Enemy AI Strategy分離<br/>Behavior群] --> R4
+  R4[R4: Entity生成Factory分離<br/>EnemyFactory等] --> R5
+  R5[R5: Room/Doorwayデータ境界<br/>FloorSnapshot] --> R6
+  R6[R6: FOV/Interaction接続<br/>roomId付きイベント]
+  R6 --> R7[R7: 拡張フェーズ<br/>スキャン/Roomロック/敵拡張]
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>R0: フロア遷移失敗契約</h3>
+      <ul>
+        <li><strong>対象</strong>: FloorManager, Game.regenerateFloor</li>
+        <li><strong>成果</strong>: 生成失敗時に旧フロアを維持、不整合を防止</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R1: Enemy描画デッドコード除去</h3>
+      <ul>
+        <li><strong>対象</strong>: Enemy.ts の TURRET 残骸</li>
+        <li><strong>成果</strong>: EnemyVisualProfile で表示設定を純粋データ化</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R2: Enemy描画ライフサイクル分離</h3>
+      <ul>
+        <li><strong>対象</strong>: Enemy ↔ PixiJS/Renderer</li>
+        <li><strong>成果</strong>: EnemyPresentation が描画を所有、Enemy.ts はゲーム状態のみ</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R3: Enemy AI Strategy分離</h3>
+      <ul>
+        <li><strong>対象</strong>: Enemy.ts の AI 分岐</li>
+        <li><strong>成果</strong>: Static/Patrol/Guard/Aggressive の Strategy 化</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R4: Entity生成Factory分離</h3>
+      <ul>
+        <li><strong>対象</strong>: Game.registerResourceEntities</li>
+        <li><strong>成果</strong>: EnemyFactory/ItemFactory/ObstacleFactory へ集約</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R5: Room/Doorwayデータ境界</h3>
+      <ul>
+        <li><strong>対象</strong>: WorldSystem のフロアデータ</li>
+        <li><strong>成果</strong>: FloorSnapshot 単位で Room/Corridor/Doorway を同一世代保持</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>R6: FOV/Interaction接続</h3>
+      <ul>
+        <li><strong>対象</strong>: FOVSystem, InteractionQuery/Executor</li>
+        <li><strong>成果</strong>: tile_visibility_changed に roomId 含む、距離/active 境界</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 6. 依存方向 -->
+<section>
+  <h2><span class="num">6</span>目標とする依存方向</h2>
+  <p class="lead">リファクタリングロードマップで定義された依存方向。ドメイン側から PixiJS を参照しない状態が R2 で達成済み。</p>
+  <div class="mermaid">
+flowchart TB
+  Game[Game<br/>起動・ユースケース調整]
+  Factory[Factory / Application Service<br/>生成・組み立て]
+  Domain[Entity / Component / Domain Model<br/>ゲーム状態と規則]
+  Port[System Port<br/>World照会・イベント通知]
+  Pres[Presentation / Renderer<br/>PixiJS]
+
+  Game --> Factory
+  Factory --> Domain
+  Domain --> Port
+  Pres -.状態を読む/表示イベント受信.-> Domain
+
+  style Pres fill:#2a1d1a,stroke:#ff8a6a
+  style Domain fill:#1a2a1d,stroke:#5fcf80
+  </div>
+  <p style="color:var(--muted);font-size:13px;margin-top:12px;">
+    R2 完了により Enemy.ts は PixiJS / RendererSystem を直接参照しない。Presentation は Domain の状態を読み、表示用イベントを受け取る下向き依存のみ。
+  </p>
+</section>
+
+<!-- 7. FOV/可視性の境界 (R6) -->
+<section>
+  <h2><span class="num">7</span>FOV / 可視性の境界 (R6)</h2>
+  <p class="lead">FOVSystem は計算とイベント反映を分離。純粋関数でテスト可能。フロア別探索状態を保持。</p>
+  <div class="mermaid">
+flowchart LR
+  subgraph Calc["純粋関数 (テスト可能)"]
+    FOVCalc[FOVCalculator<br/>computeFOV / hasLineOfSight]
+    VisRule[VisibilityRule<br/>isEntityVisible / diff*]
+  end
+  subgraph State["FOVSystem 状態"]
+    Visible[visibleTiles<br/>現在の可視タイル]
+    Explored[exploredTiles<br/>探索済みタイル]
+    ByFloor[exploredTilesByFloor<br/>フロア別探索状態]
+    Active[activeFloor<br/>現在のフロア]
+  end
+  subgraph Events["イベント"]
+    TileVis[tile_visibility_changed<br/>x/y/visible/explored/roomId]
+    EntityVis[entity_visibility_changed<br/>entityId/inFOV]
+  end
+  subgraph Triggers["更新トリガー"]
+    Move[move_completed]
+    FOVReq[fov_update_requested]
+    Floor[floor_changed]
+  end
+
+  Triggers --> FOVSystem
+  FOVSystem[FOVSystem] --> Calc
+  Calc --> State
+  State --> Events
+  </div>
+  <table>
+    <tr><th>公開API</th><th>説明</th></tr>
+    <tr><td><code>isTileVisible(x, y)</code></td><td>現在の可視状態</td></tr>
+    <tr><td><code>isTileExplored(x, y)</code></td><td>探索済みか</td></tr>
+    <tr><td><code>calculateInitialFOV()</code></td><td>初期視界計算</td></tr>
+    <tr><td><code>activateFloor()</code></td><td>フロア別探索状態へ切替</td></tr>
+    <tr><td><code>reset() / destroy()</code></td><td>状態クリア・購読解除</td></tr>
+  </table>
+</section>
+
+<!-- 8. Room データ境界 (R5) -->
+<section>
+  <h2><span class="num">8</span>Room データ境界 (R5)</h2>
+  <p class="lead">1フロア分の不変データを FloorSnapshot に集約。Room/Corridor/Doorway が同一世代で保持される。</p>
+  <div class="mermaid">
+flowchart TB
+  subgraph Snapshot["FloorSnapshot (不変値)"]
+    FloorNum[floor: FloorNumber]
+    TileMapRef[tileMap: TileMap]
+    Rooms[rooms: Room[]]
+    Corridors[corridors: Corridor[]]
+    Tactical[tacticalElements]
+    Doorways[doorways: Doorway[]]
+  end
+  subgraph RoomStruct["Room"]
+    Rid[id?: string]
+    Rx[x/y/width/height]
+    Rtype[type: RoomType]
+    Rconn[connections?: ConnectionPoint[]]
+    Rcustom[customData?: Record]
+  end
+  subgraph DoorwayStruct["Doorway"]
+    Dpos[position: x/y]
+    Ddir[direction: Direction]
+    Dfrom[fromRoom: RoomId]
+    Dto[toRoom: RoomId]
+  end
+  subgraph WorldAPI["WorldSystem API"]
+    GetRooms[getRooms / getRoomById]
+    GetAtPos[getRoomAtPosition]
+    GetDoorways[getDoorways / byFloor]
+  end
+
+  Snapshot --> WorldAPI[WorldSystem]
+  WorldAPI --> GetRooms
+  WorldAPI --> GetAtPos
+  WorldAPI --> GetDoorways
+  Rooms --> RoomStruct
+  Doorways --> DoorwayStruct
+  </div>
+  <table>
+    <tr><th>RoomType</th><th>用途</th></tr>
+    <tr><td><code>NORMAL</code></td><td>通常部屋</td></tr>
+    <tr><td><code>BOSS</code></td><td>ボス部屋</td></tr>
+    <tr><td><code>TREASURE</code></td><td>宝箱部屋</td></tr>
+    <tr><td><code>EVENT</code></td><td>イベント部屋</td></tr>
+    <tr><td><code>SHOP</code></td><td>ショップ</td></tr>
+    <tr><td><code>ENTRANCE / EXIT</code></td><td>入口・出口</td></tr>
+  </table>
+</section>
+
+<!-- 9. Enemy AI Strategy (R3) -->
+<section>
+  <h2><span class="num">9</span>Enemy AI Strategy (R3)</h2>
+  <p class="lead">EnemyType と行動パターンを分離。新しい Behavior を Enemy.ts の switch 変更なしで追加可能。</p>
+  <div class="mermaid">
+flowchart TB
+  Enemy[Enemy]
+  Factory[EnemyBehaviorStrategyFactory]
+  Context[EnemyActionContext<br/>World照会/Entity照会/攻撃要求]
+
+  Enemy --> Factory
+  Factory --> Strategy[EnemyBehaviorStrategy]
+  Strategy --> Static[StaticBehavior]
+  Strategy --> Patrol[PatrolBehavior]
+  Strategy --> Guard[GuardBehavior]
+  Strategy --> Aggressive[AggressiveBehavior]
+  Strategy --> Context
+  Context --> Impl[EnemyActionContextImpl]
+  Impl -.-> Engine[Engine.instance]
+  </div>
+  <table>
+    <tr><th>EnemyBehavior</th><th>行動</th></tr>
+    <tr><td><code>STATIC</code></td><td>静止・プレイヤーの方を向く</td></tr>
+    <tr><td><code>PATROL</code></td><td>巡回地点を順次移動・端で折返し</td></tr>
+    <tr><td><code>GUARD</code></td><td>感知範囲内のみ追跡</td></tr>
+    <tr><td><code>AGGRESSIVE</code></td><td>常に追跡</td></tr>
+  </table>
+</section>
+
+<!-- 10. Entity / Component 構造 -->
+<section>
+  <h2><span class="num">10</span>Entity / Component 構造</h2>
+  <p class="lead">EntitySystem が Entity を管理し、Entity が Component を保持する。Component は関心ごとごとに分離。</p>
+  <div class="mermaid">
+flowchart TB
+  EntitySystem[EntitySystem<br/>登録・破棄・ライフサイクル]
+  Entity[Entity<br/>id / tag / active]
+  Player[Player]
+  Enemy[Enemy]
+  Item[Item]
+  Obstacle[Obstacle]
+  EventObj[EventObjectEntity<br/>Portal/Charger]
+
+  EntitySystem --> Entity
+  Entity --> Player
+  Entity --> Enemy
+  Entity --> Item
+  Entity --> Obstacle
+  Entity --> EventObj
+
+  Entity --> Transform[Transform<br/>位置・回転・スケール]
+  Entity --> Health[Health<br/>HP・防御・無敵]
+  Entity --> Energy[Energy<br/>エネルギー]
+  Entity --> Movement[Movement<br/>移動・方向]
+  Entity --> Sprite[SpriteComponent<br/>描画要求]
+  Entity --> Interactable[Interactable<br/>操作候補]
+  </div>
+</section>
+
+</main>
+<footer>
+  salvage-mechanoid コード構造図 · 2026-08-15 · R0〜R6 リファクタリング完了後
+</footer>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#232735',
+      primaryTextColor: '#e6e8ee',
+      primaryBorderColor: '#6aa9ff',
+      lineColor: '#8b91a7',
+      secondaryColor: '#1a1d27',
+      tertiaryColor: '#2a1d1a',
+      fontFamily: '"Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif'
+    },
+    flowchart: { curve: 'basis', padding: 20 }
+  });
+</script>
+</body>
+</html>

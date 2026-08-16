@@ -1,5 +1,6 @@
 import { Player } from '../entity/Player';
 import { PlayerPresentationFactory } from '../presentation/player/PlayerPresentationFactory';
+import { PlayerInitialConfig } from '../entity/PlayerInitialConfig';
 import { Vector3 } from '../types';
 
 /**
@@ -10,17 +11,23 @@ import { Vector3 } from '../types';
  * 初期化失敗時には生成済み Entity を破棄して例外を再送する。
  *
  * C1: Player / Item の描画ライフサイクルを Presentation へ移す
+ * BU-2: Player は gameStore を参照しないため、初期値を config で受け取る
  */
 export class PlayerFactory {
   /**
    * Player を生成・初期化する
    * @param id エンティティID
    * @param startPosition 開始位置
+   * @param config 初期ステータス設定
    * @returns 初期化済みの Player（Presentation 含む）
    * @throws 初期化失敗時に生成済みリソースを破棄して例外を再送
    */
-  static async create(id: string, startPosition: Vector3): Promise<Player> {
-    const player = new Player(id, startPosition);
+  static async create(
+    id: string,
+    startPosition: Vector3,
+    config: PlayerInitialConfig
+  ): Promise<Player> {
+    const player = new Player(id, startPosition, config);
 
     try {
       await player.initialize();

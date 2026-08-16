@@ -23,6 +23,8 @@ import { ResourceGenerationSystem } from '../engine/world/ResourceGenerationSyst
 import { FloorManager } from '../engine/world/FloorManager';
 import { Player } from '../engine/entity/Player';
 import { PlayerFactory } from '../engine/factory/PlayerFactory';
+import { PlayerInitialConfig } from '../engine/entity/PlayerInitialConfig';
+import { StatsProjection } from './StatsProjection';
 import { PlayerPresentation } from '../engine/presentation/player/PlayerPresentation';
 import { Item } from '../engine/entity/Item';
 import { EnemyFactory } from '../engine/factory/EnemyFactory';
@@ -79,6 +81,9 @@ export class Game {
 
   // フロアマネージャー
   private floorManager: FloorManager | null = null;
+
+  // BU-2: ドメイン状態から gameStore への投影
+  private statsProjection: StatsProjection | null = null;
 
   // 生成されたリソースを保存
   private placedObstacles: PlacedObstacle[] = [];
@@ -489,8 +494,26 @@ export class Game {
     this.gameStore.player.status.hp = this.gameStore.player.status.maxHp;
     this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
 
+    // BU-2: Player は gameStore を直接参照しないため、初期値を config で渡す
+    const playerConfig: PlayerInitialConfig = {
+      maxHp: this.gameStore.player.status.maxHp,
+      hp: this.gameStore.player.status.hp,
+      maxEnergy: this.gameStore.player.status.maxEnergy,
+      energy: this.gameStore.player.status.energy,
+      defense: this.gameStore.player.status.defense,
+      strength: this.gameStore.player.status.strength,
+      viewRadius: this.gameStore.player.status.viewRadius,
+      level: this.gameStore.player.status.level,
+    };
+
+    // BU-2: StatsProjection を初期化（ドメイン → gameStore 投影）
+    if (!this.statsProjection) {
+      this.statsProjection = new StatsProjection();
+      this.statsProjection.initialize();
+    }
+
     // プレイヤーエンティティを作成（C1: PlayerFactory が Presentation も組み立てる）
-    this.player = await PlayerFactory.create('player', startPosition);
+    this.player = await PlayerFactory.create('player', startPosition, playerConfig);
 
     // エンティティシステムに登録
     const entitySystem = this.engine.getSystem<EntitySystem>('entity');

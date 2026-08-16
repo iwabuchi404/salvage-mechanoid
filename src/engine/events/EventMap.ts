@@ -163,6 +163,12 @@ export interface EventMap {
     stats: EffectiveStats;
     previous: EffectiveStats;
   };
+  energy_changed: {
+    entityId: string;
+    currentEnergy: number;
+    maxEnergy: number;
+    percentage: number;
+  };
 
   // ===== ゲーム進行 =====
   game_over: { score: number };

@@ -1,19 +1,59 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { Player } from '@/engine/entity/Player';
+import { PlayerInitialConfig } from '@/engine/entity/PlayerInitialConfig';
 import { Game } from '@/game/Game';
+import { StatsProjection } from '@/game/StatsProjection';
 import { useGameStore } from '@/stores/gameStore';
 import { InventoryItemType } from '@/engine/types';
+import { Engine } from '@/engine/Engine';
+import { EventSystem } from '@/engine/events/EventSystem';
+import { EntitySystem } from '@/engine/entity/EntitySystem';
+
+const defaultConfig: PlayerInitialConfig = {
+  maxHp: 100,
+  hp: 100,
+  maxEnergy: 100,
+  energy: 80,
+  defense: 5,
+  strength: 10,
+  viewRadius: 4,
+  level: 1,
+};
 
 describe('Player energy integration', () => {
+  let eventSystem: EventSystem;
+  let entitySystem: EntitySystem;
+  let projection: StatsProjection;
+
   beforeEach(() => {
     setActivePinia(createPinia());
+
+    eventSystem = new EventSystem();
+    entitySystem = new EntitySystem();
+
+    jest.spyOn(Engine, 'instance', 'get').mockReturnValue({
+      getSystem: jest.fn((key: string) => {
+        if (key === 'event') return eventSystem;
+        if (key === 'entity') return entitySystem;
+        return undefined;
+      }),
+    } as any);
+
+    projection = new StatsProjection();
+    projection.initialize();
+
+    jest.spyOn(console, 'log').mockImplementation();
+    jest.spyOn(console, 'warn').mockImplementation();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('EnergyComponentの変更を表示用ストアへ同期する', () => {
     const store = useGameStore();
-    store.player.status.energy = 80;
-    store.player.status.maxEnergy = 100;
-    const player = new Player('player', { x: 0, y: 0, z: 0 });
+    const player = new Player('player', { x: 0, y: 0, z: 0 }, defaultConfig);
+    entitySystem.registerEntity(player);
 
     expect(player.consumeEnergy(30)).toBe(true);
     expect(player.getEnergy()).toBe(50);
@@ -26,17 +66,15 @@ describe('Player energy integration', () => {
 
   it('最大エネルギーの変更とスナップショット復元を同じ正本へ反映する', () => {
     const store = useGameStore();
-    store.player.status.energy = 70;
-    store.player.status.maxEnergy = 100;
-    const player = new Player('player', { x: 0, y: 0, z: 0 });
+    const config = { ...defaultConfig, energy: 70, maxEnergy: 100 };
+    const player = new Player('player', { x: 0, y: 0, z: 0 }, config);
+    entitySystem.registerEntity(player);
 
     expect(player.increaseMaxEnergy(25)).toBe(true);
     expect(player.getEnergySnapshot()).toEqual({ currentEnergy: 70, maxEnergy: 125 });
     expect(store.player.status.maxEnergy).toBe(125);
 
-    expect(
-      player.restoreEnergySnapshot({ currentEnergy: 40, maxEnergy: 90 })
-    ).toBe(true);
+    expect(player.restoreEnergySnapshot({ currentEnergy: 40, maxEnergy: 90 })).toBe(true);
     expect(player.getEnergySnapshot()).toEqual({ currentEnergy: 40, maxEnergy: 90 });
     expect(store.player.status.energy).toBe(40);
     expect(store.player.status.maxEnergy).toBe(90);
@@ -60,9 +98,9 @@ describe('Player energy integration', () => {
 
   it('エネルギーアイテムの効果をPlayer経由で適用してから消費する', () => {
     const store = useGameStore();
-    store.player.status.energy = 20;
-    store.player.status.maxEnergy = 100;
-    const player = new Player('player', { x: 0, y: 0, z: 0 });
+    const config = { ...defaultConfig, energy: 20, maxEnergy: 100 };
+    const player = new Player('player', { x: 0, y: 0, z: 0 }, config);
+    entitySystem.registerEntity(player);
     store.addItemToInventory({
       id: 'energy-cell',
       type: InventoryItemType.ENERGY_CELL,
@@ -86,9 +124,9 @@ describe('Player energy integration', () => {
 
   it('スキルの消費もPlayer経由で正本と表示値を更新する', () => {
     const store = useGameStore();
-    store.player.status.energy = 80;
-    store.player.status.maxEnergy = 100;
-    const player = new Player('player', { x: 0, y: 0, z: 0 });
+    const config = { ...defaultConfig, energy: 80, maxEnergy: 100 };
+    const player = new Player('player', { x: 0, y: 0, z: 0 }, config);
+    entitySystem.registerEntity(player);
     const game = new Game();
     (game as unknown as { player: Player }).player = player;
     jest.spyOn(game, 'getSkillSystem').mockReturnValue({

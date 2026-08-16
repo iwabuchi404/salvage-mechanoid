@@ -1,0 +1,35 @@
+BU-2 段階7: gameStore を投影に変え、Player.ts から useGameStore() を削除する
+
+Player が gameStore を直接参照しないようにし、ドメイン状態の
+gameStore への投影を StatsProjection に委譲する。
+
+変更:
+- PlayerInitialConfig: Player の初期値を外部から注入するインターフェース
+- Player.ts:
+  - useGameStore() のインポートと gameStore フィールドを削除
+  - コンストラクタが PlayerInitialConfig を受け取る
+  - syncEnergyState → emitEnergyChanged: energy_changed イベントを発行
+  - move_completed / health_changed リスナーの gameStore 書き込みを削除
+  - getAttackPower / attack / getStatus を StatsComponent / config から取得
+- PlayerFactory.create: config パラメータを追加
+- EventMap: energy_changed イベントを追加
+- StatsProjection: ドメイン → gameStore 投影モジュール
+  - health_changed → player.status.hp
+  - stats_changed → player.status.maxHp/maxEnergy/defense/strength/level/viewRadius
+  - energy_changed → player.status.energy/maxEnergy
+  - move_completed → player.position
+- Game.createPlayer:
+  - PlayerInitialConfig を gameStore から構築して PlayerFactory へ渡す
+  - StatsProjection を初期化
+
+テスト:
+- tests/unit/entity/PlayerImportGuard.spec.ts
+  - Player.ts が gameStore をインポートしていない
+  - Player.ts が useGameStore を使用していない
+  - Player.ts が PlayerInitialConfig をインポートしている
+- tests/unit/entity/PlayerEnergy.spec.ts: StatsProjection 経由のテストに更新
+- tests/unit/world/FloorManager.spec.ts: Player コンストラクタに config を追加
+
+Generated with [Devin](https://devin.ai)
+
+Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>

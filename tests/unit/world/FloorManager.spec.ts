@@ -8,6 +8,7 @@ import { HealthComponent } from '@/engine/entity/components/Health';
 import { EnergyComponent } from '@/engine/entity/components/Energy';
 import { TransformComponent } from '@/engine/entity/components/Transform';
 import { Player } from '@/engine/entity/Player';
+import { PlayerInitialConfig } from '@/engine/entity/PlayerInitialConfig';
 import { FloorManager } from '@/engine/world/FloorManager';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { TileMap } from '@/engine/world/TileMap';
@@ -42,7 +43,20 @@ describe('FloorManager', () => {
     await entities.initialize(engine);
 
     // プレイヤーを作成して登録
-    player = new Player('player', { x: 5, y: 5, z: 0 });
+    player = new Player(
+      'player',
+      { x: 5, y: 5, z: 0 },
+      {
+        maxHp: 100,
+        hp: 100,
+        maxEnergy: 200,
+        energy: 200,
+        defense: 5,
+        strength: 10,
+        viewRadius: 4,
+        level: 1,
+      }
+    );
     await player.initialize();
     entities.registerEntity(player);
 

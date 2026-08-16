@@ -1,0 +1,691 @@
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+PASS tests/unit/game/GameInitialization.spec.ts (16.304 s)
+PASS tests/unit/entity/EnemyAI.spec.ts
+PASS tests/unit/world/RoomData.spec.ts (5.575 s)
+PASS tests/unit/entity/PlayerEnergy.spec.ts
+  笳・Console
+
+    console.log
+      Player: Initialized with viewRadius: 12 (from store: 12)
+
+      at new Player (src/engine/entity/Player.ts:52:13)
+
+    console.log
+      Player: Initialized with viewRadius: 12 (from store: 12)
+
+      at new Player (src/engine/entity/Player.ts:52:13)
+
+    console.log
+      Added item to inventory: Energy Cell
+
+      at Proxy.addItemToInventory (src/stores/gameStore.ts:96:13)
+
+    console.log
+      Player: Initialized with viewRadius: 12 (from store: 12)
+
+      at new Player (src/engine/entity/Player.ts:52:13)
+
+    console.log
+      Added item to inventory: Energy Cell
+
+      at Proxy.addItemToInventory (src/stores/gameStore.ts:96:13)
+
+    console.log
+      Restored 50 energy
+
+      at applyItemEffect (src/stores/gameStore.ts:167:17)
+
+    console.log
+      Removed item from inventory: energy-cell
+
+      at removeItemFromInventory (src/stores/gameStore.ts:113:13)
+
+    console.log
+      Player: Initialized with viewRadius: 12 (from store: 12)
+
+      at new Player (src/engine/entity/Player.ts:52:13)
+
+PASS tests/unit/world/FloorManager.spec.ts
+PASS tests/unit/graphics/RendererSystemConfig.spec.ts
+PASS tests/unit/entity/Enemy.spec.ts
+PASS tests/unit/effects/EffectSystem.spec.ts
+PASS tests/unit/entity/Item.spec.ts
+PASS tests/unit/Engine.spec.ts
+  笳・Console
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      System with name "test" already registered, destroying old instance
+
+      43 |     const existing = this.systems.get(name);
+      44 |     if (existing) {
+    > 45 |       console.warn(`System with name "${name}" already registered, destroying old instance`);
+         |               ^
+      46 |       try {
+      47 |         existing.destroy?.();
+      48 |       } catch (error) {
+
+      at Engine.registerSystem (src/engine/Engine.ts:45:15)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:89:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is already running
+
+      76 |   start(): void {
+      77 |     if (this.isRunning) {
+    > 78 |       console.warn('Engine is already running');
+         |               ^
+      79 |       return;
+      80 |     }
+      81 |
+
+      at Engine.start (src/engine/Engine.ts:78:15)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:140:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:156:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.error
+      Error updating system "A": Error: A failed
+          at Object.update (D:\work\salvage-mechanoid\tests\unit\Engine.spec.ts:210:15)
+          at Engine.rafCallback [as gameLoop] (D:\work\salvage-mechanoid\src\engine\Engine.ts:117:16)
+          at Object.<anonymous> (D:\work\salvage-mechanoid\tests\unit\Engine.spec.ts:235:5)
+          at Promise.then.completed (D:\work\salvage-mechanoid\node_modules\jest-circus\build\utils.js:391:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\work\salvage-mechanoid\node_modules\jest-circus\build\utils.js:316:10)
+          at _callCircusTest (D:\work\salvage-mechanoid\node_modules\jest-circus\build\run.js:218:40)
+          at _runTest (D:\work\salvage-mechanoid\node_modules\jest-circus\build\run.js:155:3)
+          at _runTestsForDescribeBlock (D:\work\salvage-mechanoid\node_modules\jest-circus\build\run.js:66:9)
+          at _runTestsForDescribeBlock (D:\work\salvage-mechanoid\node_modules\jest-circus\build\run.js:60:9)
+          at run (D:\work\salvage-mechanoid\node_modules\jest-circus\build\run.js:25:3)
+          at runAndTransformResultsToJestFormat (D:\work\salvage-mechanoid\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:170:21)
+          at jestAdapter (D:\work\salvage-mechanoid\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:82:19)
+          at runTestInternal (D:\work\salvage-mechanoid\node_modules\jest-runner\build\runTest.js:389:16)
+          at runTest (D:\work\salvage-mechanoid\node_modules\jest-runner\build\runTest.js:475:34)
+
+      117 |         system.update(deltaTime);
+      118 |       } catch (error) {
+    > 119 |         console.error(`Error updating system "${name}":`, error);
+          |                 ^
+      120 |       }
+      121 |     }
+      122 |
+
+      at Engine.rafCallback [as gameLoop] (src/engine/Engine.ts:119:17)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:235:5)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      System "nonexistent" not found, cannot remove
+
+      141 |     const system = this.systems.get(name);
+      142 |     if (!system) {
+    > 143 |       console.warn(`System "${name}" not found, cannot remove`);
+          |               ^
+      144 |       return;
+      145 |     }
+      146 |     system.destroy?.();
+
+      at Engine.removeSystem (src/engine/Engine.ts:143:15)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:256:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:267:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:278:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:13:21)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:290:12)
+
+    console.warn
+      Engine is not running
+
+      90 |   stop(): void {
+      91 |     if (!this.isRunning) {
+    > 92 |       console.warn('Engine is not running');
+         |               ^
+      93 |       return;
+      94 |     }
+      95 |
+
+      at Engine.stop (src/engine/Engine.ts:92:15)
+      at Engine.reset (src/engine/Engine.ts:155:10)
+      at Object.<anonymous> (tests/unit/Engine.spec.ts:18:12)
+
+PASS tests/unit/entity/EntitySystem.spec.ts
+PASS tests/unit/world/WorldSystem.spec.ts
+PASS tests/unit/turn/TurnSystem.spec.ts
+PASS tests/unit/graphics/RendererSystem.spec.ts
+PASS tests/unit/entity/EnemyRendering.spec.ts
+PASS tests/unit/combat/CombatSystem.spec.ts
+PASS tests/unit/world/TileMap.spec.ts
+PASS tests/unit/entity/MovementComponent.spec.ts
+PASS tests/unit/events/EventSystem.spec.ts
+PASS tests/unit/entity/HealthComponent.spec.ts
+PASS tests/unit/entity/EnergyComponent.spec.ts
+PASS tests/unit/App.spec.ts
+PASS tests/unit/graphics/Camera.spec.ts
+PASS tests/unit/graphics/RenderConfig.spec.ts
+PASS tests/unit/graphics/CoordinateSystem.spec.ts
+PASS tests/unit/common/GameStateManager.spec.ts
+PASS tests/unit/entity/Entity.spec.ts
+PASS tests/unit/graphics/AnimationManager.spec.ts
+
+Test Suites: 28 passed, 28 total
+Tests:       291 passed, 291 total
+Snapshots:   0 total
+Time:        26.694 s, estimated 47 s
+Ran all test suites.

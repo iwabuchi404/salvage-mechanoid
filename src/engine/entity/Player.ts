@@ -10,37 +10,40 @@ import { Vector3, Direction, TileType } from '../../engine/types';
 import { Engine } from '../../engine/Engine';
 import { EventSystem } from '../../engine/events/EventSystem';
 import { EntitySystem } from '../../engine/entity/EntitySystem';
-import { useGameStore } from '../../stores/gameStore';
 import { WorldSystem } from '../../engine/world/WorldSystem';
 import { EffectiveStats } from '../../engine/entity/stats/StatTypes';
+import { PlayerInitialConfig } from './PlayerInitialConfig';
 
 /**
  * プレイヤークラス - プレイヤーのエンティティ
+ *
+ * BU-2: gameStore への直接依存を廃止し、初期値は PlayerInitialConfig で受け取る。
+ * gameStore への投影は StatsProjection が行う（イベント経由）。
  */
 export class Player extends Entity {
   // 視野半径（何マス先まで見えるか）
   private _viewRadius = 4;
 
-  // ゲームストア
-  private gameStore = useGameStore();
+  // 初期値設定
+  private config: PlayerInitialConfig;
 
   /**
    * コンストラクタ
    * @param id エンティティID
    * @param startPosition 開始位置
+   * @param config 初期ステータス設定
    */
-  constructor(id: string, startPosition: Vector3) {
+  constructor(id: string, startPosition: Vector3, config: PlayerInitialConfig) {
     super(id, 'player');
 
     // タグを追加
     this.addTag('player');
 
+    this.config = config;
+
     // 視野半径設定
-    const storeViewRadius = this.gameStore.player.status.viewRadius;
-    this._viewRadius = storeViewRadius !== undefined ? storeViewRadius : 4;
-    console.log(
-      `Player: Initialized with viewRadius: ${this._viewRadius} (from store: ${storeViewRadius})`
-    );
+    this._viewRadius = config.viewRadius;
+    console.log(`Player: Initialized with viewRadius: ${this._viewRadius}`);
 
     // コンポーネントを追加
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
@@ -49,28 +52,22 @@ export class Player extends Entity {
     // BU-2: 実効ステータスの正本。
     // parts 由来の値（maxHp/maxEnergy/defense/carryCapacity）は基礎値 0 とし、
     // PartsSystem が StatSource として add 修飾子で提供する。
-    // それ以外の値は gameStore 初期値を基礎値とする。
+    // それ以外の値は config 初期値を基礎値とする。
     const baseStats: EffectiveStats = {
       maxHp: 0,
       maxEnergy: 0,
       defense: 0,
-      attackPower: this.gameStore.player.status.strength + 5,
+      attackPower: config.strength + 5,
       viewRadius: this._viewRadius,
       moveSpeed: 4,
       carryCapacity: 0,
-      strength: this.gameStore.player.status.strength,
-      level: this.gameStore.player.status.level,
+      strength: config.strength,
+      level: config.level,
     };
     this.addComponent(new StatsComponent(baseStats));
     // P1-fix: 攻撃力を Component として宣言する（CombatSystem が instanceof しない）
-    this.addComponent(new AttackPowerComponent(this.gameStore.player.status.strength + 5));
-    this.addComponent(
-      new EnergyComponent(
-        this.gameStore.player.status.maxEnergy,
-        this.gameStore.player.status.energy
-      )
-    );
-    this.gameStore.player.position = { ...startPosition };
+    this.addComponent(new AttackPowerComponent(config.strength + 5));
+    this.addComponent(new EnergyComponent(config.maxEnergy, config.energy));
   }
 
   /**
@@ -85,10 +82,10 @@ export class Player extends Entity {
 
     // 体力コンポーネントを追加
     const healthComponent = new HealthComponent(
-      this.gameStore.player.status.maxHp,
-      this.gameStore.player.status.hp,
+      this.config.maxHp,
+      this.config.hp,
       500, // 無敵時間（ミリ秒）
-      this.gameStore.player.status.defense, // 防御力（整数値）
+      this.config.defense, // 防御力（整数値）
       0 // HP自動回復なし
     );
     this.addComponent(healthComponent);
@@ -99,8 +96,8 @@ export class Player extends Entity {
     // イベントリスナーを設定
     this.setupEventListeners();
 
-    // EnergyComponentの状態をUI表示用ストアへ投影
-    this.syncEnergyState();
+    // BU-2: エネルギー状態の初期投影イベントを発行
+    this.emitEnergyChanged();
   }
 
   /**
@@ -113,8 +110,7 @@ export class Player extends Entity {
     // 移動完了イベント
     eventSystem.on('move_completed', (data) => {
       if (data.entityId === this.id) {
-        // ゲームストアの位置を更新
-        this.gameStore.player.position = { ...data.position };
+        // BU-2: gameStore への位置書き込みは StatsProjection が行う
 
         // 移動時のエネルギー消費
         this.consumeEnergy(1);
@@ -132,8 +128,7 @@ export class Player extends Entity {
     // 体力変更イベント
     eventSystem.on('health_changed', (data) => {
       if (data.entityId === this.id) {
-        // ゲームストアのHPを更新
-        this.gameStore.player.status.hp = data.currentHp;
+        // BU-2: gameStore へのHP書き込みは StatsProjection が行う
 
         // HPがゼロになった場合
         if (data.currentHp <= 0) {
@@ -155,6 +150,8 @@ export class Player extends Entity {
         const energy = this.getComponent<EnergyComponent>('energy');
         if (energy) {
           energy.setMaxEnergy(data.stats.maxEnergy);
+          // 最大エネルギー変更後に投影イベントを発行
+          this.emitEnergyChanged();
         }
       }
     });
@@ -228,8 +225,11 @@ export class Player extends Entity {
    * CombatSystem は Component 経由で参照するため、このメソッドはドメイン参照用
    */
   getAttackPower(): number {
+    // BU-2: StatsComponent を優先し、AttackPowerComponent へフォールバックする
+    const stats = this.getComponent<StatsComponent>('stats');
+    if (stats) return stats.getValue('attackPower');
     const attack = this.getComponent<AttackPowerComponent>('attack_power');
-    return attack ? attack.baseAttackPower : this.gameStore.player.status.strength + 5;
+    return attack ? attack.baseAttackPower : this.config.strength + 5;
   }
 
   /**
@@ -272,8 +272,9 @@ export class Player extends Entity {
         break;
     }
 
-    // 攻撃力を計算
-    const attackPower = this.gameStore.player.status.strength;
+    // 攻撃力を計算（BU-2: StatsComponent から取得）
+    const stats = this.getComponent<StatsComponent>('stats');
+    const attackPower = stats ? stats.getValue('attackPower') : this.config.strength + 5;
 
     // 攻撃イベントを発行
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
@@ -302,7 +303,7 @@ export class Player extends Entity {
     const success = energy.consume(amount);
 
     if (success) {
-      this.syncEnergyState(energy, true);
+      this.emitEnergyChanged(energy, true);
     }
 
     return success;
@@ -319,7 +320,7 @@ export class Player extends Entity {
 
     // エネルギーを回復
     const restored = energy.restore(amount);
-    this.syncEnergyState(energy, true);
+    this.emitEnergyChanged(energy, true);
     return restored;
   }
 
@@ -460,14 +461,17 @@ export class Player extends Entity {
    * 現在のHPを取得
    */
   getStatus(): any {
+    // BU-2: gameStore ではなくドメインコンポーネントから取得する
+    const health = this.getComponent<HealthComponent>('health');
+    const stats = this.getComponent<StatsComponent>('stats');
     return {
-      hp: this.gameStore.player.status.hp,
-      maxHp: this.gameStore.player.status.maxHp,
+      hp: health?.currentHp ?? 0,
+      maxHp: health?.maxHp ?? 0,
       energy: this.getEnergy(),
       maxEnergy: this.getMaxEnergy(),
-      strength: this.gameStore.player.status.strength,
-      defense: this.gameStore.player.status.defense,
-      level: this.gameStore.player.status.level,
+      strength: stats?.getValue('strength') ?? this.config.strength,
+      defense: stats?.getValue('defense') ?? this.config.defense,
+      level: stats?.getValue('level') ?? this.config.level,
     };
   }
 
@@ -500,7 +504,7 @@ export class Player extends Entity {
     if (!energy) return false;
 
     energy.restoreSnapshot(snapshot);
-    this.syncEnergyState(energy);
+    this.emitEnergyChanged(energy);
     return true;
   }
 
@@ -514,7 +518,7 @@ export class Player extends Entity {
     if (!energy) return false;
 
     energy.setMaxEnergy(energy.maxEnergy + amount);
-    this.syncEnergyState(energy);
+    this.emitEnergyChanged(energy);
     return true;
   }
 
@@ -562,16 +566,25 @@ export class Player extends Entity {
   }
 
   /**
-   * EnergyComponentの状態をUI表示用ストアへ投影する。
+   * BU-2: エネルギー状態の変更を energy_changed イベントで通知する。
+   * StatsProjection がこのイベントを受けて gameStore へ投影する。
    */
-  private syncEnergyState(
+  private emitEnergyChanged(
     energy: EnergyComponent | undefined = this.getComponent<EnergyComponent>('energy'),
     applyEffects = false
   ): void {
     if (!energy) return;
 
-    this.gameStore.player.status.energy = energy.currentEnergy;
-    this.gameStore.player.status.maxEnergy = energy.maxEnergy;
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit('energy_changed', {
+        entityId: this.id,
+        currentEnergy: energy.currentEnergy,
+        maxEnergy: energy.maxEnergy,
+        percentage: energy.percentage,
+      });
+    }
+
     if (applyEffects) {
       this.updateEnergyEffects(energy.percentage);
     }
