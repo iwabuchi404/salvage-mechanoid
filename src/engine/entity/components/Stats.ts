@@ -22,6 +22,8 @@ export class StatsComponent implements Component {
   private base: EffectiveStats;
   private sources: Map<string, StatSource> = new Map();
   private cached: EffectiveStats | null = null;
+  /** loadout_changed リスナーの参照（destroy 時に解除するため保持） */
+  private loadoutChangedListener: ((data: { sourceId: string }) => void) | null = null;
 
   constructor(base: EffectiveStats) {
     this.base = Object.freeze({ ...base });
@@ -34,18 +36,33 @@ export class StatsComponent implements Component {
     // P2修正: loadout_changed イベントを購読し、装備変更時に再計算する。
     // PartsSystem が loadout_changed を発行するため、
     // StatsComponent 側で invalidate() を呼ぶ。
+    // P1修正: リスナー参照をフィールドに保持し、destroy() で解除する。
     if (this.entity) {
       const eventSystem = Engine.instance.getSystem<EventSystem>('event');
       if (eventSystem) {
-        eventSystem.on('loadout_changed', () => {
+        this.loadoutChangedListener = () => {
           this.invalidate();
-        });
+        };
+        eventSystem.on('loadout_changed', this.loadoutChangedListener);
       }
     }
   }
 
   update(_deltaTime: number): void {
     // ステータスはイベント駆動で更新されるため、毎フレームの更新は不要
+  }
+
+  /** P1修正: 破棄時に loadout_changed リスナーを解除する */
+  destroy(): void {
+    if (this.loadoutChangedListener) {
+      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+      if (eventSystem) {
+        eventSystem.off('loadout_changed', this.loadoutChangedListener);
+      }
+      this.loadoutChangedListener = null;
+    }
+    this.sources.clear();
+    this.entity = null;
   }
 
   /** 修飾子の供給元を登録する（装備、状態異常など） */

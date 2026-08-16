@@ -24,7 +24,7 @@ export const useGameStore = defineStore('game', () => {
       maxHp: 100,
       energy: 200,
       maxEnergy: 200,
-      strength: 10,
+      attackPower: 15,
       defense: 5,
       viewRadius: 4, // 視野半径（正面方向のマス数）。側面は front - 1。
     },

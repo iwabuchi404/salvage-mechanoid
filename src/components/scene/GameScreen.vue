@@ -467,7 +467,7 @@ const closePortalDialog = () => {
             エネルギー: {{ gameStore.player.status.energy }} /
             {{ gameStore.player.status.maxEnergy }}
           </p>
-          <p>攻撃力: {{ gameStore.player.status.strength }}</p>
+          <p>攻撃力: {{ gameStore.player.status.attackPower }}</p>
           <p>防御力: {{ gameStore.player.status.defense }}</p>
         </template>
       </BaseWindow>
