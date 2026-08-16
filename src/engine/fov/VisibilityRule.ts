@@ -22,12 +22,12 @@ export function isPlayerEntity(entity: Entity): boolean {
 /**
  * Entity のタイル座標を取得する。
  * Transform を持たない場合は null を返す。
+ * P1-fix: transform.position のアロケーションを避けるため x/y getter を直接読む
  */
 export function getEntityTilePosition(entity: Entity): { x: number; y: number } | null {
   const transform = entity.getComponent<TransformComponent>('transform');
   if (!transform) return null;
-  const pos = transform.position;
-  return { x: Math.round(pos.x), y: Math.round(pos.y) };
+  return { x: Math.round(transform.x), y: Math.round(transform.y) };
 }
 
 /**

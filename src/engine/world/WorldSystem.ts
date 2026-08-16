@@ -283,36 +283,19 @@ export class WorldSystem implements System {
   isPositionOccupied(x: number, y: number, z = 0, excludeEntityId?: string): boolean {
     if (!this.entitySystem) return false;
 
-    // チェック対象の座標を整数に丸める
+    // D1: 位置インデックス経由で O(1) 検索
     const checkX = Math.round(x);
     const checkY = Math.round(y);
     const checkZ = Math.round(z);
 
-    // 全エンティティを取得
-    for (const entity of this.getAllEntities()) {
-      // 除外対象のエンティティはスキップ
+    const entities = this.entitySystem.getEntitiesAtPosition(checkX, checkY, checkZ);
+    for (const entity of entities) {
       if (excludeEntityId && entity.id === excludeEntityId) {
         continue;
       }
-
       // C3: 衝突判定は BlockingComponent の有無で宣言する
-      // 旧ロジックの item / event_object / portal / charger タグ除外は
-      // これらの Entity が BlockingComponent を持たないことで表現される
-      if (!entity.getComponent<BlockingComponent>('blocking')) {
-        continue;
-      }
-
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (transform) {
-        const pos = transform.position;
-        // 整数座標で比較（Math.roundで四捨五入）
-        const entityX = Math.round(pos.x);
-        const entityY = Math.round(pos.y);
-        const entityZ = Math.round(pos.z);
-
-        if (entityX === checkX && entityY === checkY && entityZ === checkZ) {
-          return true;
-        }
+      if (entity.getComponent<BlockingComponent>('blocking')) {
+        return true;
       }
     }
 

@@ -3,6 +3,7 @@ import { TransformComponent } from './components/Transform';
 import { SpriteComponent } from './components/Sprite';
 import { HealthComponent } from './components/Health';
 import { BlockingComponent } from './components/Blocking';
+import { VisionBlockingComponent } from './components/VisionBlocking';
 import { ObstacleType, PlacedObstacle } from '../types';
 
 /**
@@ -33,6 +34,8 @@ export class Obstacle extends Entity {
     this.addComponent(new TransformComponent(placedObstacle.x, placedObstacle.y, 0));
     // C3: 衝突判定を Entity 側で宣言する
     this.addComponent(new BlockingComponent());
+    // P2-fix: 視線遮蔽を Entity 側で宣言する（FOVSystem が as any を使わない）
+    this.addComponent(new VisionBlockingComponent(placedObstacle.blocksVision));
 
     // 破壊可能な場合は Health コンポーネントを追加
     if (this.destructible && placedObstacle.health) {
@@ -86,9 +89,11 @@ export class Obstacle extends Entity {
 
   /**
    * 視線を遮るかどうかを取得
+   * P2-fix: VisionBlockingComponent から読む（旧 _blocksVision フィールドと互換）
    */
   blocksVision(): boolean {
-    return this._blocksVision;
+    const vision = this.getComponent<VisionBlockingComponent>('vision_blocking');
+    return vision ? vision.blocksVision : this._blocksVision;
   }
 
   /**

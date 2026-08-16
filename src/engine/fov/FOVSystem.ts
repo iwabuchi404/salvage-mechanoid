@@ -7,6 +7,7 @@ import { Player } from '../entity/Player';
 import { isPlayerEntityId } from '../entity/EntityKind';
 import { TransformComponent } from '../entity/components/Transform';
 import { MovementComponent } from '../entity/components/Movement';
+import { VisionBlockingComponent } from '../entity/components/VisionBlocking';
 import { TileType, Direction, Room } from '../types';
 import {
   computeFOV,
@@ -250,22 +251,13 @@ export class FOVSystem implements System {
       return true;
     }
 
-    // 2. その位置の障害物をチェック
-    const entities = this.entitySystem.getEntities();
+    // 2. その位置のエンティティをインデックス経由でチェック（D1: O(1)）
+    // P2-fix: VisionBlockingComponent で判定（as any を廃止）
+    const entities = this.entitySystem.getEntitiesAtPosition(x, y, 0);
     for (const entity of entities) {
-      if (!entity.hasTag('obstacle')) continue;
-
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (!transform) continue;
-
-      const pos = transform.position;
-      if (Math.round(pos.x) === x && Math.round(pos.y) === y) {
-        // 障害物のblocksVisionプロパティをチェック
-        // Obstacleエンティティから取得
-        const obstacle = entity as any;
-        if (obstacle.blocksVision && obstacle.blocksVision()) {
-          return true;
-        }
+      const vision = entity.getComponent<VisionBlockingComponent>('vision_blocking');
+      if (vision && vision.blocksVision) {
+        return true;
       }
     }
 

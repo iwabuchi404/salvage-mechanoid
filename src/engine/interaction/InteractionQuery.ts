@@ -64,15 +64,15 @@ export function findInteractionCandidates(
     const interactable = entity.getComponent<InteractableComponent>('interactable');
     if (!transform || !interactable) continue;
 
-    const pos = transform.position;
-    if (pos.z !== position.z) continue;
+    // P1-fix: transform.position のアロケーションを避けるため x/y/z getter を直接読む
+    if (transform.z !== position.z) continue;
 
-    const distance = Math.abs(pos.x - position.x) + Math.abs(pos.y - position.y);
+    const distance = Math.abs(transform.x - position.x) + Math.abs(transform.y - position.y);
     if (distance < minRange || distance > maxRange) continue;
 
     candidates.push({
       entityId: entity.id,
-      position: { x: pos.x, y: pos.y, z: pos.z },
+      position: { x: transform.x, y: transform.y, z: transform.z },
       canInteract: interactable.canInteract(),
     });
   }

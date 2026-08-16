@@ -7,7 +7,6 @@ import { InteractableComponent } from '../entity/components/Interactable';
 import { isPlayerEntityId } from '../entity/EntityKind';
 import { RendererSystem } from '../graphics/RendererSystem';
 import { WorldSystem } from '../world/WorldSystem';
-import { findEntityAtTilePosition } from './InteractionQuery';
 import { InteractionExecutor } from './InteractionExecutor';
 
 /**
@@ -173,9 +172,8 @@ export class InteractionSystem implements System {
     const intX = gridPos.x;
     const intY = gridPos.y;
 
-    // まずエンティティを検索（InteractionQuery へ委譲）
-    const entities = this.entitySystem?.getEntities() || [];
-    const clickedEntity = findEntityAtTilePosition(entities, intX, intY);
+    // まずエンティティを検索（D1: インデックス経由で O(1)）
+    const clickedEntity = this.entitySystem?.getEntityAtPosition(intX, intY, 0) ?? null;
 
     if (clickedEntity) {
       // エンティティが見つかった場合
