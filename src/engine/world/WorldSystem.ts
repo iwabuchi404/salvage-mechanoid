@@ -326,21 +326,8 @@ export class WorldSystem implements System {
   getEntityAtPosition(x: number, y: number, z = 0): Entity | undefined {
     if (!this.entitySystem) return undefined;
 
-    for (const entity of this.getAllEntities()) {
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (transform) {
-        const pos = transform.position;
-        if (
-          Math.round(pos.x) === Math.round(x) &&
-          Math.round(pos.y) === Math.round(y) &&
-          Math.round(pos.z) === Math.round(z)
-        ) {
-          return entity;
-        }
-      }
-    }
-
-    return undefined;
+    // D1: 位置インデックス経由で O(1) 検索
+    return this.entitySystem.getEntityAtPosition(x, y, z);
   }
 
   /**

@@ -3,6 +3,14 @@ import { Engine } from '../Engine';
 import { Entity } from './Entity';
 import { EventSystem } from '../events/EventSystem';
 import { EventName } from '../types';
+import { TransformComponent } from './components/Transform';
+
+/**
+ * 位置インデックスのキー（"x,y,z"）
+ */
+function positionKey(x: number, y: number, z: number): string {
+  return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
+}
 
 /**
  * エンティティシステム - ゲーム内のすべてのエンティティを管理
@@ -10,6 +18,10 @@ import { EventName } from '../types';
 export class EntitySystem implements System {
   // エンティティのマップ（ID -> エンティティ）
   private entities: Map<string, Entity> = new Map();
+
+  // 位置インデックス（"x,y,z" -> エンティティIDの Set）
+  // D1: 位置によるエンティティ検索を O(1) にするためのインデックス
+  private positionIndex: Map<string, Set<string>> = new Map();
 
   // エンジンへの参照
   private engine: Engine | null = null;
@@ -26,6 +38,23 @@ export class EntitySystem implements System {
 
     // イベントシステムを取得
     this.eventSystem = engine.getSystem<EventSystem>('event') || null;
+
+    // D1: ENTITY_MOVED イベントを購読して位置インデックスを更新
+    if (this.eventSystem) {
+      this.eventSystem.on(
+        EventName.ENTITY_MOVED,
+        (data: {
+          entityId: string;
+          from: { x: number; y: number; z: number };
+          to: { x: number; y: number; z: number };
+        }) => {
+          const entity = this.entities.get(data.entityId);
+          if (entity) {
+            this.updateEntityPosition(entity, data.from);
+          }
+        }
+      );
+    }
   }
 
   /**
@@ -35,9 +64,106 @@ export class EntitySystem implements System {
   registerEntity(entity: Entity): void {
     this.entities.set(entity.id, entity);
 
+    // 位置インデックスへ追加（D1）
+    this.indexEntityPosition(entity);
+
     // エンティティ作成イベントを発行
     if (this.eventSystem) {
       this.eventSystem.emit(EventName.ENTITY_CREATED, { entity });
+    }
+  }
+
+  /**
+   * エンティティの位置をインデックスへ反映する（D1）
+   * エンティティが移動した後に呼び出す必要がある。
+   * @param entity 対象エンティティ
+   * @param oldPosition 旧位置（省略時は現在のインデックスから推定）
+   */
+  updateEntityPosition(entity: Entity, oldPosition?: { x: number; y: number; z: number }): void {
+    // 旧位置のインデックスから削除
+    if (oldPosition) {
+      this.removeFromPositionIndex(entity.id, oldPosition.x, oldPosition.y, oldPosition.z);
+    } else {
+      // 旧位置が不明な場合は全位置インデックスから当該エンティティを削除
+      this.removeAllPositionEntries(entity.id);
+    }
+    // 新位置のインデックスへ追加
+    this.indexEntityPosition(entity);
+  }
+
+  /**
+   * 指定位置にあるエンティティを取得する（D1: O(1) 位置検索）
+   * @param x X座標
+   * @param y Y座標
+   * @param z Z座標
+   * @returns エンティティの配列（空の場合あり）
+   */
+  getEntitiesAtPosition(x: number, y: number, z = 0): Entity[] {
+    const key = positionKey(x, y, z);
+    const ids = this.positionIndex.get(key);
+    if (!ids || ids.size === 0) return [];
+
+    const result: Entity[] = [];
+    for (const id of ids) {
+      const entity = this.entities.get(id);
+      if (entity && entity.active) {
+        result.push(entity);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 指定位置にある最初のエンティティを取得する（D1）
+   * @param x X座標
+   * @param y Y座標
+   * @param z Z座標
+   * @returns エンティティ、または undefined
+   */
+  getEntityAtPosition(x: number, y: number, z = 0): Entity | undefined {
+    return this.getEntitiesAtPosition(x, y, z)[0];
+  }
+
+  /**
+   * エンティティを位置インデックスへ追加（内部用）
+   */
+  private indexEntityPosition(entity: Entity): void {
+    const transform = entity.getComponent<TransformComponent>('transform');
+    if (!transform) return;
+
+    const pos = transform.position;
+    const key = positionKey(pos.x, pos.y, pos.z);
+    let set = this.positionIndex.get(key);
+    if (!set) {
+      set = new Set();
+      this.positionIndex.set(key, set);
+    }
+    set.add(entity.id);
+  }
+
+  /**
+   * 指定位置のインデックスからエンティティを削除（内部用）
+   */
+  private removeFromPositionIndex(id: string, x: number, y: number, z: number): void {
+    const key = positionKey(x, y, z);
+    const set = this.positionIndex.get(key);
+    if (set) {
+      set.delete(id);
+      if (set.size === 0) {
+        this.positionIndex.delete(key);
+      }
+    }
+  }
+
+  /**
+   * 全位置インデックスから当該エンティティを削除（内部用）
+   * 旧位置が不明な場合のフォールバック
+   */
+  private removeAllPositionEntries(id: string): void {
+    for (const [key, set] of this.positionIndex) {
+      if (set.delete(id) && set.size === 0) {
+        this.positionIndex.delete(key);
+      }
     }
   }
 
@@ -98,6 +224,9 @@ export class EntitySystem implements System {
         this.eventSystem.emit(EventName.ENTITY_DESTROYED, { entity });
       }
 
+      // 位置インデックスから削除（D1）
+      this.removeAllPositionEntries(id);
+
       // エンティティのクリーンアップ
       entity.destroy();
 
@@ -154,6 +283,7 @@ export class EntitySystem implements System {
     }
 
     this.entities.clear();
+    this.positionIndex.clear();
   }
 
   /**

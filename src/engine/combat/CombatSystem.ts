@@ -369,17 +369,13 @@ export class CombatSystem implements System {
     position: { x: number; y: number; z: number },
     tag?: string
   ): string | null {
-    const entities = tag
-      ? this.entitySystem?.getEntitiesByTag(tag) || []
-      : this.entitySystem?.getEntities() || [];
+    if (!this.entitySystem) return null;
 
+    // D1: 位置インデックス経由で O(1) 検索
+    const entities = this.entitySystem.getEntitiesAtPosition(position.x, position.y, position.z);
     for (const entity of entities) {
-      const transform = entity.getComponent<TransformComponent>('transform');
-      if (transform) {
-        const pos = transform.position;
-        if (pos.x === position.x && pos.y === position.y && pos.z === position.z) {
-          return entity.id;
-        }
+      if (!tag || entity.hasTag(tag)) {
+        return entity.id;
       }
     }
 

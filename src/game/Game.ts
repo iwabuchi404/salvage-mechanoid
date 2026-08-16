@@ -1159,7 +1159,11 @@ export class Game {
     if (this.player && startPos) {
       const transform = this.player.getComponent<TransformComponent>('transform');
       if (transform) {
+        const oldPos = { ...transform.position };
         transform.setPosition(startPos.x, startPos.y, 0);
+        // D1: 位置インデックスを更新
+        const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+        entitySystem?.updateEntityPosition(this.player, oldPos);
       }
     }
   }

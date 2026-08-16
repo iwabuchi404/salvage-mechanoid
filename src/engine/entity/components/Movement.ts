@@ -3,7 +3,7 @@ import { Entity } from '../Entity';
 import { Engine } from '../../Engine';
 import { EventSystem } from '../../events/EventSystem';
 import { TransformComponent } from './Transform';
-import { Vector3, Direction } from '../../types';
+import { Vector3, Direction, EventName } from '../../types';
 import { Easing, EasingFn } from '../../graphics/AnimationManager';
 
 /**
@@ -174,6 +174,16 @@ export class MovementComponent implements Component {
 
     this.emitMoveStartedEvent();
     this.emitDirectionChangedEvent();
+
+    // D1: 位置インデックスを更新するため ENTITY_MOVED イベントを発行
+    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
+    if (eventSystem) {
+      eventSystem.emit(EventName.ENTITY_MOVED, {
+        entityId: this.entity.id,
+        from: { ...currentPos },
+        to: { ...targetPos },
+      });
+    }
 
     return true;
   }

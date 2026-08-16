@@ -317,7 +317,11 @@ export class FloorManager {
     // 位置を元に戻す
     const transform = player.getComponent<TransformComponent>('transform');
     if (transform) {
+      const oldPos = { ...transform.position };
       transform.setPosition(state.position.x, state.position.y, state.position.z);
+      // D1: 位置インデックスを更新
+      const entitySystem = this.engine.getSystem<EntitySystem>('entity');
+      entitySystem?.updateEntityPosition(player, oldPos);
     }
 
     console.log('Player state reverted:', state);
