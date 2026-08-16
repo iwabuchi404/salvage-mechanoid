@@ -58,9 +58,14 @@ const PROFILES: Readonly<Record<EnemyType, EnemyStatProfile>> = Object.freeze({
 
 /**
  * フォールバックプロファイル（未知の EnemyType 用）
- * EnemyVisualProfile と同じ規約で、HEAVY を流用する。
+ * P1-fix: 旧 Enemy.getEnemyStats() の default ブランチ（SOLDIER 相当）に戻す
  */
-const FALLBACK_PROFILE: EnemyStatProfile = PROFILES[EnemyType.HEAVY];
+const FALLBACK_PROFILE: EnemyStatProfile = Object.freeze({
+  baseMaxHealth: 50,
+  baseDefense: 5,
+  moveSpeed: 4,
+  baseAttackPower: 10,
+});
 
 /**
  * EnemyType に対応する基本ステータスプロファイルを取得する（純粋関数）

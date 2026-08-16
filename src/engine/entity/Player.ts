@@ -3,6 +3,7 @@ import { TransformComponent } from '../../engine/entity/components/Transform';
 import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
 import { BlockingComponent } from '../../engine/entity/components/Blocking';
+import { AttackPowerComponent } from '../../engine/entity/components/AttackPower';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
 import { Engine } from '../../engine/Engine';
@@ -43,6 +44,8 @@ export class Player extends Entity {
     this.addComponent(new TransformComponent(startPosition.x, startPosition.y, startPosition.z));
     // C3: 衝突判定を Entity 側で宣言する
     this.addComponent(new BlockingComponent());
+    // P1-fix: 攻撃力を Component として宣言する（CombatSystem が instanceof しない）
+    this.addComponent(new AttackPowerComponent(this.gameStore.player.status.strength + 5));
     this.addComponent(
       new EnergyComponent(
         this.gameStore.player.status.maxEnergy,
@@ -186,11 +189,12 @@ export class Player extends Entity {
 
   /**
    * 攻撃力を取得
-   * C2: CombatSystem がステータスベースのダメージ計算に使用する
-   * @returns 攻撃力（gameStore の strength + 固定ボーナス）
+   * P1-fix: AttackPowerComponent から読む（gameStore の strength + 固定ボーナス）
+   * CombatSystem は Component 経由で参照するため、このメソッドはドメイン参照用
    */
   getAttackPower(): number {
-    return this.gameStore.player.status.strength;
+    const attack = this.getComponent<AttackPowerComponent>('attack_power');
+    return attack ? attack.baseAttackPower : this.gameStore.player.status.strength + 5;
   }
 
   /**

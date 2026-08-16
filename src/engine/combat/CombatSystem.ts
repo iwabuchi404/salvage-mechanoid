@@ -6,8 +6,7 @@ import { WorldSystem } from '../world/WorldSystem';
 import { TransformComponent } from '../entity/components/Transform';
 import { HealthComponent } from '../entity/components/Health';
 import { MovementComponent } from '../entity/components/Movement';
-import { Enemy } from '../entity/Enemy';
-import { Player } from '../entity/Player';
+import { AttackPowerComponent } from '../entity/components/AttackPower';
 import { isPlayerEntityId } from '../entity/EntityKind';
 import { Direction } from '../types';
 
@@ -214,36 +213,27 @@ export class CombatSystem implements System {
       return 0;
     }
 
-    // C2: 攻撃側のステータスから基本ダメージを算出する
-    // Player は getAttackPower() (strength) + 固定ボーナス、Enemy は getStats().attackPower
-    // 実際の Player/Enemy インスタンスでない場合はタグで判定し、デフォルト値を使用する
+    // P1-fix: AttackPowerComponent 経由で攻撃力を取得する（instanceof を廃止）
+    // Player は strength + 5 = 15、Enemy は EnemyStatProfile.attackPower
+    // Component がない場合はタグでフォールバック（テスト用 Entity 互換）
+    const attackPower = attacker.getComponent<AttackPowerComponent>('attack_power');
     let baseDamage: number;
-    if (attacker instanceof Player) {
-      baseDamage = attacker.getAttackPower() + 5; // strength(10) + 5 = 15（旧ロジックと同じ）
-    } else if (attacker instanceof Enemy) {
-      baseDamage = attacker.getStats().attackPower;
+    if (attackPower) {
+      baseDamage = attackPower.baseAttackPower;
     } else if (attacker.hasTag('player')) {
       baseDamage = 15; // Player のデフォルト（strength 10 + bonus 5）
-    } else if (attacker.hasTag('enemy')) {
-      baseDamage = 10; // Enemy のデフォルト
     } else {
-      baseDamage = 10; // フォールバック
+      baseDamage = 10; // Enemy / フォールバック
     }
 
-    // C2: 防御側のステータスからダメージ軽減を適用する
-    // 旧ロジックは defense を無視していたが、C2 では参照する
-    // ただし影響を最小限にするため、defense の 1/2 を減算する
-    const targetHealth = target.getComponent<HealthComponent>('health');
-    const defense = targetHealth?.defense ?? 0;
-    const defenseReduction = Math.floor(defense * 0.5);
-
+    // P1-fix: 防御力によるダメージ軽減は撤回（C2 は「値の置き場所と参照経路の変更」に限定）
+    // 旧ロジックどおり defense を無視して固定値計算する
     // ランダム要素を追加（±20%）
     const randomFactor = 0.8 + Math.random() * 0.4;
-    const rawDamage = Math.floor(baseDamage * randomFactor);
-    const finalDamage = Math.max(1, rawDamage - defenseReduction);
+    const finalDamage = Math.floor(baseDamage * randomFactor);
 
     console.log(
-      `Damage calculation: base=${baseDamage}, defense=${defense}, random=${randomFactor.toFixed(
+      `Damage calculation: base=${baseDamage}, random=${randomFactor.toFixed(
         2
       )}, final=${finalDamage}`
     );
