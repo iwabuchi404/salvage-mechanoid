@@ -40,6 +40,7 @@ export class EntitySystem implements System {
     this.eventSystem = engine.getSystem<EventSystem>('event') || null;
 
     // D1: ENTITY_MOVED イベントを購読して位置インデックスを更新
+    // P0: ペイロード契約を { entityId, from, to, position } に統一
     if (this.eventSystem) {
       this.eventSystem.on(
         EventName.ENTITY_MOVED,
@@ -47,6 +48,7 @@ export class EntitySystem implements System {
           entityId: string;
           from: { x: number; y: number; z: number };
           to: { x: number; y: number; z: number };
+          position: { x: number; y: number; z: number };
         }) => {
           const entity = this.entities.get(data.entityId);
           if (entity) {

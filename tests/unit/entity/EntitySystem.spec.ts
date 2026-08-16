@@ -151,6 +151,7 @@ describe('EntitySystem', () => {
         entityId: 'entity-1',
         from: { x: 3, y: 5, z: 0 },
         to: { x: 10, y: 12, z: 0 },
+        position: { x: 10, y: 12, z: 0 },
       });
 
       expect(entitySystem.getEntityAtPosition(3, 5, 0)).toBeUndefined();

@@ -100,7 +100,12 @@ export class WorldSystem implements System {
    * エンティティ移動イベントハンドラ
    * @param data イベントデータ
    */
-  private onEntityMoved(data: { entityId: string; position: Vector3 }): void {
+  private onEntityMoved(data: {
+    entityId: string;
+    from: Vector3;
+    to: Vector3;
+    position: Vector3;
+  }): void {
     if (!this.entitySystem) return;
 
     // エンティティを取得

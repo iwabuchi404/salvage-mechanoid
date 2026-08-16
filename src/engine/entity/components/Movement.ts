@@ -176,12 +176,15 @@ export class MovementComponent implements Component {
     this.emitDirectionChangedEvent();
 
     // D1: 位置インデックスを更新するため ENTITY_MOVED イベントを発行
+    // P0: ペイロードを統一する（from / to / position の全フィールドを含める）
+    // WorldSystem は position を、EntitySystem は from を読む
     const eventSystem = Engine.instance.getSystem<EventSystem>('event');
     if (eventSystem) {
       eventSystem.emit(EventName.ENTITY_MOVED, {
         entityId: this.entity.id,
         from: { ...currentPos },
         to: { ...targetPos },
+        position: { ...targetPos },
       });
     }
 

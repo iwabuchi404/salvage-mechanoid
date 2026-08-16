@@ -1,8 +1,6 @@
 import { Component } from '../Component';
 import { Entity } from '../Entity';
-import { Engine } from '../../Engine';
-import { EventSystem } from '../../events/EventSystem';
-import { Vector3, EventName } from '../../types';
+import { Vector3 } from '../../types';
 
 /**
  * トランスフォームコンポーネント - エンティティの位置、回転、スケールを管理
@@ -59,9 +57,12 @@ export class TransformComponent implements Component {
    * @param deltaTime 前回のフレームからの経過時間（ミリ秒）
    */
   update(deltaTime: number): void {
-    // 位置が変更された場合、位置変更イベントを発行
+    // P0: ENTITY_MOVED の発行は MovementComponent に一本化した。
+    // Transform 単独での位置変更（setPosition / translate）は
+    // 呼び出し元が明示的に EntitySystem.updateEntityPosition() を
+    // 呼ぶため、ここからのイベント発行は不要。
+    // dirty フラグのみクリアする。
     if (this.dirty) {
-      this.emitPositionChangedEvent();
       this.dirty = false;
     }
   }
@@ -240,20 +241,9 @@ export class TransformComponent implements Component {
     }
   }
 
-  /**
-   * 位置変更イベントを発行
-   */
-  private emitPositionChangedEvent(): void {
-    if (!this.entity) return;
-
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
-      eventSystem.emit(EventName.ENTITY_MOVED, {
-        entityId: this.entity.id,
-        position: this._position,
-        rotation: this._rotation,
-        scale: this._scale,
-      });
-    }
-  }
+  // P0: emitPositionChangedEvent() は削除。
+  // ENTITY_MOVED の発行は MovementComponent.startMoving() に一本化し、
+  // ペイロード契約を { entityId, from, to, position } に統一した。
+  // Transform 単独での位置変更は呼び出し元が EntitySystem.updateEntityPosition() を
+  // 明示的に呼ぶため、ここからのイベント発行は不要。
 }
