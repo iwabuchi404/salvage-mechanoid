@@ -4,6 +4,7 @@ import { HealthComponent } from './components/Health';
 import { MovementComponent } from './components/Movement';
 import { BlockingComponent } from './components/Blocking';
 import { AttackPowerComponent } from './components/AttackPower';
+import { ActorComponent } from './components/Actor';
 import { Vector3, EnemyType, EnemyBehavior, PlacedEnemy, Direction } from '../types';
 import { EnemyBehaviorStrategy } from './ai/EnemyBehaviorStrategy';
 import { EnemyBehaviorStrategyFactory } from './ai/EnemyBehaviorStrategyFactory';
@@ -82,6 +83,18 @@ export class Enemy extends Entity {
       placedEnemy.patrolRoute
     );
     this.actionContext = new EnemyActionContextImpl();
+
+    // BU-3 段階4: ActorComponent を付与（敵は AI 制御）
+    // decideAction は当面 Enemy.act() をラップし、従来の副作用実行を行う（段階6で Action へ移す）
+    this.addComponent(
+      new ActorComponent({
+        inputControlled: false,
+        decideAction: async () => {
+          await this.act();
+          return null; // 段階6で Action を返すよう変更
+        },
+      })
+    );
   }
 
   /**

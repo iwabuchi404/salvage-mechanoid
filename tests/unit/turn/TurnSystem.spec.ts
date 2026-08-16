@@ -1,5 +1,6 @@
 import { Engine } from '@/engine/Engine';
 import { HealthComponent } from '@/engine/entity/components/Health';
+import { ActorComponent } from '@/engine/entity/components/Actor';
 import { Entity } from '@/engine/entity/Entity';
 import { EntitySystem } from '@/engine/entity/EntitySystem';
 import { EventSystem } from '@/engine/events/EventSystem';
@@ -42,14 +43,25 @@ describe('TurnSystem', () => {
       const firstAction = new Promise<void>((resolve) => {
         releaseFirst = resolve;
       });
-      const first = Object.assign(new Entity('enemy-1', 'enemy'), {
-        act: jest.fn(() => firstAction),
-      });
-      const second = Object.assign(new Entity('enemy-2', 'enemy'), {
-        act: jest.fn(async () => undefined),
-      });
+      // BU-3 段階4: ActorComponent 経由で行動を宣言する
+      const firstSpy = jest.fn(() => firstAction.then(() => null));
+      const secondSpy = jest.fn(async () => null);
+      const first = new Entity('enemy-1', 'enemy');
       first.addTag('enemy');
+      first.addComponent(
+        new ActorComponent({
+          inputControlled: false,
+          decideAction: firstSpy,
+        })
+      );
+      const second = new Entity('enemy-2', 'enemy');
       second.addTag('enemy');
+      second.addComponent(
+        new ActorComponent({
+          inputControlled: false,
+          decideAction: secondSpy,
+        })
+      );
       entities.registerEntity(first);
       entities.registerEntity(second);
       const actionStarted = jest.fn();
@@ -60,15 +72,16 @@ describe('TurnSystem', () => {
       events.emit(eventName, { entityId: 'player' });
 
       expect(turns.getCurrentPhase()).toBe(TurnPhase.ENEMY);
-      expect(first.act).toHaveBeenCalledTimes(1);
-      expect(second.act).not.toHaveBeenCalled();
+      expect(firstSpy).toHaveBeenCalledTimes(1);
+      expect(secondSpy).not.toHaveBeenCalled();
 
       releaseFirst();
       await firstAction;
-      await Promise.resolve();
-      await Promise.resolve();
+      // processAllEnemies はイベントリスナーから await なしで呼ばれるため、
+      // すべての microtask が消化されるまで待つ
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
-      expect(second.act).toHaveBeenCalledTimes(1);
+      expect(secondSpy).toHaveBeenCalledTimes(1);
       expect(actionStarted.mock.calls).toEqual([
         [{ enemyId: 'enemy-1' }],
         [{ enemyId: 'enemy-2' }],
@@ -79,10 +92,15 @@ describe('TurnSystem', () => {
   );
 
   it('死亡済みの敵を行動対象から除外する', async () => {
-    const dead = Object.assign(new Entity('dead', 'enemy'), {
-      act: jest.fn(async () => undefined),
-    });
+    const deadSpy = jest.fn(async () => null);
+    const dead = new Entity('dead', 'enemy');
     dead.addTag('enemy');
+    dead.addComponent(
+      new ActorComponent({
+        inputControlled: false,
+        decideAction: deadSpy,
+      })
+    );
     dead.addComponent(new HealthComponent(1, 0, 0, 0, 0, false));
     entities.registerEntity(dead);
 
@@ -93,7 +111,7 @@ describe('TurnSystem', () => {
     });
     await Promise.resolve();
 
-    expect(dead.act).not.toHaveBeenCalled();
+    expect(deadSpy).not.toHaveBeenCalled();
     expect(turns.getCurrentPhase()).toBe(TurnPhase.PLAYER);
   });
 });

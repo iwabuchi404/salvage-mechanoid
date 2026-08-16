@@ -2,6 +2,7 @@ import { System } from '../System';
 import { Engine } from '../Engine';
 import { EntitySystem } from '../entity/EntitySystem';
 import { EventSystem } from '../events/EventSystem';
+import { ActorComponent } from '../entity/components/Actor';
 
 /**
  * ターンフェーズ
@@ -191,10 +192,11 @@ export class TurnSystem implements System {
         enemyId: enemy.id,
       });
 
-      // 敵のAI行動を実行（Enemyエンティティのactメソッドを呼び出す）
-      if ('act' in enemy && typeof (enemy as any).act === 'function') {
+      // BU-3 段階4: ダックタイピングを廃止し ActorComponent の有無で判定する
+      const actor = enemy.getComponent<ActorComponent>('actor');
+      if (actor) {
         try {
-          await (enemy as any).act();
+          await actor.decideAction();
         } catch (error) {
           console.error(`Error during enemy ${enemy.id} action:`, error);
         }

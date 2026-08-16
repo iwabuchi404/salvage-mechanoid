@@ -4,6 +4,7 @@ import { MovementComponent } from '../../engine/entity/components/Movement';
 import { HealthComponent } from '../../engine/entity/components/Health';
 import { BlockingComponent } from '../../engine/entity/components/Blocking';
 import { StatsComponent } from '../../engine/entity/components/Stats';
+import { ActorComponent } from '../../engine/entity/components/Actor';
 import { EnergyComponent, EnergySnapshot } from './components/Energy';
 import { Vector3, Direction, TileType } from '../../engine/types';
 import { Engine } from '../../engine/Engine';
@@ -62,6 +63,8 @@ export class Player extends Entity {
     // CombatSystem は StatsComponent.getValue('attackPower') を優先する。
     // Enemy 側は AttackPowerComponent を使うため、コンポーネント自体は残す。
     this.addComponent(new EnergyComponent(config.maxEnergy, config.energy));
+    // BU-3 段階4: ActorComponent を付与（プレイヤーは入力制御）
+    this.addComponent(new ActorComponent({ inputControlled: true }));
   }
 
   /**
