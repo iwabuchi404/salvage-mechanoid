@@ -76,6 +76,15 @@ export class FloorStore {
   ): void {
     const resolvedDoorways = doorways ? [...doorways] : corridorsToDoorways(corridors, rooms);
 
+    // P2-fix: rooms と corridors があるのに doorways が0件の場合は
+    // 無言の失敗の可能性が高いため警告を出力する
+    if (rooms.length > 0 && corridors.length > 0 && resolvedDoorways.length === 0) {
+      console.warn(
+        `[FloorStore] Floor ${floor} has ${rooms.length} rooms and ${corridors.length} corridors ` +
+          `but 0 doorways were derived. This may indicate a connectivity issue.`
+      );
+    }
+
     // Doorway 検証を本番経路で実行（B3）
     // 不正な Doorway があれば警告を出力するが、登録はブロックしない。
     // 通行可能性判定は TileMap 経由で行う。

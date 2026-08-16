@@ -17,6 +17,7 @@ import {
   Doorway,
 } from '@/engine/world/Doorway';
 import { FlexibleMapGenerator } from '@/engine/world/FlexibleMapGenerator';
+import { TacticalMapGenerator } from '@/engine/world/TacticalMapGenerator';
 import {
   Corridor,
   CorridorGenerationMethod,
@@ -649,6 +650,131 @@ describe('Doorway', () => {
       // 連結性は ensureConnectivity により保証されていることを期待
       expect(connected).toBe(true);
 
+      jest.restoreAllMocks();
+    });
+
+    it('TacticalMapGenerator の生成結果から Doorway を導出し整合性を検証できる', async () => {
+      jest.spyOn(console, 'log').mockImplementation();
+      jest.spyOn(console, 'warn').mockImplementation();
+
+      const generator = new TacticalMapGenerator(50, 50);
+      const result = await generator.generate({
+        width: 50,
+        height: 50,
+        stageType: StageType.TACTICAL_COMBAT,
+        algorithm: MapGenerationAlgorithm.BSP,
+        roomConfig: {
+          minSize: 4,
+          maxSize: 8,
+          density: 0.7,
+          connectivity: 0.8,
+          roomTypes: [
+            RoomType.NORMAL,
+            RoomType.BOSS,
+            RoomType.TREASURE,
+            RoomType.ENTRANCE,
+            RoomType.EXIT,
+          ],
+        },
+        corridorConfig: {
+          method: 'astar' as any,
+          width: 1,
+          minWidth: 1,
+          maxWidth: 3,
+          redundancy: 0.4,
+          allowDiagonal: false,
+        },
+        featureConfig: {
+          method: 'basic',
+          density: 0.05,
+          rules: [],
+          themeFeatures: [],
+          globalRules: [],
+        },
+        postProcessing: {
+          ensureConnectivity: true,
+          balanceFeatures: true,
+          optimizePerformance: false,
+        },
+      });
+
+      // TileMap を構築して通行可能性を判定できるようにする
+      const tileMap = new TileMap(50, 50);
+      tileMap.importMapData(result.map);
+
+      const doorways = corridorsToDoorways(result.corridors, result.rooms);
+
+      // Doorway が1件以上生成される
+      expect(doorways.length).toBeGreaterThan(0);
+
+      // 整合性検証: 全 Doorway が fromRoom 境界上にある
+      const validationResult = validateDoorways(doorways, result.rooms, (x, y) =>
+        tileMap.isWalkable(x, y, 0)
+      );
+
+      // 生成されたマップでは、Doorway が通行可能タイル上にあることを期待する。
+      const criticalErrors = validationResult.errors.filter(
+        (e) => e.kind === 'unknown_from_room' || e.kind === 'unknown_to_room'
+      );
+      expect(criticalErrors).toEqual([]);
+
+      // 全 Room が Doorway 経由で接続されているか（緩い判定）
+      const connected = isRoomGraphConnected(result.rooms, doorways);
+      // 連結性は ensureConnectivity により保証されていることを期待
+      expect(connected).toBe(true);
+
+      jest.restoreAllMocks();
+    });
+  });
+
+  describe('P2-fix: doorways===0 の警告', () => {
+    it('rooms と corridors があるのに doorways が0件の場合は警告を出力する', async () => {
+      jest.spyOn(console, 'log').mockImplementation();
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      const events = new EventSystem();
+      const entities = new EntitySystem();
+      Engine.instance.reset();
+      Engine.instance.registerSystem('event', events);
+      Engine.instance.registerSystem('entity', entities);
+      await entities.initialize(Engine.instance);
+
+      const map = new TileMap(20, 20);
+      for (let y = 0; y < 20; y++) {
+        for (let x = 0; x < 20; x++) {
+          map.setTileAt(x, y, 0, TileType.TILE, true);
+        }
+      }
+      const world = new WorldSystem(map);
+      Engine.instance.registerSystem('world', world);
+      await world.initialize(Engine.instance);
+
+      // rooms と corridors はあるが、corridorsToDoorways で0件になるケース
+      // （corridor が room 境界に接していない場合）
+      const gen = new RoomIdGenerator();
+      const rooms: Room[] = [
+        { id: gen.next() as string, x: 1, y: 1, width: 4, height: 4, type: RoomType.NORMAL },
+        { id: gen.next() as string, x: 10, y: 10, width: 4, height: 4, type: RoomType.NORMAL },
+      ];
+      // 遠すぎる corridor（room 境界に接しない）
+      const corridors: Corridor[] = [
+        {
+          startX: 5,
+          startY: 5,
+          endX: 7,
+          endY: 5,
+          width: 1,
+          method: 'astar' as CorridorGenerationMethod,
+          connectedRooms: [],
+        },
+      ];
+
+      world.registerFloorSnapshot(createFloorSnapshot(1, map, { rooms, corridors }));
+
+      // doorways が0件の警告が出力されている
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('but 0 doorways were derived'));
+
+      Engine.instance.reset();
       jest.restoreAllMocks();
     });
   });
