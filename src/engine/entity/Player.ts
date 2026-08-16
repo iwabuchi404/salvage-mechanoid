@@ -141,6 +141,23 @@ export class Player extends Entity {
         }
       }
     });
+
+    // BU-2: ステータス変更イベント — StatsComponent の実効値を
+    // HealthComponent / EnergyComponent の最大値へ反映する
+    eventSystem.on('stats_changed', (data) => {
+      if (data.entityId === this.id) {
+        const health = this.getComponent<HealthComponent>('health');
+        if (health) {
+          health.setMaxHp(data.stats.maxHp);
+          health.defense = data.stats.defense;
+        }
+
+        const energy = this.getComponent<EnergyComponent>('energy');
+        if (energy) {
+          energy.setMaxEnergy(data.stats.maxEnergy);
+        }
+      }
+    });
   }
 
   /**
