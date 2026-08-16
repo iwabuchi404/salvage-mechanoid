@@ -60,7 +60,7 @@ describe('LootSystem', () => {
     events.on('item_dropped', droppedListener);
 
     const position = { x: 12, y: 8, z: 0 };
-    events.emit('enemy_destroyed', { position });
+    events.emit('enemy_destroyed', { entityId: 'enemy', position });
     await flushPromises();
 
     const droppedItems = entities.getEntitiesByType('item');
@@ -84,7 +84,7 @@ describe('LootSystem', () => {
     const droppedListener = jest.fn();
     events.on('item_dropped', droppedListener);
 
-    events.emit('enemy_destroyed', { position: { x: 1, y: 2, z: 0 } });
+    events.emit('enemy_destroyed', { entityId: 'enemy', position: { x: 1, y: 2, z: 0 } });
     await flushPromises();
 
     expect(entities.getEntitiesByType('item')).toHaveLength(0);
@@ -121,7 +121,7 @@ describe('LootSystem', () => {
       })
     );
 
-    events.emit('enemy_destroyed', { position: { x: 3, y: 4, z: 0 } });
+    events.emit('enemy_destroyed', { entityId: 'enemy', position: { x: 3, y: 4, z: 0 } });
     loot.destroy();
     await loot.initialize(Engine.instance);
     resolveCreate?.(item);

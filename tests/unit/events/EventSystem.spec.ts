@@ -21,7 +21,7 @@ describe('EventSystem', () => {
     expect(events.getListenerCount('test')).toBe(1);
 
     events.off('test', listener);
-    events.emit('test');
+    events.emit('test', {});
 
     expect(events.getListenerCount('test')).toBe(0);
     expect(listener).not.toHaveBeenCalled();

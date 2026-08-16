@@ -186,16 +186,6 @@ export class Tile {
     if (this.selected !== selected) {
       this.selected = selected;
       this.updateVisuals();
-
-      // 選択状態変更イベントを発行
-      const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-      if (eventSystem) {
-        eventSystem.emit('tile_selected', {
-          position: this.position,
-          type: this.type,
-          selected: selected,
-        });
-      }
     }
   }
 
@@ -312,10 +302,8 @@ export class Tile {
 
       case TileType.PORTAL:
         // ポータルタイル効果
-        eventSystem.emit('portal_activated', {
-          entityId,
-          position: this.position,
-        });
+        // portal_activated は Game.ts のポータルコールバックで発行されるため、
+        // ここでは発行しない（契約: { playerId, position }）
         break;
 
       case TileType.EVENT:
@@ -334,8 +322,8 @@ export class Tile {
     // 汎用的なタイル進入イベント
     eventSystem.emit('tile_entered', {
       entityId,
-      position: this.position,
-      type: this.type,
+      tilePosition: this.position,
+      tileType: this.type,
     });
   }
 

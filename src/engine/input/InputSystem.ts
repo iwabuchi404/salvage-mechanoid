@@ -303,11 +303,11 @@ export class InputSystem implements System {
 
   /**
    * プレイヤーのスキップをリクエスト
-   * @param _player プレイヤー
+   * @param player プレイヤー
    */
-  private requestPlayerSkip(_player: Player): void {
+  private requestPlayerSkip(player: Player): void {
     // ターン終了イベントを発行
-    this.eventSystem?.emit('player_turn_ended', {});
+    this.eventSystem?.emit('player_turn_ended', { playerId: player.id });
 
     // 入力を一時的に無効化
     this.waitingForInput = false;

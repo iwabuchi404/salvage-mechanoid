@@ -67,7 +67,7 @@ describe('FOVSystem', () => {
     ).toHaveLength(1);
 
     world.registerFloorSnapshot(createFloorSnapshot(2, makeFilledMap()));
-    events.emit('floor_changed', { floor: 2 });
+    events.emit('floor_changed', { floor: 2, maxFloors: 10 });
 
     expect(
       tileChanges.filter((change) => change.x === 5 && change.y === 5 && change.visible)
@@ -80,12 +80,12 @@ describe('FOVSystem', () => {
 
     world.registerFloorSnapshot(createFloorSnapshot(2, makeFilledMap()));
     playerTransform.setPosition(10, 10, 0);
-    events.emit('floor_changed', { floor: 2 });
+    events.emit('floor_changed', { floor: 2, maxFloors: 10 });
     expect(fov.isTileExplored(5, 8)).toBe(false);
 
     world.setCurrentFloor(1);
     playerTransform.setPosition(5, 5, 0);
-    events.emit('floor_changed', { floor: 1 });
+    events.emit('floor_changed', { floor: 1, maxFloors: 10 });
     expect(fov.isTileExplored(5, 8)).toBe(true);
   });
 

@@ -1,6 +1,7 @@
 import { Vector3, Direction, TileType, StageType } from '../types';
 import { Entity } from '../entity/Entity';
 import { FloorGenerationRequest } from '../world/FloorManager';
+import { Tile } from '../world/Tile';
 
 /**
  * イベント名とペイロード型の対応表。
@@ -78,7 +79,7 @@ export interface EventMap {
 
   // ===== ターン =====
   player_turn_started: Record<string, never>;
-  player_turn_ended: { playerId: string } | Record<string, never>;
+  player_turn_ended: { playerId: string };
   enemy_turn_started: Record<string, never>;
   enemy_action_started: { enemyId: string };
 
@@ -91,10 +92,8 @@ export interface EventMap {
   // ===== タイル =====
   tile_entered: {
     entityId: string;
-    tilePosition?: Vector3;
-    tileType?: TileType;
-    position?: Vector3;
-    type?: TileType;
+    tilePosition: Vector3;
+    tileType: TileType;
   };
   tile_exited: { entityId: string; position: Vector3; type: TileType };
   tile_changed: { position: Vector3; type: TileType };
@@ -107,10 +106,8 @@ export interface EventMap {
     roomId?: string;
   };
   tile_selected: {
-    tile?: any;
-    position: { x: number; y: number } | Vector3;
-    type?: TileType;
-    selected?: boolean;
+    tile: Tile;
+    position: { x: number; y: number };
   };
   tile_hovered: { position: { x: number; y: number } | null };
   fov_update_requested: { entityId: string };

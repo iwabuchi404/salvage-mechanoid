@@ -86,7 +86,11 @@ describe('TurnSystem', () => {
     dead.addComponent(new HealthComponent(1, 0, 0, 0, 0, false));
     entities.registerEntity(dead);
 
-    events.emit('player_attacked');
+    events.emit('player_attacked', {
+      attackerId: 'player',
+      position: { x: 0, y: 0, z: 0 },
+      power: 10,
+    });
     await Promise.resolve();
 
     expect(dead.act).not.toHaveBeenCalled();

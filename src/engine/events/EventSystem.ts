@@ -3,14 +3,24 @@ import { Engine } from '../Engine';
 import { EventKey, EventMap } from './EventMap';
 
 /**
+ * イベント名からペイロード型を解決する。
+ * 宣言済みキーは EventMap[K]、未宣言キーは Record<string, unknown>。
+ *
+ * 単一シグネチャ + 条件型方式により、オーバーロードのフォールバック
+ * による型検査の無効化が起きない。宣言済みイベント名には必ず
+ * EventMap[K] のペイロードが要求される。
+ */
+type PayloadFor<K> = K extends EventKey ? EventMap[K] : Record<string, unknown>;
+
+/**
  * イベントシステム - 観察者パターンを実装
  * コンポーネント間の疎結合通信を可能にする
  *
- * BU-1: on / off / emit に型付きオーバーロードを追加。
- * EventMap に宣言済みのイベント名は型検査され、ペイロードの
- * 不整合がコンパイル時に検出される。
- * 未宣言のイベント名は後方互換シグネチャ（string）に流れるため、
- * 段階的な移行が可能。
+ * BU-1: on / off / emit を単一シグネチャ + 条件型に変更。
+ * EventMap に宣言済みのイベント名には必ず EventMap[K] のペイロードが要求され、
+ * オーバーロードのフォールバックによる型検査の無効化が起きない。
+ * 未宣言のイベント名は Record<string, unknown> に流れるが、
+ * any ではないため呼び出し側で明示的なキャストが必要になる。
  */
 export class EventSystem implements System {
   // イベント名とリスナーのマップ
@@ -50,30 +60,27 @@ export class EventSystem implements System {
 
   /**
    * イベントリスナーを登録する
-   * BU-1: EventMap に宣言済みのイベント名は型検査される
+   * BU-1: EventMap に宣言済みのイベント名は EventMap[K] が要求される。
+   * 未宣言の名前は Record<string, unknown> になり、any ではない。
    * @param eventName 監視するイベントの名前
    * @param callback イベント発生時に呼び出されるコールバック関数
    */
-  on<K extends EventKey>(eventName: K, callback: (data: EventMap[K]) => void): void;
-  on(eventName: string, callback: (data: any) => void): void;
-  on(eventName: string, callback: (data: any) => void): void {
+  on<K extends string>(eventName: K, callback: (data: PayloadFor<K>) => void): void {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
     }
-    this.listeners.get(eventName)!.add(callback);
+    this.listeners.get(eventName)!.add(callback as (data: any) => void);
   }
 
   /**
    * イベントリスナーを削除する
-   * BU-1: EventMap に宣言済みのイベント名は型検査される
+   * BU-1: EventMap に宣言済みのイベント名は EventMap[K] が要求される。
    * @param eventName 監視を解除するイベントの名前
    * @param callback 削除するコールバック関数
    */
-  off<K extends EventKey>(eventName: K, callback: (data: EventMap[K]) => void): void;
-  off(eventName: string, callback: (data: any) => void): void;
-  off(eventName: string, callback: (data: any) => void): void {
+  off<K extends string>(eventName: K, callback: (data: PayloadFor<K>) => void): void {
     if (this.listeners.has(eventName)) {
-      this.listeners.get(eventName)!.delete(callback);
+      this.listeners.get(eventName)!.delete(callback as (data: any) => void);
 
       // リスナーが空になった場合はマップからエントリを削除
       if (this.listeners.get(eventName)!.size === 0) {
@@ -84,21 +91,20 @@ export class EventSystem implements System {
 
   /**
    * イベントを発行する
-   * BU-1: EventMap に宣言済みのイベント名は型検査される
+   * BU-1: EventMap に宣言済みのイベント名は EventMap[K] が要求される。
+   * 未宣言の名前は Record<string, unknown> になり、any ではない。
    * @param eventName 発行するイベントの名前
    * @param data イベントに付随するデータ
    */
-  emit<K extends EventKey>(eventName: K, data: EventMap[K]): void;
-  emit(eventName: string, data?: any): void;
-  emit(eventName: string, data: any = {}): void {
+  emit<K extends string>(eventName: K, data: PayloadFor<K>): void {
     // バッファリングが有効な場合はイベントをバッファに追加
     if (this.bufferingEnabled) {
-      this.eventBuffer.push({ name: eventName, data });
+      this.eventBuffer.push({ name: eventName, data: data as any });
       return;
     }
 
     // 即時にイベントを処理
-    this.processEvent(eventName, data);
+    this.processEvent(eventName, data as any);
   }
 
   /**

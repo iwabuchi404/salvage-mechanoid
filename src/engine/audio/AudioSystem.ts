@@ -2,6 +2,8 @@ import { System } from '../System';
 import { Engine } from '../Engine';
 import { SoundManager } from '../../common/SoundManager';
 import { EventSystem } from '../events/EventSystem';
+import { EntitySystem } from '../entity/EntitySystem';
+import { isPlayerEntityId } from '../entity/EntityKind';
 
 /**
  * オーディオシステム - 旧SoundManagerをECSに統合
@@ -62,9 +64,10 @@ export class AudioSystem implements System {
     }
 
     // プレイヤー攻撃時のSE（attack_performed に統一）
-    // attack_performed は敵の攻撃時にも発行されるため、playerId でフィルタする
+    // attack_performed は敵の攻撃時にも発行されるため、isPlayerEntityId でフィルタする
     this.eventSystem.on('attack_performed', (data) => {
-      if (data.entityId === 'player') {
+      const entitySystem = this.engine?.getSystem<EntitySystem>('entity') || null;
+      if (isPlayerEntityId(data.entityId, entitySystem)) {
         this.playSE('attack');
       }
     });

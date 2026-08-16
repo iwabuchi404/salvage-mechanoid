@@ -53,7 +53,7 @@ describe('EffectSystem', () => {
   });
 
   it('damage_takenで赤く点滅し、完了時に元の色へ戻す', () => {
-    events.emit('damage_taken', { entityId: 'target' });
+    events.emit('damage_taken', { entityId: 'target', damage: 10, attackerId: 'attacker' });
 
     animations.update(50);
     expect(sprite.tint).toBe(0xff4444);
@@ -63,7 +63,7 @@ describe('EffectSystem', () => {
   });
 
   it('entity_healedで緑に点滅し、完了時に元の色へ戻す', () => {
-    events.emit('entity_healed', { entityId: 'target' });
+    events.emit('entity_healed', { entityId: 'target', heal: 10, currentHp: 90, maxHp: 100 });
 
     animations.update(50);
     expect(sprite.tint).toBe(0x44ff44);
@@ -100,7 +100,7 @@ describe('EffectSystem', () => {
     const explosion = jest.spyOn(effects, 'playExplosionEffect').mockImplementation();
     const position = { x: 3, y: 4, z: 0 };
 
-    events.emit('enemy_destroyed', { position });
+    events.emit('enemy_destroyed', { entityId: 'enemy', position });
 
     expect(explosion).toHaveBeenCalledWith(position);
   });
@@ -108,7 +108,7 @@ describe('EffectSystem', () => {
   it('対象エンティティがない場合はアニメーションを登録しない', () => {
     const animate = jest.spyOn(animations, 'animate');
 
-    events.emit('damage_taken', { entityId: 'missing' });
+    events.emit('damage_taken', { entityId: 'missing', damage: 10, attackerId: 'attacker' });
 
     expect(animate).not.toHaveBeenCalled();
   });

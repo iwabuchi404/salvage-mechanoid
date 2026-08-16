@@ -108,7 +108,12 @@ describe('WorldSystem', () => {
     const entered = jest.fn();
     events.on('tile_entered', entered);
 
-    events.emit('entity_moved', { entityId: entity.id, position: { x: 2, y: 2, z: 0 } });
+    events.emit('entity_moved', {
+      entityId: entity.id,
+      from: { x: 1, y: 1, z: 0 },
+      to: { x: 2, y: 2, z: 0 },
+      position: { x: 2, y: 2, z: 0 },
+    });
 
     expect(takeDamage).toHaveBeenCalledWith(5);
     expect(entered).toHaveBeenCalledWith({
