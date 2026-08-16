@@ -61,9 +61,12 @@ export class AudioSystem implements System {
       return;
     }
 
-    // プレイヤー攻撃時のSE
-    this.eventSystem.on('player_attack', () => {
-      this.playSE('attack');
+    // プレイヤー攻撃時のSE（attack_performed に統一）
+    // attack_performed は敵の攻撃時にも発行されるため、playerId でフィルタする
+    this.eventSystem.on('attack_performed', (data) => {
+      if (data.entityId === 'player') {
+        this.playSE('attack');
+      }
     });
 
     // 敵撃破時のSE

@@ -63,7 +63,9 @@ export interface EventMap {
   player_attack_requested: { playerId: string };
   enemy_attack_requested: { enemyId: string; targetId: string };
   attack_performed: { entityId: string };
-  player_attack: Record<string, never>;
+  // player_attacked は TurnSystem のターン進行トリガーおよび
+  // PlayerPresentation の攻撃演出トリガーとして使用中。
+  // BU-3（ターンモデル）で行動モデルへ移す対象のため、本フェーズでは残す。
   player_attacked: {
     attackerId: string;
     position: Vector3;

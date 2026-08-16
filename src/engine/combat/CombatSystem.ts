@@ -105,17 +105,13 @@ export class CombatSystem implements System {
       // 4. ダメージを適用
       await this.applyDamage(targetId, damage, playerId);
 
-      // 5. 攻撃エフェクトを再生
+      // 5. 攻撃エフェクトとサウンドを再生
       this.eventSystem?.emit('attack_performed', { entityId: playerId });
-
-      // 6. サウンドを再生
-      this.eventSystem?.emit('player_attack', {});
     } else {
       console.log('No target found, attack missed');
 
       // 空振りでもエフェクトとサウンドは再生
       this.eventSystem?.emit('attack_performed', { entityId: playerId });
-      this.eventSystem?.emit('player_attack', {});
     }
 
     // 7. ターンアクション完了を通知

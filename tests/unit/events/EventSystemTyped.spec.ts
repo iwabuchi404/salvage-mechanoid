@@ -96,8 +96,8 @@ describe('BU-1 段階2: EventSystem のジェネリック化', () => {
   // ===== コンパイル時テスト（@ts-expect-error で検証） =====
 
   it('誤ったペイロードで emit するとコンパイルエラーになる（型テスト）', () => {
-    // @ts-expect-error: entityId は string だが number を渡す
     emitTyped(events, 'entity_moved', {
+      // @ts-expect-error: entityId は string だが number を渡す
       entityId: 123,
       from: { x: 1, y: 2, z: 0 },
       to: { x: 2, y: 2, z: 0 },

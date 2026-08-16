@@ -902,20 +902,6 @@ export class Game {
       }
     });
 
-    // 敵選択イベント（後方互換性のため残す）
-    eventSystem.on('enemy_selected', (data) => {
-      if (this.onEnemySelect) {
-        this.onEnemySelect(data.enemy);
-      }
-    });
-
-    // キャラクター選択イベント（後方互換性のため残す）
-    eventSystem.on('character_selected', (data) => {
-      if (this.onCharacterSelect) {
-        this.onCharacterSelect(data.character);
-      }
-    });
-
     // プレイヤーターン開始イベント
     eventSystem.on('player_turn_started', () => {
       if (this.onTurnChange) {

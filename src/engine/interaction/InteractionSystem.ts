@@ -80,13 +80,6 @@ export class InteractionSystem implements System {
       }
     });
 
-    // プレイヤー移動完了時にもチェック
-    this.eventSystem.on('player_move_completed', (data) => {
-      if (data.position) {
-        this.checkInteractionAt('player', data.position);
-      }
-    });
-
     // スクリーンクリック時にタイル/エンティティ選択を処理
     this.eventSystem.on('screen_clicked', (data) => {
       this.handleScreenClick(data.screenX, data.screenY);

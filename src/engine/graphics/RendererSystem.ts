@@ -96,7 +96,6 @@ export class RendererSystem implements System {
 
     const eventSystem = engine.getSystem<EventSystem>('event');
     if (eventSystem) {
-      eventSystem.on('render_entity', this.renderEntity.bind(this));
       eventSystem.on('tile_hovered', this.handleTileHover.bind(this));
       eventSystem.on('tile_visibility_changed', this.handleTileVisibilityChanged.bind(this));
     }
