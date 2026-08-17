@@ -13,10 +13,17 @@ export interface EnemyStatProfile {
   readonly baseMaxHealth: number;
   /** 防御力（レベル適用前の基本値） */
   readonly baseDefense: number;
-  /** 移動速度（タイル/秒、レベル非依存） */
+  /** 移動速度（タイル/秒、レベル非依存・アニメーション用） */
   readonly moveSpeed: number;
   /** 攻撃力（レベル適用前の基本値） */
   readonly baseAttackPower: number;
+  /**
+   * スケジューラ用 行動速度（100系・レベル非依存）。
+   * ACTION_THRESHOLD = 100 に対する毎 tick の蓄積量。
+   * moveSpeed * 25 で算出: SCOUT(6)=150 / SOLDIER(4)=100 / HEAVY(2)=50。
+   * BU-3 P1: 敵の速度差を有効にするため EnemyStatProfile へ追加。
+   */
+  readonly actionSpeed: number;
 }
 
 /**
@@ -41,18 +48,21 @@ const PROFILES: Readonly<Record<EnemyType, EnemyStatProfile>> = Object.freeze({
     baseDefense: 3,
     moveSpeed: 6,
     baseAttackPower: 5,
+    actionSpeed: 150,
   }),
   [EnemyType.SOLDIER]: Object.freeze({
     baseMaxHealth: 50,
     baseDefense: 5,
     moveSpeed: 4,
     baseAttackPower: 10,
+    actionSpeed: 100,
   }),
   [EnemyType.HEAVY]: Object.freeze({
     baseMaxHealth: 100,
     baseDefense: 10,
     moveSpeed: 2,
     baseAttackPower: 15,
+    actionSpeed: 50,
   }),
 });
 
@@ -65,6 +75,7 @@ const FALLBACK_PROFILE: EnemyStatProfile = Object.freeze({
   baseDefense: 5,
   moveSpeed: 4,
   baseAttackPower: 10,
+  actionSpeed: 100,
 });
 
 /**
@@ -85,6 +96,8 @@ export interface EnemyStats {
   readonly defense: number;
   readonly moveSpeed: number;
   readonly attackPower: number;
+  /** スケジューラ用 行動速度（100系・レベル非依存） */
+  readonly actionSpeed: number;
 }
 
 /**
@@ -92,7 +105,7 @@ export interface EnemyStats {
  *
  * 旧 Enemy.getEnemyStats() と同じ値を返す。
  * maxHealth / defense / attackPower はレベル倍率を適用し、
- * moveSpeed はレベル非依存。
+ * moveSpeed / actionSpeed はレベル非依存。
  *
  * @param enemyType 敵タイプ
  * @param level レベル
@@ -107,5 +120,6 @@ export function resolveEnemyStats(enemyType: EnemyType, level: number): EnemySta
     defense: Math.floor(profile.baseDefense * multiplier),
     moveSpeed: profile.moveSpeed,
     attackPower: Math.floor(profile.baseAttackPower * multiplier),
+    actionSpeed: profile.actionSpeed,
   });
 }

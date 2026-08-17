@@ -1,13 +1,9 @@
 <template>
   <div>
-    <div
-      v-if="uiStore.itemPickupDialog.visible"
-      class="item-pickup-overlay"
-      @click="cancelPickup"
-    ></div>
+    <div v-if="dialogVisible" class="item-pickup-overlay" @click="cancelPickup"></div>
     <BaseWindow
       type="normal"
-      :state="uiStore.itemPickupDialog.visible"
+      :state="dialogVisible"
       width="500px"
       height="400px"
       :pos="{ x: 'calc(50% - 250px)', y: 'calc(50% - 200px)' }"
@@ -48,26 +44,29 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
-import { useUIStore } from '../../stores/uiStore';
+import { useUIPanelStore } from '../../stores/uiPanelStore';
+import type { InventoryItem } from '../../engine/types';
 import BaseWindow from './BaseWindow.vue';
 import BaseButton from './BaseButton.vue';
 
 const gameStore = useGameStore();
-const uiStore = useUIStore();
+const panelStore = useUIPanelStore();
 
-const item = computed(() => uiStore.itemPickupDialog.item);
+// BU-4 段階4: uiPanelStore から item_pickup パネルの状態を取得
+const dialogVisible = computed(() => panelStore.isOpen('item_pickup'));
 
-// デバッグ用：ダイアログの状態を監視
-watch(
-  () => uiStore.itemPickupDialog.visible,
-  (newVal) => {
-    console.log('ItemPickupDialog visibility changed:', newVal);
-    console.log('Item:', item.value);
-  },
-  { immediate: true }
+interface ItemPickupPayload {
+  item: InventoryItem;
+  position: { x: number; y: number };
+  itemEntityId: string | null;
+}
+
+const payload = computed<ItemPickupPayload | null>(() =>
+  panelStore.getPayload<ItemPickupPayload>('item_pickup')
 );
+const item = computed(() => payload.value?.item ?? null);
 
 // ステータス名を取得
 function getStatName(statType: string): string {
@@ -90,7 +89,7 @@ function pickupItem() {
 
   if (success) {
     // Stageからアイテムを削除（カスタムイベントで通知）
-    const itemEntityId = uiStore.itemPickupDialog.itemEntityId;
+    const itemEntityId = payload.value?.itemEntityId;
     if (itemEntityId) {
       window.dispatchEvent(
         new CustomEvent('removeItem', {
@@ -99,14 +98,15 @@ function pickupItem() {
       );
     }
 
-    // ダイアログを閉じる
-    uiStore.hideItemPickupDialog();
+    // BU-4 段階4: PanelManager 経由で閉じる
+    panelStore.close('item_pickup');
   }
 }
 
 // キャンセル
 function cancelPickup() {
-  uiStore.hideItemPickupDialog();
+  // BU-4 段階4: PanelManager 経由で閉じる
+  panelStore.close('item_pickup');
 }
 </script>
 

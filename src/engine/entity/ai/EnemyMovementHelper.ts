@@ -1,37 +1,35 @@
 import { Enemy } from '../Enemy';
-import { MovementComponent } from '../components/Movement';
 import { TransformComponent } from '../components/Transform';
-import { Vector3 } from '../../types';
+import { Vector3, Direction } from '../../types';
 import { EnemyActionContext } from './EnemyActionContext';
 import {
   getDirectionFromPositions,
   getDirectionToTarget,
   getRandomDirection,
-  waitForMovement,
-  waitForAttack,
 } from './EnemyAIUtils';
 
 /**
  * Enemy AI の移動ヘルパー
  *
- * 複数の Behavior で共通する移動処理（プレイヤー追跡・ランダム移動）を集約する。
+ * BU-3 段階6: 副作用を実行せず、移動方向・攻撃可否を返す純粋関数へ変更。
+ * 実際の移動・攻撃実行は ActionExecutor が行う。
  */
 
 /**
- * プレイヤーに向かって移動する（A* パスファインディングを使用）
- * 隣接時は攻撃要求を発行する
+ * プレイヤーに向かう行動を決定する（A* パスファインディングを使用）
+ * 隣接時は攻撃、それ以外は移動
  * @param enemy 行動主体
  * @param playerPosition プレイヤー位置
  * @param context ActionContext
+ * @returns 移動方向 or null（移動不可時）
  */
-export async function moveTowardsPlayer(
+export function decideMoveTowardsPlayer(
   enemy: Enemy,
   playerPosition: Vector3,
   context: EnemyActionContext
-): Promise<void> {
+): { direction: Direction; attack: boolean } | null {
   const transform = enemy.getComponent<TransformComponent>('transform');
-  const movement = enemy.getComponent<MovementComponent>('movement');
-  if (!transform || !movement) return;
+  if (!transform) return null;
 
   const currentPos = transform.position;
 
@@ -49,15 +47,13 @@ export async function moveTowardsPlayer(
 
   const distance = context.getDistance(intCurrentPos, intPlayerPos);
 
-  // 隣接している場合は攻撃（移動しない）
+  // 隣接している場合は攻撃
   if (distance <= 1) {
     const direction = getDirectionToTarget(intCurrentPos, intPlayerPos);
     if (direction) {
-      enemy.setDirection(direction);
+      return { direction, attack: true };
     }
-    context.requestAttack(enemy.id, 'player');
-    await waitForAttack();
-    return;
+    return null;
   }
 
   // プレイヤーの隣接マスをゴールとして探索
@@ -82,39 +78,17 @@ export async function moveTowardsPlayer(
   if (bestPath.length > 1) {
     const nextStep = bestPath[1];
     const direction = getDirectionFromPositions(intCurrentPos, nextStep);
-
     if (direction) {
-      enemy.setDirection(direction);
-      const moved = movement.moveInDirection(direction);
-      if (moved) {
-        await waitForMovement(movement);
-      }
-    }
-  } else {
-    // パスが見つからない場合、単純な方向計算で移動を試みる
-    const direction = getDirectionToTarget(intCurrentPos, intPlayerPos);
-    if (direction) {
-      enemy.setDirection(direction);
-      const moved = movement.moveInDirection(direction);
-      if (moved) {
-        await waitForMovement(movement);
-      } else {
-        await moveRandomly(enemy, movement);
-      }
+      return { direction, attack: false };
     }
   }
-}
 
-/**
- * ランダムに移動する
- * @param enemy 行動主体
- * @param movement MovementComponent
- */
-export async function moveRandomly(enemy: Enemy, movement: MovementComponent): Promise<void> {
-  const randomDirection = getRandomDirection();
-  enemy.setDirection(randomDirection);
-  const moved = movement.moveInDirection(randomDirection);
-  if (moved) {
-    await waitForMovement(movement);
+  // パスが見つからない場合、単純な方向計算で移動を試みる
+  const direction = getDirectionToTarget(intCurrentPos, intPlayerPos);
+  if (direction) {
+    return { direction, attack: false };
   }
+
+  // ランダム移動へフォールバック
+  return { direction: getRandomDirection(), attack: false };
 }

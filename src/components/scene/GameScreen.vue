@@ -3,6 +3,9 @@ import { onMounted, onUnmounted, ref, computed, watch } from 'vue';
 import { Game } from '../../game/Game';
 import { defineEmits } from 'vue';
 import { useGameStore } from '../../stores/gameStore';
+import { useGameViewStateStore } from '../../stores/gameViewStateStore';
+import { useUIPanelStore } from '../../stores/uiPanelStore';
+import { usePanelInputBlock } from '../../composables/usePanelInputBlock';
 import BaseButton from '../uiParts/BaseButton.vue';
 import BaseWindow from '../uiParts/BaseWindow.vue';
 import ItemPickupDialog from '../uiParts/ItemPickupDialog.vue';
@@ -10,20 +13,19 @@ import SkillSelectDialog from '../uiParts/SkillSelectDialog.vue';
 import type { Direction } from '../../engine/types';
 
 const gameStore = useGameStore();
+const viewStore = useGameViewStateStore();
+const panelStore = useUIPanelStore();
 const mainCanvas = ref<HTMLCanvasElement | null>(null);
 const game = new Game();
 
-const selectedTile = ref<{
-  name: string;
-  effect: string;
-  statModifier: Record<string, number>;
-} | null>(null);
 const message = ref<string | null>(null);
 
-const showActionMenu = ref(true);
-const showItemList = ref(false);
-const showStatusWindow = ref(false);
-const showSkillMenu = ref(false);
+// BU-4 段階4: パネル状態は uiPanelStore で一元管理
+const showActionMenu = computed(() => panelStore.isOpen('action_menu'));
+const showItemList = computed(() => panelStore.isOpen('item_list'));
+const showStatusWindow = computed(() => panelStore.isOpen('status_window'));
+const showSkillMenu = computed(() => panelStore.isOpen('skill_menu'));
+
 const playerItems = ref<Array<{ id: string; name: string; description: string }>>([]);
 const playerSkills = ref<
   Array<{
@@ -37,8 +39,30 @@ const playerSkills = ref<
     canUse: boolean;
   }>
 >([]);
-const isPlayerTurn = ref(true);
-const playerDirection = ref<Direction>('down');
+
+// BU-4 段階3: ビューモデルから方向・ターン・選択を取得（ポーリング廃止）
+const playerDirection = computed<Direction>(() => viewStore.player.direction);
+const isPlayerTurn = computed<boolean>(() => viewStore.progress.isPlayerTurn);
+const selectedTile = computed(() => {
+  const sel = viewStore.selection;
+  if (!sel) return null;
+  // 既存のテンプレート互換形式へ変換
+  switch (sel.kind) {
+    case 'tile':
+      return { name: sel.name, effect: sel.effect, statModifier: {} as Record<string, number> };
+    case 'enemy':
+      return { name: sel.name, effect: 'Enemy Entity', statModifier: {} as Record<string, number> };
+    case 'player':
+      return {
+        name: sel.name,
+        effect: 'Character Entity',
+        statModifier: {} as Record<string, number>,
+      };
+    case 'object':
+      return { name: sel.name, effect: 'Entity', statModifier: {} as Record<string, number> };
+  }
+  return null;
+});
 
 const energyPercentage = computed(
   () => (gameStore.player.status.energy / gameStore.player.status.maxEnergy) * 100
@@ -58,6 +82,26 @@ const emit = defineEmits<{
   (e: 'game-over', score: number): void;
 }>();
 
+// BU-4 段階4: 非同期 onMounted 内で生成される watch 停止ハンドルと
+// resize リスナー解除を setup スコープで保持し、トップレベルの onUnmounted で
+// 確実に解除できるようにする。Vue のライフサイクルフック登録は
+// 同期 setup 中に行う必要があるため、onUnmounted を onMounted 内に
+// 入れるとコンポーネントへ関連付けられない。
+let stopPanelInputBlock: (() => void) | null = null;
+let stopSelectionWatch: (() => void) | null = null;
+
+onUnmounted(() => {
+  window.removeEventListener('resize', resizeGame);
+  if (stopPanelInputBlock) {
+    stopPanelInputBlock();
+    stopPanelInputBlock = null;
+  }
+  if (stopSelectionWatch) {
+    stopSelectionWatch();
+    stopSelectionWatch = null;
+  }
+});
+
 onMounted(async () => {
   if (mainCanvas.value) {
     await game.initialize(mainCanvas.value);
@@ -66,78 +110,52 @@ onMounted(async () => {
       emit('game-over', score);
     });
 
-    game.setOnTileSelect((tileInfo: any) => {
-      selectedTile.value = tileInfo;
-      showStatusWindow.value = true; // タイル選択時にステータスウィンドウを表示
-    });
-
-    game.setOnEnemySelect((enemyInfo: any) => {
-      // 敵の情報をselectedTileに格納して表示
-      selectedTile.value = {
-        name: enemyInfo.id || 'Enemy',
-        effect: 'Enemy Entity',
-        statModifier: {},
-      };
-      showStatusWindow.value = true;
-    });
-
-    game.setOnCharacterSelect((characterInfo: any) => {
-      // キャラクターの情報をselectedTileに格納して表示
-      selectedTile.value = {
-        name: characterInfo.id || 'Character',
-        effect: 'Character Entity',
-        statModifier: {},
-      };
-      showStatusWindow.value = true;
-    });
-
-    // ターン変更コールバックを設定
-    game.setOnTurnChange((playerTurn: boolean) => {
-      isPlayerTurn.value = playerTurn;
-    });
-
-    // プレイヤーの方向を定期的に更新
-    const updatePlayerDirection = () => {
-      playerDirection.value = game.getPlayerDirection();
-    };
-
-    // 初期方向を取得
-    updatePlayerDirection();
-
-    // 方向変更イベントをリッスン
-    const eventSystem = game.getEventSystem();
-    if (eventSystem) {
-      eventSystem.on('direction_changed', (data: any) => {
-        if (data.entityId === 'player') {
-          updatePlayerDirection();
+    // BU-4 段階3: 選択イベントは viewStore.selection へ投影済み（Game 側）
+    // selectedTile は computed で viewStore から読み取る
+    // ステータスウィンドウの表示は selection の変化で制御
+    // 停止ハンドルを setup スコープの変数に保持し、
+    // トップレベルの onUnmounted で解除する
+    stopSelectionWatch = watch(
+      () => viewStore.selection,
+      (selection) => {
+        if (selection) {
+          panelStore.open('status_window');
         }
-      });
-    }
+      }
+    );
 
-    // 定期的に方向を更新（フォールバック）
-    const directionUpdateInterval = setInterval(updatePlayerDirection, 100);
+    // BU-4 段階4: action_menu を初期表示
+    panelStore.open('action_menu');
+
+    // BU-4 段階4: モーダルパネル表示中は InputSystem の入力を無効化
+    // composable に抽出してテスト可能にしている
+    // 停止ハンドルを setup スコープの変数に保持し、
+    // トップレベルの onUnmounted で解除する
+    stopPanelInputBlock = usePanelInputBlock(game);
+
+    // BU-4 段階3: ターン変更は viewStore.progress.isPlayerTurn で購読（computed）
+    // コールバック setter は不要だが、併存期間中は残す
+
+    // BU-4 段階3: ポーリング廃止
+    // direction_changed イベントは StatsProjection が viewStore.player.direction へ投影済み
+    // playerDirection は computed で viewStore から読み取る
 
     window.addEventListener('resize', resizeGame);
     resizeGame(); // 初期サイズを設定
-
-    // クリーンアップ
-    onUnmounted(() => {
-      clearInterval(directionUpdateInterval);
-      window.removeEventListener('resize', resizeGame);
-    });
   }
 });
 const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
-  if (isPlayerTurn.value) {
+  // BU-4 段階4: モーダルパネル表示中は移動をブロック
+  if (isPlayerTurn.value && !panelStore.inputBlocked) {
     game.movePlayer(direction);
   }
 };
 
 const turnPlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
-  if (isPlayerTurn.value) {
+  // BU-4 段階4: モーダルパネル表示中は方向転換もブロック
+  if (isPlayerTurn.value && !panelStore.inputBlocked) {
     game.turnPlayer(direction);
-    // 方向を即座に更新
-    playerDirection.value = direction;
+    // 方向は viewStore 経由で更新されるため、ここでは設定しない
   }
 };
 
@@ -156,8 +174,9 @@ const getDirectionIcon = (direction: 'up' | 'down' | 'left' | 'right'): string =
   }
 };
 const closeStatusWindow = () => {
-  showStatusWindow.value = false;
-  selectedTile.value = null;
+  // BU-4 段階4: PanelManager 経由で閉じる + selection をクリア
+  panelStore.close('status_window');
+  viewStore.setSelection(null);
 };
 
 const getSelectedName = () => {
@@ -171,12 +190,14 @@ const showItems = () => {
     name: item.name,
     description: item.description,
   }));
-  showItemList.value = true;
-  // showActionMenu.value = false;
+  // BU-4 段階4: PanelManager 経由で開く
+  panelStore.open('item_list');
 };
 const closeItemList = () => {
-  showItemList.value = false;
-  showActionMenu.value = true;
+  // BU-4 段階4: PanelManager 経由で閉じる
+  // item_list を閉じたら action_menu を再表示（旧挙動の維持）
+  panelStore.close('item_list');
+  panelStore.open('action_menu');
 };
 
 // アイテムを使用
@@ -193,14 +214,17 @@ const useInventoryItem = (itemId: string) => {
   }
 };
 const attack = async () => {
-  if (isPlayerTurn.value) {
-    await game.playerAttack();
+  // BU-4 段階4: モーダルパネル表示中は攻撃もブロック
+  if (isPlayerTurn.value && !panelStore.inputBlocked) {
+    // BU-4 段階5: GameCommands.attack 経由
+    await game.attack();
     checkGameClear();
   }
 };
 const showStatus = () => {
-  showStatusWindow.value = true;
-  selectedTile.value = null;
+  // BU-4 段階4: PanelManager 経由で開く
+  panelStore.open('status_window');
+  viewStore.setSelection(null);
 };
 
 // スキルメニューを表示
@@ -227,12 +251,14 @@ const showSkills = () => {
     canUse: skillSystem.canUseSkill(skill.id, currentEnergy),
   }));
 
-  showSkillMenu.value = true;
+  // BU-4 段階4: PanelManager 経由で開く
+  panelStore.open('skill_menu');
 };
 
 // スキルメニューを閉じる
 const closeSkillMenu = () => {
-  showSkillMenu.value = false;
+  // BU-4 段階4: PanelManager 経由で閉じる
+  panelStore.close('skill_menu');
 };
 
 // スキルを使用
@@ -290,14 +316,17 @@ const closePortalDialog = () => {
     <div id="game-container" ref="mainCanvas"></div>
     <div id="ui-overlay">
       <div class="player-info">
-        <p class="energy-text">
+        <p class="energy-text" data-testid="hud-hp">
           HP: {{ gameStore.player.status.hp }} / {{ gameStore.player.status.maxHp }}
         </p>
         <div class="energy-bar energy-text--hp">
           <div class="energy-fill energy-fill--hp" :style="{ width: `${hpPercentage}%` }"></div>
         </div>
-        <p class="energy-text">
+        <p class="energy-text" data-testid="hud-energy">
           Energy: {{ gameStore.player.status.energy }} / {{ gameStore.player.status.maxEnergy }}
+        </p>
+        <p class="energy-text" data-testid="hud-position">
+          Pos: {{ viewStore.player.position.x }},{{ viewStore.player.position.y }}
         </p>
         <div class="energy-bar">
           <div class="energy-fill" :style="{ width: `${energyPercentage}%` }"></div>

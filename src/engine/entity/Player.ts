@@ -64,10 +64,10 @@ export class Player extends Entity {
     // Enemy 側は AttackPowerComponent を使うため、コンポーネント自体は残す。
     this.addComponent(new EnergyComponent(config.maxEnergy, config.energy));
     // BU-3 段階4: ActorComponent を付与（プレイヤーは入力制御）
+    // BU-3 P0-2: actionSpeed は 100 系（moveSpeed とは別物）
     const actor = new ActorComponent({ inputControlled: true });
     this.addComponent(actor);
-    // BU-3 段階7: StatsComponent.moveSpeed から speed を同期
-    actor.syncSpeedFromStats();
+    actor.syncActionSpeedFromStats();
   }
 
   /**
@@ -195,13 +195,8 @@ export class Player extends Entity {
     // 方向を変更
     movement.direction = direction;
 
-    // ターン終了イベントを発行（1ターン消費）
-    const eventSystem = Engine.instance.getSystem<EventSystem>('event');
-    if (eventSystem) {
-      eventSystem.emit('player_turn_ended', {
-        playerId: this.id,
-      });
-    }
+    // BU-3 段階5: player_turn_ended の直接発行は撤去。
+    // ターン進行は TurnScheduler が行う。
 
     return true;
   }

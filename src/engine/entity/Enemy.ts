@@ -11,6 +11,7 @@ import { EnemyBehaviorStrategyFactory } from './ai/EnemyBehaviorStrategyFactory'
 import { EnemyActionContext } from './ai/EnemyActionContext';
 import { EnemyActionContextImpl } from './ai/EnemyActionContextImpl';
 import { EnemyStats } from './enemy/EnemyStatProfile';
+import { Action } from '../turn/Action';
 
 /**
  * 敵エンティティクラス
@@ -84,16 +85,17 @@ export class Enemy extends Entity {
     );
     this.actionContext = new EnemyActionContextImpl();
 
-    // BU-3 段階4: ActorComponent を付与（敵は AI 制御）
-    // decideAction は当面 Enemy.act() をラップし、従来の副作用実行を行う（段階6で Action へ移す）
-    // BU-3 段階7: speed に EnemyStatProfile.moveSpeed を設定する
+    // BU-3 段階4/段階6: ActorComponent を付与（敵は AI 制御）
+    // decideAction は Strategy.decideAction() へ委譲し、Action を返す。
+    // 副作用実行は ActionExecutor が行う。
+    // BU-3 P1: actionSpeed は EnemyStatProfile から直接取得（SCOUT=150 / SOLDIER=100 / HEAVY=50）。
+    //   moveSpeed（2〜6系・アニメーション用）とは別物。
     this.addComponent(
       new ActorComponent({
         inputControlled: false,
-        speed: stats.moveSpeed,
+        actionSpeed: stats.actionSpeed,
         decideAction: async () => {
-          await this.act();
-          return null; // 段階6で Action を返すよう変更
+          return this.strategy.decideAction(this, this.actionContext);
         },
       })
     );
@@ -172,18 +174,22 @@ export class Enemy extends Entity {
   }
 
   /**
-   * ターンシステムから呼び出される行動メソッド
-   * 行動パターンに応じた Strategy へ委譲する
+   * ターンシステムから呼び出される行動決定メソッド
+   *
+   * BU-3 段階6: Strategy.act() は Strategy.decideAction() へ変更された。
+   * 本メソッドは decideAction() を呼んで Action を返す。
+   * 実行は ActionExecutor が行う（TurnScheduler 経由）。
+   *
+   * @returns 実行する Action、行動しない場合は null
    */
-  async act(): Promise<void> {
+  async decideAction(): Promise<Action | null> {
     // 体力チェック
     const health = this.getComponent<HealthComponent>('health');
     if (health && health.currentHp <= 0) {
       this.active = false;
-      return;
+      return null;
     }
 
-    // Strategy へ委譲
-    await this.strategy.act(this, this.actionContext);
+    return this.strategy.decideAction(this, this.actionContext);
   }
 }

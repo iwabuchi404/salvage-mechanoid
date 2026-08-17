@@ -1,16 +1,18 @@
 import { Enemy } from '../Enemy';
 import { TransformComponent } from '../components/Transform';
-import { MovementComponent } from '../components/Movement';
-import { Vector3 } from '../../types';
 import { EnemyBehaviorStrategy } from './EnemyBehaviorStrategy';
 import { EnemyActionContext } from './EnemyActionContext';
+import { Action } from '../../turn/Action';
+import { getActionCost } from '../../turn/ActionCostTable';
 import { getDirectionToTarget } from './EnemyAIUtils';
-import { moveTowardsPlayer } from './EnemyMovementHelper';
+import { decideMoveTowardsPlayer } from './EnemyMovementHelper';
 
 /**
  * 警戒行動
  *
  * プレイヤーが感知範囲内に入ったら追跡し、範囲外の場合はプレイヤーの方向を向くだけ。
+ *
+ * BU-3 段階6: act() から decideAction() へ変更。Action を返す。
  */
 export class GuardBehavior implements EnemyBehaviorStrategy {
   private readonly detectionRange: number;
@@ -19,13 +21,12 @@ export class GuardBehavior implements EnemyBehaviorStrategy {
     this.detectionRange = detectionRange;
   }
 
-  async act(enemy: Enemy, context: EnemyActionContext): Promise<void> {
+  async decideAction(enemy: Enemy, context: EnemyActionContext): Promise<Action | null> {
     const playerPosition = context.getPlayerPosition();
-    if (!playerPosition) return;
+    if (!playerPosition) return null;
 
     const transform = enemy.getComponent<TransformComponent>('transform');
-    const movement = enemy.getComponent<MovementComponent>('movement');
-    if (!transform || !movement) return;
+    if (!transform) return null;
 
     const currentPos = transform.position;
     const distance = Math.sqrt(
@@ -33,13 +34,37 @@ export class GuardBehavior implements EnemyBehaviorStrategy {
     );
 
     if (distance < this.detectionRange) {
-      await moveTowardsPlayer(enemy, playerPosition, context);
-    } else {
-      // 範囲外でもプレイヤーの方向を向く
-      const direction = getDirectionToTarget(currentPos, playerPosition);
-      if (direction) {
-        enemy.setDirection(direction);
+      // 追跡: moveTowardsPlayer と同じロジックで Action を生成
+      const decision = decideMoveTowardsPlayer(enemy, playerPosition, context);
+      if (!decision) return null;
+
+      if (decision.attack) {
+        return {
+          kind: 'attack',
+          actorId: enemy.id,
+          cost: getActionCost('attack'),
+          params: { direction: decision.direction },
+        };
       }
+
+      return {
+        kind: 'move',
+        actorId: enemy.id,
+        cost: getActionCost('move'),
+        params: { direction: decision.direction },
+      };
     }
+
+    // 範囲外でもプレイヤーの方向を向く（turn action）
+    const direction = getDirectionToTarget(currentPos, playerPosition);
+    if (direction) {
+      return {
+        kind: 'turn',
+        actorId: enemy.id,
+        cost: getActionCost('turn'),
+        params: { direction },
+      };
+    }
+    return null;
   }
 }

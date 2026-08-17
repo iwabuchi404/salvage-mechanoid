@@ -1,11 +1,11 @@
 import { Enemy } from '../Enemy';
 import { TransformComponent } from '../components/Transform';
-import { MovementComponent } from '../components/Movement';
 import { Vector3 } from '../../types';
 import { EnemyBehaviorStrategy } from './EnemyBehaviorStrategy';
 import { EnemyActionContext } from './EnemyActionContext';
-import { getDirectionToTarget, waitForMovement } from './EnemyAIUtils';
-import { moveRandomly } from './EnemyMovementHelper';
+import { Action } from '../../turn/Action';
+import { getActionCost } from '../../turn/ActionCostTable';
+import { getDirectionToTarget, getRandomDirection } from './EnemyAIUtils';
 
 /**
  * 巡回行動
@@ -14,6 +14,8 @@ import { moveRandomly } from './EnemyMovementHelper';
  * 巡回ルートがない場合はランダム移動へフォールバックする。
  *
  * 巡回インデックス・折返し方向の状態は本クラスが所有する。
+ *
+ * BU-3 段階6: act() から decideAction() へ変更。Action を返す。
  */
 export class PatrolBehavior implements EnemyBehaviorStrategy {
   private readonly patrolRoute: Vector3[] | undefined;
@@ -24,18 +26,21 @@ export class PatrolBehavior implements EnemyBehaviorStrategy {
     this.patrolRoute = patrolRoute;
   }
 
-  async act(enemy: Enemy, context: EnemyActionContext): Promise<void> {
-    // R3 以前と同様、プレイヤーが存在しない間は行動しない
-    if (!context.getPlayerPosition()) return;
+  async decideAction(enemy: Enemy, context: EnemyActionContext): Promise<Action | null> {
+    // プレイヤーが存在しない間は行動しない
+    if (!context.getPlayerPosition()) return null;
 
     const transform = enemy.getComponent<TransformComponent>('transform');
-    const movement = enemy.getComponent<MovementComponent>('movement');
-    if (!transform || !movement) return;
+    if (!transform) return null;
 
     // パトロールルートがない場合はランダム移動
     if (!this.patrolRoute || this.patrolRoute.length === 0) {
-      await moveRandomly(enemy, movement);
-      return;
+      return {
+        kind: 'move',
+        actorId: enemy.id,
+        cost: getActionCost('move'),
+        params: { direction: getRandomDirection() },
+      };
     }
 
     const currentPos = transform.position;
@@ -55,14 +60,20 @@ export class PatrolBehavior implements EnemyBehaviorStrategy {
         this.patrolIndex = 1;
         this.patrolDirection = 1;
       }
-    } else {
-      // 目標地点に向かって移動
-      const direction = getDirectionToTarget(currentPos, targetPos);
-      if (direction) {
-        enemy.setDirection(direction);
-        movement.moveInDirection(direction);
-        await waitForMovement(movement);
-      }
+      // 到達時はインデックス更新のみで移動しない（旧 act() と同じ挙動）
+      return null;
     }
+
+    // 目標地点に向かって移動
+    const direction = getDirectionToTarget(currentPos, targetPos);
+    if (direction) {
+      return {
+        kind: 'move',
+        actorId: enemy.id,
+        cost: getActionCost('move'),
+        params: { direction },
+      };
+    }
+    return null;
   }
 }

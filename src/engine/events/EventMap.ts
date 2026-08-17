@@ -89,6 +89,21 @@ export interface EventMap {
    * 既存の player_turn_started / enemy_turn_started は併存させる（UI・InputSystem が購読中）。
    */
   turn_started: { turn: number };
+  /**
+   * BU-3 案B: 個々のアクターが行動権を得た。
+   * time は論理時刻（currentTime）。
+   */
+  actor_turn_started: { actorId: string; time: number };
+  /**
+   * BU-3 案B: プレイヤーの入力待ちが開始した。
+   * InputSystem はこれを受けて入力を受け付ける。
+   * 行動失敗時の再入力待ちでも発行される。
+   */
+  player_input_requested: { playerId: string; turn: number };
+  /**
+   * BU-3 案B: プレイヤーの入力が確定した（行動が投入された or stop() で中断）。
+   */
+  player_input_resolved: { playerId: string; turn: number };
 
   // ===== フロア =====
   floor_changed: { floor: number; maxFloors: number };

@@ -11,17 +11,23 @@ import { PatrolBehavior } from '@/engine/entity/ai/PatrolBehavior';
 import { GuardBehavior } from '@/engine/entity/ai/GuardBehavior';
 import { AggressiveBehavior } from '@/engine/entity/ai/AggressiveBehavior';
 import { getDirectionFromPositions, getDirectionToTarget } from '@/engine/entity/ai/EnemyAIUtils';
+import { Action } from '@/engine/turn/Action';
+import { Engine } from '@/engine/Engine';
+import { EventSystem } from '@/engine/events/EventSystem';
+import { EntitySystem } from '@/engine/entity/EntitySystem';
 
 /**
  * Enemy AI Strategy の単体テスト
  *
+ * BU-3 段階6: Strategy.act() から Strategy.decideAction() へ移行。
  * 各 Strategy が EnemyActionContext（モック）経由で
- * 正しい行動を選択することを検証する。
- * Engine.instance や PixiJS に依存しない純粋なロジックテスト。
+ * 正しい Action を返すことを検証する。
+ * 返された Action をインラインで適用して、位置・方向・攻撃要求を確認する。
  */
 describe('Enemy AI Strategy', () => {
   let playerPosition: Vector3 | null;
   const strategies = new WeakMap<Enemy, EnemyBehaviorStrategy>();
+  let attackRequests: { enemyId: string; targetId: string }[];
 
   const createManhattanPath = (from: Vector3, to: Vector3): Vector3[] => {
     const path: Vector3[] = [{ ...from }];
@@ -51,7 +57,9 @@ describe('Enemy AI Strategy', () => {
       getDistance: jest.fn(
         (from: Vector3, to: Vector3) => Math.abs(to.x - from.x) + Math.abs(to.y - from.y)
       ),
-      requestAttack: jest.fn(),
+      requestAttack: jest.fn((enemyId: string, targetId: string) => {
+        attackRequests.push({ enemyId, targetId });
+      }),
       ...overrides,
     } as jest.Mocked<EnemyActionContext>;
   };
@@ -82,37 +90,73 @@ describe('Enemy AI Strategy', () => {
     return transform;
   };
 
+  /**
+   * decideAction() を呼び、返された Action をインラインで適用する。
+   * move: movement.moveInDirection + update で即座に移動完了
+   * turn: movement.direction を設定
+   * attack: context.requestAttack を呼ぶ（既に decideAction 内で呼ばれることはないが、
+   *         ActionExecutor の代わりにここで requestAttack を呼ぶ）
+   */
+  const runDecideAction = async (
+    enemy: Enemy,
+    context: EnemyActionContext
+  ): Promise<Action | null> => {
+    const strategy = strategies.get(enemy);
+    if (!strategy) throw new Error(`Strategy is not registered for ${enemy.id}`);
+
+    const action = await strategy.decideAction(enemy, context);
+    if (!action) return null;
+
+    const movement = enemy.getComponent<MovementComponent>('movement');
+    if (!movement) return action;
+
+    const direction = action.params?.direction;
+    if (direction) {
+      movement.direction = direction;
+    }
+
+    switch (action.kind) {
+      case 'move':
+        if (direction) {
+          movement.moveInDirection(direction);
+          // 移動アニメーションを即座に完了させる
+          movement.update(1000);
+        }
+        break;
+      case 'turn':
+        // direction 設定済み
+        break;
+      case 'attack':
+        // ActionExecutor の代わりに requestAttack を呼ぶ
+        context.requestAttack(enemy.id, 'player');
+        break;
+      case 'wait':
+        break;
+    }
+
+    return action;
+  };
+
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation();
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
     playerPosition = { x: 2, y: 2, z: 0 };
+    attackRequests = [];
+
+    // Engine.instance を最小限セットアップ（Enemy の初期化で必要）
+    Engine.instance.reset();
+    const events = new EventSystem();
+    const entities = new EntitySystem();
+    Engine.instance.registerSystem('event', events);
+    Engine.instance.registerSystem('entity', entities);
   });
 
   afterEach(() => {
+    Engine.instance.reset();
     jest.useRealTimers();
     jest.restoreAllMocks();
   });
-
-  /**
-   * act() を実行し、内部のタイムアウトを解決する
-   * 同じ Strategy インスタンスを直接呼び出す（Strategy 状態が維持される）
-   */
-  const runAct = async (enemy: Enemy, context: EnemyActionContext): Promise<void> => {
-    const strategy = strategies.get(enemy);
-    if (!strategy) throw new Error(`Strategy is not registered for ${enemy.id}`);
-
-    jest.useFakeTimers();
-    const actPromise = strategy.act(enemy, context);
-    jest.advanceTimersByTime(700);
-    await actPromise;
-    jest.useRealTimers();
-
-    const movement = enemy.getComponent<MovementComponent>('movement');
-    if (movement && movement.isMoving) {
-      movement.update(1000);
-    }
-  };
 
   describe('StaticBehavior', () => {
     it('移動せずプレイヤーの方向を向く', async () => {
@@ -127,8 +171,11 @@ describe('Enemy AI Strategy', () => {
       const initialPos = transform.position;
 
       const context = createMockContext();
-      await runAct(enemy, context);
+      const action = await runDecideAction(enemy, context);
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('turn');
+      expect(action!.params?.direction).toBe('right');
       expect(enemy.getDirection()).toBe('right');
       expect(transform.position).toEqual(initialPos);
       expect(context.getPlayerPosition).toHaveBeenCalledTimes(1);
@@ -145,8 +192,9 @@ describe('Enemy AI Strategy', () => {
       const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).toBeNull();
       expect(transform.position).toEqual(initialPos);
     });
   });
@@ -168,8 +216,10 @@ describe('Enemy AI Strategy', () => {
 
       playerPosition = { x: 0, y: 0, z: 0 };
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('move');
       expect(transform.position.x).toBe(4);
       expect(enemy.getDirection()).toBe('right');
     });
@@ -190,24 +240,24 @@ describe('Enemy AI Strategy', () => {
 
       playerPosition = { x: 0, y: 0, z: 0 };
 
-      // 1回目: 到達判定 → patrolIndex 0→1
-      await runAct(enemy, createMockContext());
+      // 1回目: 到達判定 → patrolIndex 0→1（移動なし）
+      await runDecideAction(enemy, createMockContext());
       expect(transform.position.x).toBe(5);
 
       // 2回目: (7,5) へ移動
-      await runAct(enemy, createMockContext());
+      await runDecideAction(enemy, createMockContext());
       expect(transform.position.x).toBe(6);
       expect(enemy.getDirection()).toBe('right');
 
       // 3回目: (7,5) へ移動
-      await runAct(enemy, createMockContext());
+      await runDecideAction(enemy, createMockContext());
       expect(transform.position.x).toBe(7);
 
       // 4回目: 到達 → patrolIndex 反転
-      await runAct(enemy, createMockContext());
+      await runDecideAction(enemy, createMockContext());
 
       // 5回目: 折り返して左へ
-      await runAct(enemy, createMockContext());
+      await runDecideAction(enemy, createMockContext());
       expect(transform.position.x).toBeLessThan(7);
       expect(enemy.getDirection()).toBe('left');
     });
@@ -225,8 +275,10 @@ describe('Enemy AI Strategy', () => {
       const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
 
       playerPosition = { x: 0, y: 0, z: 0 };
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('move');
       expect(transform.position).not.toEqual(initialPos);
       randomSpy.mockRestore();
     });
@@ -243,8 +295,9 @@ describe('Enemy AI Strategy', () => {
       const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).toBeNull();
       expect(transform.position).toEqual(initialPos);
     });
   });
@@ -261,14 +314,16 @@ describe('Enemy AI Strategy', () => {
       const transform = getTransform(enemy);
 
       const context = createMockContext();
-      await runAct(enemy, context);
+      const action = await runDecideAction(enemy, context);
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('move');
       expect(transform.position.y).toBe(4);
       expect(enemy.getDirection()).toBe('up');
       expect(context.findPath).toHaveBeenCalled();
     });
 
-    it('感知範囲外のプレイヤーを追跡しない', async () => {
+    it('感知範囲外のプレイヤーを追跡しない（方向のみ変更）', async () => {
       playerPosition = { x: 0, y: 0, z: 0 };
       const enemy = createEnemy({
         id: 'guard-far',
@@ -279,8 +334,10 @@ describe('Enemy AI Strategy', () => {
       const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('turn');
       expect(transform.position).toEqual(initialPos);
       expect(enemy.getDirection()).toBe('up');
     });
@@ -297,13 +354,15 @@ describe('Enemy AI Strategy', () => {
       });
       const transform = getTransform(enemy);
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('move');
       expect(transform.position.x).toBe(8);
       expect(enemy.getDirection()).toBe('left');
     });
 
-    it('プレイヤー隣接時に攻撃を要求する', async () => {
+    it('プレイヤー隣接時に攻撃 Action を返す', async () => {
       playerPosition = { x: 5, y: 4, z: 0 };
       const enemy = createEnemy({
         id: 'aggressive-adjacent',
@@ -315,10 +374,17 @@ describe('Enemy AI Strategy', () => {
       const initialPos = transform.position;
 
       const context = createMockContext();
-      await runAct(enemy, context);
+      const action = await runDecideAction(enemy, context);
 
+      expect(action).not.toBeNull();
+      expect(action!.kind).toBe('attack');
+      expect(action!.params?.direction).toBe('up');
       expect(transform.position).toEqual(initialPos);
-      expect(context.requestAttack).toHaveBeenCalledWith('aggressive-adjacent', 'player');
+      // runDecideAction 内で requestAttack を呼ぶ
+      expect(attackRequests).toContainEqual({
+        enemyId: 'aggressive-adjacent',
+        targetId: 'player',
+      });
     });
 
     it('プレイヤー不在時に何もしない', async () => {
@@ -332,8 +398,9 @@ describe('Enemy AI Strategy', () => {
       const transform = getTransform(enemy);
       const initialPos = transform.position;
 
-      await runAct(enemy, createMockContext());
+      const action = await runDecideAction(enemy, createMockContext());
 
+      expect(action).toBeNull();
       expect(transform.position).toEqual(initialPos);
     });
   });

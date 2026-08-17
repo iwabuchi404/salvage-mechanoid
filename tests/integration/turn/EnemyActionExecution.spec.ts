@@ -8,9 +8,11 @@ import { Action, ActionResult } from '@/engine/turn/Action';
 import { getActionCost } from '@/engine/turn/ActionCostTable';
 
 /**
- * BU-3 段階6: 敵 AI が Action を返した場合の TurnScheduler 実行テスト
+ * BU-3 段階6 / P2: 敵 AI が Action を返した場合の TurnScheduler 実行テスト
+ *
+ * ActionExecutor が汎用化され、敵の Action も ActionExecutor 経由で実行されることを検証する。
  */
-describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
+describe('BU-3 段階6 / P2: 敵 AI の Action ベース実行', () => {
   let events: EventSystem;
   let entities: EntitySystem;
   let scheduler: TurnScheduler;
@@ -41,6 +43,12 @@ describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
     scheduler.initialize(Engine.instance);
     (scheduler as any).executor = mockExecutor;
 
+    // プレイヤーを登録
+    const player = new Entity('player', 'player');
+    player.addTag('player');
+    player.addComponent(new ActorComponent({ inputControlled: true, actionSpeed: 100 }));
+    entities.registerEntity(player);
+
     jest.spyOn(console, 'error').mockImplementation();
   });
 
@@ -48,6 +56,22 @@ describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
     scheduler.stop();
     jest.restoreAllMocks();
   });
+
+  /** 次の player_input_requested まで待つ */
+  async function waitForNextInputRequest(timeoutMs = 200): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        events.off('player_input_requested', handler);
+        resolve();
+      }, timeoutMs);
+      const handler = () => {
+        clearTimeout(timer);
+        events.off('player_input_requested', handler);
+        setTimeout(resolve, 5);
+      };
+      events.on('player_input_requested', handler);
+    });
+  }
 
   it('敵が Action を返した場合 ActionExecutor 経由で実行される', async () => {
     const enemyAction: Action = {
@@ -60,18 +84,21 @@ describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
     enemy.addComponent(
       new ActorComponent({
         inputControlled: false,
+        actionSpeed: 100,
         decideAction: jest.fn(async () => enemyAction),
       })
     );
     entities.registerEntity(enemy);
 
     scheduler.start();
+    await waitForNextInputRequest();
+
     scheduler.submitPlayerAction({
       kind: 'wait',
       actorId: 'player',
       cost: getActionCost('wait'),
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForNextInputRequest();
 
     // プレイヤー行動と敵行動の両方が ActionExecutor 経由で実行される
     expect(executedActions).toHaveLength(2);
@@ -85,6 +112,7 @@ describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
     enemy.addComponent(
       new ActorComponent({
         inputControlled: false,
+        actionSpeed: 100,
         decideAction: jest.fn(async () => {
           sideEffect();
           return null;
@@ -94,12 +122,14 @@ describe('BU-3 段階6: 敵 AI の Action ベース実行', () => {
     entities.registerEntity(enemy);
 
     scheduler.start();
+    await waitForNextInputRequest();
+
     scheduler.submitPlayerAction({
       kind: 'wait',
       actorId: 'player',
       cost: getActionCost('wait'),
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForNextInputRequest();
 
     // 副作用は実行される
     expect(sideEffect).toHaveBeenCalledTimes(1);

@@ -10,10 +10,14 @@ import { TileMap } from '@/engine/world/TileMap';
 import { WorldSystem } from '@/engine/world/WorldSystem';
 import { resolveEnemyStats } from '@/engine/entity/enemy/EnemyStatProfile';
 import { EnemyBehavior, EnemyType, PlacedEnemy, TileType, Vector3 } from '@/engine/types';
+import { Action } from '@/engine/turn/Action';
 
 /**
  * Enemy AI の行動テスト
- * act() を通じて各 behavior の行動選択とイベント発行を検証する。
+ *
+ * BU-3 段階6: act() から decideAction() へ移行。
+ * decideAction() が返す Action を検証し、Action をインラインで適用して
+ * 位置・方向・攻撃要求を確認する。
  */
 describe('Enemy AI', () => {
   let events: EventSystem;
@@ -21,6 +25,7 @@ describe('Enemy AI', () => {
   let world: WorldSystem;
   let player: Entity;
   let playerTransform: TransformComponent;
+  let attackRequests: { enemyId: string; targetId: string }[];
 
   const createPlacedEnemy = (overrides: Partial<PlacedEnemy> = {}): PlacedEnemy => ({
     id: 'enemy-ai-1',
@@ -40,6 +45,12 @@ describe('Enemy AI', () => {
     Engine.instance.reset();
     events = new EventSystem();
     entities = new EntitySystem();
+    attackRequests = [];
+
+    // enemy_attack_requested をキャプチャ
+    events.on('enemy_attack_requested', (payload) => {
+      attackRequests.push(payload);
+    });
 
     // 10x10 の全面通行可能マップ
     const map = new TileMap(10, 10);
@@ -80,24 +91,46 @@ describe('Enemy AI', () => {
   };
 
   /**
-   * act() を実行し、内部の waitForMovement/waitForAttack のタイムアウトを解決する。
-   * フェイクタイマーを使用して 500ms のタイムアウトを即座に進める。
-   * また、移動アニメーションを完了させるため MovementComponent.update() を呼ぶ。
+   * decideAction() を呼び、返された Action をインラインで適用する。
+   * move: movement.moveInDirection + update で即座に移動完了
+   * turn: movement.direction を設定
+   * attack: enemy_attack_requested イベントを発行
    */
-  const runAct = async (enemy: Enemy): Promise<void> => {
-    jest.useFakeTimers();
-    const actPromise = enemy.act();
-    // waitForMovement (最大500ms) と waitForAttack (200ms) のタイムアウトを解決
-    jest.advanceTimersByTime(700);
-    await actPromise;
-    jest.useRealTimers();
+  const runDecideAction = async (enemy: Enemy): Promise<Action | null> => {
+    const action = await enemy.decideAction();
+    if (!action) return null;
 
-    // 移動アニメーションを完了させる（update を呼んで isMoving を false にする）
     const movement = enemy.getComponent<MovementComponent>('movement');
-    if (movement && movement.isMoving) {
-      // moveDuration 以上の deltaTime を与えて移動を完了させる
-      movement.update(1000);
+    if (!movement) return action;
+
+    const direction = action.params?.direction;
+    if (direction) {
+      movement.direction = direction;
     }
+
+    switch (action.kind) {
+      case 'move':
+        if (direction) {
+          movement.moveInDirection(direction);
+          // 移動アニメーションを即座に完了させる
+          movement.update(1000);
+        }
+        break;
+      case 'turn':
+        // direction 設定済み
+        break;
+      case 'attack':
+        // ActionExecutor の代わりにイベントを発行
+        events.emit('enemy_attack_requested', {
+          enemyId: enemy.id,
+          targetId: 'player',
+        });
+        break;
+      case 'wait':
+        break;
+    }
+
+    return action;
   };
 
   it('Renderer / PixiJS の初期化なしで Enemy を初期化できる', async () => {
@@ -124,8 +157,11 @@ describe('Enemy AI', () => {
     const transform = enemy.getComponent<TransformComponent>('transform')!;
     const initialPos = transform.position;
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('turn');
+    expect(action!.params?.direction).toBe('right');
     expect(enemy.getDirection()).toBe('right');
     expect(transform.position).toEqual(initialPos);
     expect(movement.isMoving).toBe(false);
@@ -137,7 +173,7 @@ describe('Enemy AI', () => {
       { x: 7, y: 5, z: 0 },
     ];
     // 開始位置を巡回ルートの最初の点と異なる位置に設定
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'patrol-enemy',
       x: 3,
       y: 5,
@@ -149,8 +185,10 @@ describe('Enemy AI', () => {
     // プレイヤーを遠くに配置して干渉しないようにする
     playerTransform.setPosition(0, 0, 0);
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('move');
     // 巡回ルートの最初の点 (5,5) に向かって移動する
     expect(transform.position.x).toBe(4);
     expect(enemy.getDirection()).toBe('right');
@@ -163,7 +201,7 @@ describe('Enemy AI', () => {
       { x: 7, y: 5, z: 0 },
     ];
     // 開始位置を巡回ルートの最初の点に設定（patrolIndex=0 から開始）
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'patrol-bounce-enemy',
       x: 5,
       y: 5,
@@ -175,48 +213,48 @@ describe('Enemy AI', () => {
     // プレイヤーを遠くに配置
     playerTransform.setPosition(0, 0, 0);
 
-    // 1回目の act: 開始位置 (5,5) は patrolRoute[0] と一致するため、
+    // 1回目: 開始位置 (5,5) は patrolRoute[0] と一致するため、
     // patrolIndex が 0→1 に進む（移動はしない）
-    await runAct(enemy);
+    await runDecideAction(enemy);
     expect(transform.position.x).toBe(5);
 
-    // 2回目の act: patrolRoute[1] (7,5) に向かって移動（1マス移動）
-    await runAct(enemy);
+    // 2回目: patrolRoute[1] (7,5) に向かって移動（1マス移動）
+    await runDecideAction(enemy);
     expect(transform.position.x).toBe(6);
     expect(enemy.getDirection()).toBe('right');
 
-    // 3回目の act: (7,5) に向かって移動（1マス移動）
-    await runAct(enemy);
+    // 3回目: (7,5) に向かって移動（1マス移動）
+    await runDecideAction(enemy);
     expect(transform.position.x).toBe(7);
 
-    // 4回目の act: (7,5) に到達したので patrolIndex が 1→2 に進み、
+    // 4回目: (7,5) に到達したので patrolIndex が 1→2 に進み、
     // patrolIndex >= length(2) のため patrolIndex=0, patrolDirection=-1 に反転
-    // この act 内では到達判定のみで移動はしない
-    await runAct(enemy);
+    // この decideAction 内では到達判定のみで移動はしない
+    await runDecideAction(enemy);
 
-    // 5回目の act: patrolRoute[0] (5,5) に向かって移動（左方向）
-    await runAct(enemy);
+    // 5回目: patrolRoute[0] (5,5) に向かって移動（左方向）
+    await runDecideAction(enemy);
     // 折り返して左方向に移動する（x が減少）
     expect(transform.position.x).toBeLessThan(7);
     expect(enemy.getDirection()).toBe('left');
 
-    // 6回目の act: (5,5) に向かって移動
-    await runAct(enemy);
+    // 6回目: (5,5) に向かって移動
+    await runDecideAction(enemy);
     expect(transform.position.x).toBeLessThanOrEqual(6);
 
-    // 7回目の act: さらに (5,5) に向かって移動
-    await runAct(enemy);
+    // 7回目: さらに (5,5) に向かって移動
+    await runDecideAction(enemy);
     expect(transform.position.x).toBeLessThanOrEqual(5);
 
-    // 8回目の act: (5,5) に到達したので patrolIndex が反転し、
+    // 8回目: (5,5) に到達したので patrolIndex が反転し、
     // patrolDirection=1 に反転して right 方向に向かう
-    await runAct(enemy);
+    await runDecideAction(enemy);
     // patrolDirection が 1 に反転し、right 方向に移動
     expect(enemy.getDirection()).toBe('right');
   });
 
   it('PATROL は巡回ルートがない場合にランダム移動へフォールバックする', async () => {
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'patrol-no-route',
       x: 5,
       y: 5,
@@ -229,8 +267,10 @@ describe('Enemy AI', () => {
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0); // 常に最初の方向 'up'
 
     playerTransform.setPosition(0, 0, 0);
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('move');
     // ランダム移動で位置が変化する
     expect(transform.position).not.toEqual(initialPos);
     randomSpy.mockRestore();
@@ -239,7 +279,7 @@ describe('Enemy AI', () => {
   it('GUARD は感知範囲内のプレイヤーを追跡する', async () => {
     // プレイヤーを近く（距離3）に配置
     playerTransform.setPosition(5, 2, 0);
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'guard-enemy',
       x: 5,
       y: 5,
@@ -247,8 +287,10 @@ describe('Enemy AI', () => {
     });
     const transform = enemy.getComponent<TransformComponent>('transform')!;
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('move');
     // プレイヤーに向かって移動する（Y座標が減少）
     expect(transform.position.y).toBe(4);
     expect(enemy.getDirection()).toBe('up');
@@ -257,7 +299,7 @@ describe('Enemy AI', () => {
   it('GUARD は感知範囲外のプレイヤーを追跡しない', async () => {
     // プレイヤーを遠く（距離 > 8）に配置
     playerTransform.setPosition(0, 0, 0);
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'guard-far',
       x: 9,
       y: 9,
@@ -266,8 +308,10 @@ describe('Enemy AI', () => {
     const transform = enemy.getComponent<TransformComponent>('transform')!;
     const initialPos = transform.position;
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('turn');
     // 移動せず、プレイヤーの方向を向くだけ
     expect(transform.position).toEqual(initialPos);
     // (0,0) から (9,9) への方向は左上、dx=-9, dy=-9, abs(dx) == abs(dy) なので dy 優先で 'up'
@@ -277,7 +321,7 @@ describe('Enemy AI', () => {
   it('AGGRESSIVE は常にプレイヤーを追跡する', async () => {
     // プレイヤーを同じ行の遠くに配置（方向を一意にするため）
     playerTransform.setPosition(0, 5, 0);
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'aggressive-enemy',
       x: 9,
       y: 5,
@@ -285,8 +329,10 @@ describe('Enemy AI', () => {
     });
     const transform = enemy.getComponent<TransformComponent>('transform')!;
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('move');
     // プレイヤーに向かって左へ移動する（距離が遠くても常に追跡）
     expect(transform.position.x).toBe(8);
     expect(enemy.getDirection()).toBe('left');
@@ -296,7 +342,7 @@ describe('Enemy AI', () => {
     // プレイヤーを削除
     entities.removeEntity('player');
 
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'no-player-enemy',
       x: 5,
       y: 5,
@@ -305,52 +351,37 @@ describe('Enemy AI', () => {
     const transform = enemy.getComponent<TransformComponent>('transform')!;
     const initialPos = transform.position;
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
+    expect(action).toBeNull();
     expect(transform.position).toEqual(initialPos);
   });
 
   it('死亡済み Enemy は行動せず非アクティブになる', async () => {
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'dead-enemy',
       x: 5,
       y: 5,
       behavior: EnemyBehavior.AGGRESSIVE,
     });
-    const health = enemy.getComponent<HealthComponent>('health')!;
-    const transform = enemy.getComponent<TransformComponent>('transform')!;
-    const initialPos = transform.position;
-
-    // HP を 0 にする（destroyOnDeath を false にしてエンティティが削除されないようにする）
-    health.takeDamage(health.maxHp, true, true);
-
-    // HealthComponent の takeDamage が entitySystem.removeEntity を呼ぶため、
-    // エンティティが削除されている可能性がある。削除されていない場合は act() を検証。
-    // 代わりに: 直接 HP を 0 に設定して act() を呼ぶ
-    const enemy2 = await createHeadlessEnemy({
-      id: 'dead-enemy-2',
-      x: 5,
-      y: 5,
-      behavior: EnemyBehavior.AGGRESSIVE,
-    });
-    const health2 = enemy2.getComponent<HealthComponent>('health')!;
     // destroyOnDeath = false の HealthComponent に差し替え
     const newHealth = new HealthComponent(50, 0, 0, 5, 0, false);
-    newHealth.entity = enemy2;
-    enemy2.addComponent(newHealth);
+    newHealth.entity = enemy;
+    enemy.addComponent(newHealth);
 
-    const initialPos2 = enemy2.getComponent<TransformComponent>('transform')!.position;
+    const initialPos = enemy.getComponent<TransformComponent>('transform')!.position;
 
-    await runAct(enemy2);
+    const action = await runDecideAction(enemy);
 
-    expect(enemy2.active).toBe(false);
-    expect(enemy2.getComponent<TransformComponent>('transform')!.position).toEqual(initialPos2);
+    expect(action).toBeNull();
+    expect(enemy.active).toBe(false);
+    expect(enemy.getComponent<TransformComponent>('transform')!.position).toEqual(initialPos);
   });
 
-  it('プレイヤー隣接時に移動せず攻撃を要求する', async () => {
+  it('プレイヤー隣接時に移動せず攻撃 Action を返す', async () => {
     // プレイヤーを隣接（1マス上）に配置
     playerTransform.setPosition(5, 4, 0);
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'adjacent-enemy',
       x: 5,
       y: 5,
@@ -359,15 +390,15 @@ describe('Enemy AI', () => {
     const transform = enemy.getComponent<TransformComponent>('transform')!;
     const initialPos = transform.position;
 
-    const attackHandler = jest.fn();
-    events.on('enemy_attack_requested', attackHandler);
+    const action = await runDecideAction(enemy);
 
-    await runAct(enemy);
-
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('attack');
+    expect(action!.params?.direction).toBe('up');
     // 移動していない
     expect(transform.position).toEqual(initialPos);
     // 攻撃要求を発行
-    expect(attackHandler).toHaveBeenCalledWith({
+    expect(attackRequests).toContainEqual({
       enemyId: 'adjacent-enemy',
       targetId: 'player',
     });
@@ -391,14 +422,13 @@ describe('Enemy AI', () => {
     map.setTileAt(9, 8, 0, TileType.TILE, true); // 上
     map.setTileAt(8, 9, 0, TileType.TILE, true); // 左
 
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'no-path-enemy',
       x: 9,
       y: 9,
       behavior: EnemyBehavior.AGGRESSIVE,
     });
     const movement = enemy.getComponent<MovementComponent>('movement')!;
-    const transform = enemy.getComponent<TransformComponent>('transform')!;
 
     // moveInDirection の呼び出しを監視
     const moveInDirectionSpy = jest.spyOn(movement, 'moveInDirection');
@@ -406,17 +436,19 @@ describe('Enemy AI', () => {
     // ランダム移動を制御（'up' 方向を選択）
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
 
-    await runAct(enemy);
+    const action = await runDecideAction(enemy);
 
-    // フォールバック処理として moveInDirection が呼ばれていることを確認
-    // 経路が見つからない場合、getDirectionToTarget → moveInDirection が呼ばれる
+    // フォールバック処理として move Action が返る
+    expect(action).not.toBeNull();
+    expect(action!.kind).toBe('move');
+    // moveInDirection が呼ばれていることを確認
     expect(moveInDirectionSpy).toHaveBeenCalled();
 
     randomSpy.mockRestore();
   });
 
-  it('移動待ちがタイムアウトしてターンを停止させない', async () => {
-    const enemy = await createHeadlessEnemy({
+  it('decideAction() が即座に完了する（タイムアウトなし）', async () => {
+    const enemy = createHeadlessEnemy({
       id: 'timeout-enemy',
       x: 5,
       y: 5,
@@ -425,34 +457,61 @@ describe('Enemy AI', () => {
     });
     playerTransform.setPosition(0, 0, 0);
 
-    // act() がタイムアウト内に完了することを確認
+    // decideAction() がタイムアウト内に完了することを確認
     const startTime = Date.now();
-    await runAct(enemy);
+    await runDecideAction(enemy);
     const elapsed = Date.now() - startTime;
 
-    // フェイクタイマー使用時は実時間はごく短い
+    // アニメーション待ちがないので実時間はごく短い
     expect(elapsed).toBeLessThan(1000);
-    // act() が正常に完了したこと自体が、ターンが停止しないことを示す
     expect(enemy.active).toBe(true);
   });
 
-  it('攻撃待ちがタイムアウトしてターンを停止させない', async () => {
+  it('攻撃 Action が即座に完了する（タイムアウトなし）', async () => {
     // プレイヤーを隣接に配置して攻撃を発生させる
     playerTransform.setPosition(5, 4, 0);
-    const enemy = await createHeadlessEnemy({
+    const enemy = createHeadlessEnemy({
       id: 'attack-timeout-enemy',
       x: 5,
       y: 5,
       behavior: EnemyBehavior.AGGRESSIVE,
     });
 
-    events.on('enemy_attack_requested', jest.fn());
-
     const startTime = Date.now();
-    await runAct(enemy);
+    await runDecideAction(enemy);
     const elapsed = Date.now() - startTime;
 
     expect(elapsed).toBeLessThan(1000);
     expect(enemy.active).toBe(true);
+    expect(attackRequests).toHaveLength(1);
+  });
+
+  it('SCOUT / SOLDIER / HEAVY に actionSpeed の差がある', async () => {
+    const scout = createHeadlessEnemy({
+      id: 'scout-1',
+      type: EnemyType.SCOUT,
+      behavior: EnemyBehavior.STATIC,
+    });
+    const soldier = createHeadlessEnemy({
+      id: 'soldier-1',
+      type: EnemyType.SOLDIER,
+      behavior: EnemyBehavior.STATIC,
+    });
+    const heavy = createHeadlessEnemy({
+      id: 'heavy-1',
+      type: EnemyType.HEAVY,
+      behavior: EnemyBehavior.STATIC,
+    });
+
+    const scoutActor =
+      scout.getComponent<import('@/engine/entity/components/Actor').ActorComponent>('actor')!;
+    const soldierActor =
+      soldier.getComponent<import('@/engine/entity/components/Actor').ActorComponent>('actor')!;
+    const heavyActor =
+      heavy.getComponent<import('@/engine/entity/components/Actor').ActorComponent>('actor')!;
+
+    expect(scoutActor.speed).toBe(150);
+    expect(soldierActor.speed).toBe(100);
+    expect(heavyActor.speed).toBe(50);
   });
 });

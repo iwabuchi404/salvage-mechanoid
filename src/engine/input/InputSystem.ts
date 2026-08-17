@@ -232,24 +232,24 @@ export class InputSystem implements System {
 
   /**
    * イベントリスナーを設定
+   *
+   * BU-3 P1 修正: waitingForInput を player_input_requested / player_input_resolved で制御する。
+   * 旧来の player_turn_started / enemy_turn_started / player_turn_ended リスナーは撤去。
+   * 行動失敗時の再入力待ちでも player_input_requested が発行されるため、
+   * 壁に向かって移動して失敗しても入力が再開される。
    */
   private setupEventListeners(): void {
     if (!this.eventSystem) {
       return;
     }
 
-    // プレイヤーターン開始時に入力を有効化
-    this.eventSystem.on('player_turn_started', () => {
+    // プレイヤー入力待ち開始時に入力を有効化
+    this.eventSystem.on('player_input_requested', () => {
       this.waitingForInput = true;
     });
 
-    // プレイヤーターン終了時に入力を無効化
-    this.eventSystem.on('player_turn_ended', () => {
-      this.waitingForInput = false;
-    });
-
-    // 敵ターン開始時に入力を無効化
-    this.eventSystem.on('enemy_turn_started', () => {
+    // プレイヤー入力確定時に入力を無効化
+    this.eventSystem.on('player_input_resolved', () => {
       this.waitingForInput = false;
     });
   }
@@ -302,38 +302,39 @@ export class InputSystem implements System {
   /**
    * プレイヤーの移動をリクエスト
    *
-   * BU-3 段階5: TurnScheduler が設定されていれば submitPlayerAction で行動を投入する。
-   * なければ ActionExecutor へフォールバック（段階3の挙動）。
+   * BU-3 案B: TurnScheduler.canAct() で入力可否を判定し、
+   * submitPlayerAction() で行動を投入する。
+   * waitingForInput は player_input_requested / player_input_resolved で制御される。
    */
   private requestPlayerMove(player: Player, direction: Direction): void {
-    if (this.scheduler && this.scheduler.isWaitingForPlayerInput()) {
+    if (this.scheduler && this.scheduler.canAct(player.id)) {
       this.scheduler.submitPlayerAction(createMoveAction(player.id, direction));
+      // waitingForInput は player_input_resolved で false になる
     } else if (this.actionExecutor) {
       this.actionExecutor.execute(createMoveAction(player.id, direction));
+      this.waitingForInput = false;
     } else {
       player.move(direction);
+      this.waitingForInput = false;
     }
-
-    // 入力を一時的に無効化（移動完了まで）
-    this.waitingForInput = false;
   }
 
   /**
    * プレイヤーの攻撃をリクエスト
    *
-   * BU-3 段階5: TurnScheduler が設定されていれば submitPlayerAction で行動を投入する。
+   * BU-3 案B: TurnScheduler.canAct() で入力可否を判定し、
+   * submitPlayerAction() で行動を投入する。
    */
   private requestPlayerAttack(player: Player): void {
-    if (this.scheduler && this.scheduler.isWaitingForPlayerInput()) {
+    if (this.scheduler && this.scheduler.canAct(player.id)) {
       this.scheduler.submitPlayerAction(createAttackAction(player.id));
     } else if (this.actionExecutor) {
       this.actionExecutor.execute(createAttackAction(player.id));
+      this.waitingForInput = false;
     } else {
       player.attack();
+      this.waitingForInput = false;
     }
-
-    // 入力を一時的に無効化（攻撃完了まで）
-    this.waitingForInput = false;
   }
 
   /**

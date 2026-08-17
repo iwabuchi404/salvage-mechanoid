@@ -27,6 +27,10 @@ import { Player } from '../engine/entity/Player';
 import { PlayerFactory } from '../engine/factory/PlayerFactory';
 import { PlayerInitialConfig } from '../engine/entity/PlayerInitialConfig';
 import { StatsProjection } from './StatsProjection';
+import { useGameViewStateStore } from '../stores/gameViewStateStore';
+import { useUIPanelStore } from '../stores/uiPanelStore';
+import type { SelectionViewState } from './view/GameViewState';
+import type { GameCommands } from './view/GameCommands';
 import { PlayerPresentation } from '../engine/presentation/player/PlayerPresentation';
 import { Item } from '../engine/entity/Item';
 import { EnemyFactory } from '../engine/factory/EnemyFactory';
@@ -67,8 +71,11 @@ interface GeneratedResourceState {
 
 /**
  * ゲームクラス - ゲームの主要な機能を統合
+ *
+ * BU-4 段階5: GameCommands インターフェースを実装し、
+ * UI は EventSystem を直接触らずこのインターフェース経由で操作する。
  */
-export class Game {
+export class Game implements GameCommands {
   // エンジンのインスタンス
   private engine: Engine;
 
@@ -110,13 +117,15 @@ export class Game {
   // ゲームストア（Pinia）
   private gameStore = useGameStore();
   private uiStore = useUIStore();
+  // BU-4 段階2: 実行中の表示状態ストア
+  private viewStore = useGameViewStateStore();
+  // BU-4 段階4: パネル管理ストア
+  private uiPanelStore = useUIPanelStore();
 
   // UIコールバック
+  // BU-4 段階5: setOnGameOver のみ残す（UI emit へ直結するため）
+  // それ以外の setter は viewStore 経由に統一して撤去
   private onGameOver: ((score: number) => void) | null = null;
-  private onTileSelect: ((tileInfo: any) => void) | null = null;
-  private onEnemySelect: ((enemy: any) => void) | null = null;
-  private onCharacterSelect: ((character: any) => void) | null = null;
-  private onTurnChange: ((isPlayerTurn: boolean) => void) | null = null;
 
   /**
    * コンストラクタ
@@ -197,6 +206,12 @@ export class Game {
     // BU-2 P1: StatsProjection をクリア（リスナーは Engine.reset() で消える）
     // createPlayer() の if (!this.statsProjection) で再初期化される
     this.statsProjection = null;
+
+    // BU-4 段階2: viewStore をリセット
+    this.viewStore.reset();
+
+    // テスト戦略 I-7: パネルスタックもリセット（残存防止）
+    this.uiPanelStore.closeAll();
 
     // BU-3 段階3: ActionExecutor もクリア
     this.actionExecutor = null;
@@ -340,6 +355,14 @@ export class Game {
 
     // 防御力を更新
     gameStore.player.status.defense = stats.defense;
+
+    // BU-4 段階2: viewStore へも投影
+    this.viewStore.setPlayer({
+      hp: stats.maxHp,
+      maxHp: stats.maxHp,
+      energy: stats.maxEnergy,
+      maxEnergy: stats.maxEnergy,
+    });
 
     console.log('Player stats updated from parts:', {
       maxHp: stats.maxHp,
@@ -520,6 +543,17 @@ export class Game {
     this.gameStore.player.status.hp = this.gameStore.player.status.maxHp;
     this.gameStore.player.status.energy = this.gameStore.player.status.maxEnergy;
 
+    // BU-4 段階2: viewStore のプレイヤー状態を初期化
+    this.viewStore.setPlayer({
+      hp: this.gameStore.player.status.maxHp,
+      maxHp: this.gameStore.player.status.maxHp,
+      energy: this.gameStore.player.status.maxEnergy,
+      maxEnergy: this.gameStore.player.status.maxEnergy,
+      level: this.gameStore.player.status.level,
+      direction: 'down',
+      position: { x: startPosition.x, y: startPosition.y },
+    });
+
     // BU-2: Player は gameStore を直接参照しないため、初期値を config で渡す
     // P0-3: gameStore.status.strength を attackPower にリネームし、
     // +5 変換を廃止した。往復が恒等になり、リトライ累積が起きない。
@@ -547,11 +581,14 @@ export class Game {
     }
 
     // BU-3 段階5: TurnScheduler を初期化し InputSystem へ設定
+    // BU-3 P0-3: TurnSystem へも注入し、委譲させる
     if (!this.turnScheduler) {
       this.turnScheduler = new TurnScheduler();
       this.turnScheduler.initialize(this.engine);
       const inputSystem = this.engine.getSystem<InputSystem>('input');
       inputSystem?.setScheduler(this.turnScheduler);
+      const turnSystem = this.engine.getSystem<TurnSystem>('turn');
+      turnSystem?.setScheduler(this.turnScheduler);
     }
 
     // プレイヤーエンティティを作成（C1: PlayerFactory が Presentation も組み立てる）
@@ -928,6 +965,9 @@ export class Game {
     if (!eventSystem) return;
 
     // ゲームオーバーイベント
+    // BU-4 段階5: コールバック setter を撤去し、EventSystem 経由で直接処理
+    // game-over は UI の emit に直結するため、onGameOver コールバックが
+    // 設定されていれば呼ぶ（段階5でも併存）
     eventSystem.on(EventName.GAME_OVER, (data) => {
       if (this.onGameOver) {
         this.onGameOver(data.score || 0);
@@ -935,62 +975,60 @@ export class Game {
     });
 
     // タイル選択イベント
+    // BU-4 段階5: viewStore.selection へ投影のみ（コールバック撤去）
     eventSystem.on('tile_selected', (data) => {
-      if (this.onTileSelect) {
-        // タイル情報をフォーマットして送信
-        const tileInfo = {
-          name: data.tile.type || 'Unknown',
-          effect: 'None',
-          statModifier: {},
-          position: data.position,
-        };
-        this.onTileSelect(tileInfo);
-      }
+      const selection: SelectionViewState = {
+        kind: 'tile',
+        name: String(data.tile.type || 'Unknown'),
+        position: { x: data.position.x, y: data.position.y },
+        effect: 'None',
+      };
+      this.viewStore.setSelection(selection);
     });
 
-    // エンティティ選択イベント（新しいイベント）
+    // エンティティ選択イベント
+    // BU-4 段階5: viewStore.selection へ投影のみ（コールバック撤去）
     eventSystem.on('entity_selected', (data) => {
       const entity = data.entity;
       const entityId = data.entityId;
 
-      // エンティティのタイプに応じて処理
       if (entity.hasTag('enemy')) {
-        // 敵エンティティの場合
-        if (this.onEnemySelect) {
-          this.onEnemySelect({ entity, id: entityId, position: data.position });
-        }
+        const health =
+          entity.getComponent<import('../engine/entity/components/Health').HealthComponent>(
+            'health'
+          );
+        const selection: SelectionViewState = {
+          kind: 'enemy',
+          name: entityId,
+          position: { x: data.position.x, y: data.position.y },
+          hp: health?.currentHp ?? 0,
+          maxHp: health?.maxHp ?? 0,
+        };
+        this.viewStore.setSelection(selection);
       } else if (entity.hasTag('player')) {
-        // プレイヤーの場合
-        if (this.onCharacterSelect) {
-          this.onCharacterSelect({ entity, id: entityId, position: data.position });
-        }
+        const selection: SelectionViewState = {
+          kind: 'player',
+          name: 'プレイヤー',
+          position: { x: data.position.x, y: data.position.y },
+        };
+        this.viewStore.setSelection(selection);
       } else {
-        // その他のエンティティ（障害物、アイテムなど）
-        if (this.onTileSelect) {
-          const entityInfo = {
-            name: entityId,
-            effect: 'Entity',
-            statModifier: {},
-            position: data.position,
-          };
-          this.onTileSelect(entityInfo);
-        }
+        const selection: SelectionViewState = {
+          kind: 'object',
+          name: entityId,
+          position: { x: data.position.x, y: data.position.y },
+        };
+        this.viewStore.setSelection(selection);
       }
     });
 
     // プレイヤーターン開始イベント
-    eventSystem.on('player_turn_started', () => {
-      if (this.onTurnChange) {
-        this.onTurnChange(true);
-      }
-    });
+    // BU-4 段階5: StatsProjection が viewStore.progress.isPlayerTurn へ投影済み
+    // コールバックは撤去
 
     // 敵ターン開始イベント
-    eventSystem.on('enemy_turn_started', () => {
-      if (this.onTurnChange) {
-        this.onTurnChange(false);
-      }
-    });
+    // BU-4 段階5: StatsProjection が viewStore.progress.isPlayerTurn へ投影済み
+    // コールバックは撤去
 
     // アイテム発見イベント
     eventSystem.on('item_found', (data) => {
@@ -998,14 +1036,13 @@ export class Game {
       const inventoryItem = itemEntity.toInventoryItem();
 
       if (inventoryItem) {
-        // UIダイアログを表示
-        this.uiStore.showItemPickupDialog(inventoryItem, {
-          x: data.position.x,
-          y: data.position.y,
+        // BU-4 段階4: uiPanelStore 経由で item_pickup パネルを開く
+        // payload にアイテム情報・位置・エンティティIDを保持
+        this.uiPanelStore.open('item_pickup', {
+          item: inventoryItem,
+          position: { x: data.position.x, y: data.position.y },
+          itemEntityId: itemEntity.id,
         });
-
-        // アイテムエンティティIDをuiStoreに保存
-        this.uiStore.itemPickupDialog.itemEntityId = itemEntity.id;
       }
     });
 
@@ -1040,41 +1077,28 @@ export class Game {
   /**
    * ゲームオーバーハンドラーを設定
    * @param callback ゲームオーバー時に呼び出されるコールバック
+   *
+   * BU-4 段階5: 5本のコールバック setter のうち、
+   * game-over は UI の emit へ直結するため唯一残す。
+   * それ以外は viewStore 経由で統一した。
    */
   setOnGameOver(callback: (score: number) => void): void {
     this.onGameOver = callback;
   }
 
   /**
-   * タイル選択ハンドラーを設定
-   * @param callback タイル選択時に呼び出されるコールバック
+   * BU-4 段階4: ゲーム入力の有効/無効を切り替える
+   * モーダルパネル表示中は InputSystem の入力を無効化する
+   * @param blocked true で入力無効、false で入力有効
    */
-  setOnTileSelect(callback: (tileInfo: any) => void): void {
-    this.onTileSelect = callback;
-  }
-
-  /**
-   * 敵選択ハンドラーを設定
-   * @param callback 敵選択時に呼び出されるコールバック
-   */
-  setOnEnemySelect(callback: (enemy: any) => void): void {
-    this.onEnemySelect = callback;
-  }
-
-  /**
-   * キャラクター選択ハンドラーを設定
-   * @param callback キャラクター選択時に呼び出されるコールバック
-   */
-  setOnCharacterSelect(callback: (character: any) => void): void {
-    this.onCharacterSelect = callback;
-  }
-
-  /**
-   * ターン変更ハンドラーを設定
-   * @param callback ターン変更時に呼び出されるコールバック
-   */
-  setOnTurnChange(callback: (isPlayerTurn: boolean) => void): void {
-    this.onTurnChange = callback;
+  setInputBlocked(blocked: boolean): void {
+    const inputSystem = this.engine.getSystem<InputSystem>('input');
+    if (!inputSystem) return;
+    if (blocked) {
+      inputSystem.disableInput();
+    } else {
+      inputSystem.enableInput();
+    }
   }
 
   /**
@@ -1124,15 +1148,15 @@ export class Game {
   }
 
   /**
-   * イベントシステムを取得（UI用）
-   * @returns イベントシステム
+   * プレイヤーが攻撃
+   * BU-4 段階5: GameCommands.attack の実装
    */
-  getEventSystem(): EventSystem | null {
-    return this.engine.getSystem<EventSystem>('event') || null;
+  async attack(): Promise<void> {
+    await this.playerAttack();
   }
 
   /**
-   * プレイヤーが攻撃
+   * プレイヤーが攻撃（旧メソッド名、互換性のため残す）
    */
   async playerAttack(): Promise<void> {
     if (!this.player) {
@@ -1150,13 +1174,33 @@ export class Game {
 
   /**
    * プレイヤーのターンを終了
+   *
+   * BU-3 案B: ターン進行は TurnScheduler が行うため、ここでは何もしない。
+   * 旧TurnSystem.startNewTurn() は撤去された。
    */
   endPlayerTurn(): void {
-    // ターン管理システムがあれば、次のターンに進む
-    const turnManager = this.engine.getSystem<TurnSystem>('turn');
-    if (turnManager) {
-      turnManager.startNewTurn();
-    }
+    // no-op: ターン進行は TurnScheduler が管理する
+  }
+
+  /**
+   * BU-4 段階5: GameCommands.endTurn — endPlayerTurn のエイリアス
+   */
+  endTurn(): void {
+    this.endPlayerTurn();
+  }
+
+  /**
+   * BU-4 段階5: GameCommands.clearSelection — 選択をクリア
+   */
+  clearSelection(): void {
+    this.viewStore.setSelection(null);
+  }
+
+  /**
+   * BU-4 段階5: GameCommands.useItem — useInventoryItem のエイリアス
+   */
+  useItem(itemId: string): boolean {
+    return this.useInventoryItem(itemId);
   }
 
   /**
@@ -1220,6 +1264,10 @@ export class Game {
     this.placedObstacles = resourceState.obstacles;
     this.placedItems = resourceState.items;
     this.placedEnemies = resourceState.enemies;
+
+    // BU-4 段階2: フロア番号を viewStore へ投影
+    this.viewStore.setProgress({ floor: floorNumber });
+    this.gameStore.currentFloor = floorNumber;
 
     for (const entity of resourceState.entities) {
       entitySystem.registerEntity(entity);

@@ -248,6 +248,9 @@ export class SpriteComponent implements Component {
       texture = textureSrc;
     }
 
+    // await 後に sprite が破棄されている可能性がある（レースコンディション対策）
+    if (!this.sprite) return;
+
     this.sprite.texture = texture;
   }
 
